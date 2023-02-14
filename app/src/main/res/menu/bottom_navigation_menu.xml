@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/menu_domain"
+        android:enabled="true"
+        android:icon="@drawable/ic_domain_24"
+        android:title="Domains" />
+    <item
+        android:id="@+id/menu_healthcheck"
+        android:enabled="true"
+        android:icon="@drawable/ic_monitor_heart_24"
+        android:title="Healthcheck" />
+    <item
+        android:id="@+id/menu_account"
+        android:enabled="true"
+        android:icon="@drawable/ic_account_circle_24"
+        android:title="Account" />
+</menu>
