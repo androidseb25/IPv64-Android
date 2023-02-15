@@ -76,8 +76,7 @@
                                 android:layout_height="wrap_content"
                                 android:gravity="center_vertical"
                                 android:text="A-Record stimmt nicht mit der aktuellen IP überein"
-                                android:textAppearance="?attr/textAppearanceBody1"
-                                android:textColor="@color/black" />
+                                android:textAppearance="?attr/textAppearanceBody1" />
 
                         </LinearLayout>
 
@@ -104,8 +103,7 @@
                                 android:layout_height="wrap_content"
                                 android:gravity="center_vertical"
                                 android:text="A-Record stimmt mit der aktuellen IP überein"
-                                android:textAppearance="?attr/textAppearanceBody1"
-                                android:textColor="@color/black" />
+                                android:textAppearance="?attr/textAppearanceBody1" />
 
                         </LinearLayout>
 
@@ -158,8 +156,7 @@
                             android:layout_height="wrap_content"
                             android:gravity="center_vertical"
                             android:text="dfdsfdsfsdfds"
-                            android:textAppearance="?attr/textAppearanceBody1"
-                            android:textColor="@color/black" />
+                            android:textAppearance="?attr/textAppearanceBody1" />
 
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -210,8 +207,7 @@
                             android:layout_height="wrap_content"
                             android:gravity="center_vertical"
                             android:text="dfdsfdsfsdfds"
-                            android:textAppearance="?attr/textAppearanceBody1"
-                            android:textColor="@color/black" />
+                            android:textAppearance="?attr/textAppearanceBody1" />
 
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -263,8 +259,7 @@
                             android:layout_height="wrap_content"
                             android:gravity="center_vertical"
                             android:text="dfdsfdsfsdfds"
-                            android:textAppearance="?attr/textAppearanceBody1"
-                            android:textColor="@color/black" />
+                            android:textAppearance="?attr/textAppearanceBody1" />
 
                         <com.google.android.material.divider.MaterialDivider
                             android:layout_width="match_parent"
@@ -277,8 +272,7 @@
                             android:layout_height="wrap_content"
                             android:gravity="center_vertical"
                             android:text="Version: 1.0.0"
-                            android:textAppearance="?attr/textAppearanceBody1"
-                            android:textColor="@color/black" />
+                            android:textAppearance="?attr/textAppearanceBody1" />
 
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>

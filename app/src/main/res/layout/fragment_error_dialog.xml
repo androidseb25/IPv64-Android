@@ -101,7 +101,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:layout_marginBottom="25dp"
+            android:layout_marginBottom="10dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent">
@@ -124,7 +124,7 @@
                 android:layout_marginHorizontal="25dp"
                 android:text="Abbrechen"
                 android:textAllCaps="true"
-                android:textColor="@color/black"
+                android:textColor="@color/menuIconTint"
                 app:backgroundTint="@color/ipv64_cancelBtn"
                 app:cornerRadius="8dp" />
         </LinearLayout>

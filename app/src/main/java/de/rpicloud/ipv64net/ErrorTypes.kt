@@ -13,7 +13,7 @@ class ErrorTypes {
             R.color.ipv64_error_orange,
             "Information",
             "Zu Viele Aktualisierungen!",
-            "Du hast dein Limit von 5 API-Anfragen innerhalb der erlaubten 10 Sek. überschritten.",
+            "Du hast dein Limit von 5 API-Anfragen innerhalb der erlaubten 5 Sek. überschritten.",
             429
         )
 
@@ -22,7 +22,7 @@ class ErrorTypes {
             R.color.ipv64_error_orange,
             "Information",
             "Zu Viele Aktualisierungen!",
-            "Die A-Record Aktualisierung kann nur alle 10 Sek. ausgeführt werden!",
+            "Die A-Record Aktualisierung kann nur alle 5 Sek. ausgeführt werden!",
             429
         )
 

@@ -42,18 +42,18 @@
 
 
     <!--IPv64.net Colors-->
-    <color name="ipv64_toolbar">#41FFF2CC</color>
-    <color name="ipv64_toolbar_status">#59D3C6A3</color>
+    <color name="ipv64_toolbar">#2d281d</color>
+    <color name="ipv64_toolbar_status">#272319</color>
     <color name="ipv64">#ffc107</color>
     <color name="ipv64_trans20">#34ffc107</color>
     <color name="ipv64_lighter">#FFE596</color>
     <color name="ipv64_darker">#DAC37F</color>
     <color name="ipv64_selector_pill">#41FFC107</color>
-    <color name="ipv64_navbar_bg">#41FFF2CC</color>
+    <color name="ipv64_navbar_bg">#2d281d</color>
 
-    <color name="ipv64_cardBg">#EDEDED</color>
+    <color name="ipv64_cardBg">#303034</color>
     <color name="ipv64_cardTextSecondary">#7E7E7E</color>
-    <color name="ipv64_cancelBtn">#D1D1D1</color>
+    <color name="ipv64_cancelBtn">#303034</color>
 
     <color name="ipv64_error_orange">#fd921e</color>
     <color name="ipv64_error_green">#39bf52</color>
@@ -61,5 +61,5 @@
     <color name="ipv64_red">#e44b3b</color>
     <color name="ipv64_red_trans20">#34E44B3B</color>
 
-    <color name="menuIconTint">@color/black</color>
+    <color name="menuIconTint">@color/white</color>
 </resources>
