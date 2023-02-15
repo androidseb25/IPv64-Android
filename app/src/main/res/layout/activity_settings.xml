@@ -22,6 +22,7 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="@color/ipv64_toolbar"
+            app:navigationIconTint="@color/menuIconTint"
             app:navigationIcon="@drawable/ic_close_24"
             android:elevation="0dp"
             app:title="Account Status" />

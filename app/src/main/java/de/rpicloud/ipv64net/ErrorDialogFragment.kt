@@ -87,7 +87,7 @@ class ErrorDialogFragment(var errorTyp: ErrorTyp) : DialogFragment() {
 
     //start timer function
     fun startTimer() {
-        val cTimer = object: CountDownTimer(10000, 1000) {
+        val cTimer = object: CountDownTimer(5000, 1000) {
             override fun onTick(millisUntilFinished: Long) {
                 val seco = millisUntilFinished / 1000
                 secounds = seco.toInt()

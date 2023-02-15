@@ -15,7 +15,7 @@
         android:elevation="15dp"
         app:layout_constraintTop_toTopOf="parent">
 
-        <androidx.appcompat.widget.Toolbar
+        <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/topAppBarDetail"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
@@ -23,6 +23,7 @@
             app:elevation="15dp"
             android:elevation="15dp"
             app:navigationIcon="@drawable/ic_close_24"
+            app:navigationIconTint="@color/menuIconTint"
             app:menu="@menu/edit_menu"
             app:title="seb.nas64.de" />
 

@@ -1,9 +1,13 @@
 package de.rpicloud.ipv64net
 
+import android.app.UiModeManager
+import android.content.Context
 import android.content.Intent
 import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+import android.os.Build
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 
 class LaunchActivity : AppCompatActivity() {
     private lateinit var activeScreen: LaunchScreens
@@ -11,6 +15,13 @@ class LaunchActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val mode = applicationContext.getSharedInt("THEME", "THEME")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val man = applicationContext.getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
+            man.setApplicationNightMode(mode)
+        } else {
+            AppCompatDelegate.setDefaultNightMode(mode)
+        }
         val isPortrait = resources.getBoolean(R.bool.portrait_only)
         Functions().setOrientaiton(this, isPortrait)
 

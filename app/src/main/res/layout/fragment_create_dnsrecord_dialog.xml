@@ -18,6 +18,7 @@
             android:layout_height="?attr/actionBarSize"
             android:background="@color/ipv64_toolbar"
             android:elevation="0dp"
+            app:navigationIconTint="@color/menuIconTint"
             app:navigationIcon="@drawable/ic_close_24"
             app:title="Neuer DNS-Record"
             app:menu="@menu/save_menu"/>

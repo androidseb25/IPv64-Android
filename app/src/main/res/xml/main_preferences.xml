@@ -20,6 +20,14 @@
             app:icon="@drawable/ic_location_round_24"
             app:key="ip"
             app:title="Meine IP" />
+        <ListPreference
+            app:icon="@drawable/round_color_lens_24"
+            android:dialogTitle="Design"
+            android:entries="@array/arrTheme"
+            android:entryValues="@array/arrTheme"
+            android:key="designList"
+            android:summary="Automatisch"
+            android:title="Design" />
     </androidx.preference.PreferenceCategory>
 
     <androidx.preference.PreferenceCategory

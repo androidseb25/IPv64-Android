@@ -2,6 +2,10 @@
     <!-- Base application theme. -->
     <style name="Base.Theme.IPv64net" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your dark theme here. -->
-        <item name="colorPrimary">@color/ipv64_toolbar_status</item>
+        <item name="colorPrimary">@color/ipv64</item>
+        <item name="colorAccent">@color/white</item>
+        <item name="android:statusBarColor">@color/ipv64_toolbar_status</item>
+
+        <item name="android:colorControlActivated">@color/ipv64</item>
     </style>
 </resources>

@@ -10,6 +10,15 @@ class MainActivity : AppCompatActivity() {
     var listOfDomains: DomainResult = DomainResult()
     lateinit var domainAdapter: DomainAdapter
 
+    override fun onResume() {
+        super.onResume()
+        val isRestart = getSharedBool("THEME_RESTART", "THEME_RESTART")
+        if (isRestart) {
+            navigation.menu.findItem(R.id.menu_domain).isChecked = true
+            setSharedBool("THEME_RESTART", "THEME_RESTART", false)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -21,7 +30,7 @@ class MainActivity : AppCompatActivity() {
         topAppBar.title = "Domain"//resources.getString(R.string.dashboard)
 
         val domainFragment = DomainFragment()
-        supportFragmentManager.beginTransaction().add(R.id.main_container, domainFragment, "domain").commit()
+        supportFragmentManager.beginTransaction().replace(R.id.main_container, domainFragment, "domain").commit()
 
         val lastVersionCode = getSharedInt("LASTBUILDNUMBER", "LASTBUILDNUMBER")
         if (BuildConfig.VERSION_CODE != lastVersionCode) {

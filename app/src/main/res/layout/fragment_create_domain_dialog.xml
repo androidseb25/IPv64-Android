@@ -20,6 +20,7 @@
             android:elevation="0dp"
             app:navigationIcon="@drawable/ic_close_24"
             app:title="Neue Domain"
+            app:navigationIconTint="@color/menuIconTint"
             app:menu="@menu/save_menu"/>
 
     </com.google.android.material.appbar.AppBarLayout>

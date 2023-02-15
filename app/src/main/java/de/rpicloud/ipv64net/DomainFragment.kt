@@ -113,10 +113,10 @@ class DomainFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                     rootView.swipe_layout.isRefreshing = false
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.tooManyRequests)
-                    newFragment.show(fragmentManager!!, "dialogError")
-                    fragmentManager.executePendingTransactions()
-                    newFragment.setOnDismissListener {
-                        onRefresh()
+                    if (fragmentManager != null) {
+                        newFragment.show(fragmentManager!!, "dialogError")
+                        fragmentManager.executePendingTransactions()
+                        newFragment.setOnDismissListener { }
                     }
                 }
                 return@launch
@@ -130,9 +130,7 @@ class DomainFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                     val newFragment = ErrorDialogFragment(ErrorTypes.unauthorized)
                     newFragment.show(fragmentManager!!, "dialogError")
                     fragmentManager.executePendingTransactions()
-                    newFragment.setOnDismissListener {
-                        onRefresh()
-                    }
+                    newFragment.setOnDismissListener { }
                 }
                 return@launch
             }
@@ -141,8 +139,16 @@ class DomainFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                 rootView.swipe_layout.isRefreshing = false
                 rootView.recycler_domain?.layoutManager =
                     GridLayoutManager(activity?.applicationContext, 1)
-                domainAdapter = DomainAdapter(listOfDomains.subdomains!!, activity, myIP4, myIP6, accountInfo)
-                rootView.recycler_domain?.adapter = domainAdapter
+                if (listOfDomains.subdomains != null) {
+                    domainAdapter = DomainAdapter(
+                        listOfDomains.subdomains!!,
+                        activity,
+                        myIP4,
+                        myIP6,
+                        accountInfo
+                    )
+                    rootView.recycler_domain?.adapter = domainAdapter
+                }
             }
         }
     }

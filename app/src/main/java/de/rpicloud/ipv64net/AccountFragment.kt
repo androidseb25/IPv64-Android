@@ -1,10 +1,16 @@
 package de.rpicloud.ipv64net
 
+import android.app.UiModeManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentManager
+import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreference
@@ -46,8 +52,13 @@ class AccountFragment : PreferenceFragmentCompat() {
         val youtube: Preference? = findPreference("youtube")
         val discord: Preference? = findPreference("discord")
         val logout: Preference? = findPreference("logout")
+        val themes: Preference? = findPreference("designList")
 
         //whatsnew?.summary = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+
+        val themeArr = resources.getStringArray(R.array.arrTheme)
+        val themeActive = requireActivity().applicationContext.let { activity?.applicationContext!!.getSharedInt("THEME", "THEME") } as Int
+        themes!!.summary = themeArr[themeActive]
 
         // Switch preference click listener
         account?.setOnPreferenceClickListener{
@@ -76,6 +87,39 @@ class AccountFragment : PreferenceFragmentCompat() {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             intent.setClass(activity?.applicationContext!!, SettingsActivity::class.java)
             startActivity(intent)
+            true
+        }
+        themes?.setOnPreferenceChangeListener { preference, newValue ->
+            val stringValue = newValue.toString()
+
+            if (preference is ListPreference) {
+                // For list preferences, look up the correct display value in
+                // the preference's 'entries' list.
+                val index = preference.findIndexOfValue(stringValue)
+
+                // Set the summary to reflect the new value.
+                themes.summary = if (index >= 0)
+                    preference.entries[index]
+                else
+                    preference.entries[0]
+                preference.context.let { activity?.setSharedInt("THEME", "THEME", index) }
+                when (index) {
+                    1 -> setTheme(AppCompatDelegate.MODE_NIGHT_NO, requireActivity())
+                    2 -> setTheme(AppCompatDelegate.MODE_NIGHT_YES, requireActivity())
+                    0 -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            setTheme(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM, requireActivity())
+                        } else {
+                            setTheme(AppCompatDelegate.MODE_NIGHT_AUTO_BATTERY, requireActivity())
+                        }
+                    }
+                }
+            } else {
+                // For all other preferences, set the summary to the value's
+                // simple string representation.
+                themes.summary = stringValue
+            }
+
             true
         }
         about?.setOnPreferenceClickListener{
@@ -108,5 +152,20 @@ class AccountFragment : PreferenceFragmentCompat() {
             startActivity(intent)
             true
         }
+    }
+
+    private fun setTheme(mode: Int, activity: FragmentActivity) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            var m = mode
+            if (mode == -1) {
+                m = UiModeManager.MODE_NIGHT_AUTO
+            }
+            val man = activity.applicationContext!!.getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
+            man.setApplicationNightMode(m)
+        } else {
+            AppCompatDelegate.setDefaultNightMode(mode)
+        }
+        activity.applicationContext!!.setSharedBool("THEME_RESTART", "THEME_RESTART", true)
+        requireActivity().recreate()
     }
 }
