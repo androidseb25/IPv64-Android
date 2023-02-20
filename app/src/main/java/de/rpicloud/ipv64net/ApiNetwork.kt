@@ -252,5 +252,35 @@ class ApiNetwork {
                 }
             }
         }
+
+
+
+
+        fun PostAddIntegration(integrationType: String, dtoken: String, dName: String): AddDomainResult {
+            val APIKEY = context?.getSharedString("APIKEY", "APIKEY")
+            val formData = listOf("add_integration" to integrationType, "integration_name" to dName, "devicetoken" to dtoken)
+
+            val httpAsync = "$apiUrl"
+                .httpPost(parameters = formData)
+                .header("Authorization", "Authorization: Bearer $APIKEY" )
+                .responseString()
+
+            return when (httpAsync.third) {
+                is Result.Failure -> {
+                    val ex = (httpAsync.third as Result.Failure<FuelError>).getException()
+                    val errordata = String(ex.errorData)
+                    var errorMessage = AddDomainResult()
+                    if (errordata.isNotEmpty()) {
+                        errorMessage = gson.fromJson(errordata, AddDomainResult::class.java)
+                    }
+                    errorMessage
+                }
+                is Result.Success -> {
+                    val data = httpAsync.third.get()
+                    val response = gson.fromJson(data, AddDomainResult::class.java)
+                    response
+                }
+            }
+        }
     }
 }

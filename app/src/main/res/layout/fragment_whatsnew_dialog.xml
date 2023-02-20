@@ -126,7 +126,7 @@
                     android:layout_width="40dp"
                     android:layout_height="40dp"
                     android:layout_marginEnd="20dp"
-                    android:src="@drawable/round_color_lens_24"
+                    android:src="@drawable/round_notifications_active_24"
                     app:tint="@color/ipv64" />
 
                 <LinearLayout
@@ -140,49 +140,50 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="5dp"
-                        android:text="Dark Mode" />
+                        android:text="Healthcheck Benachrichtigungen" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="In diesem Update könnt Ihr euch auf den Dark Mode freuen. Die Option findet Ihr unter Account Design, falls das helle Theme euch besser gefällt 😜" />
+                        android:text="In diesem Update halten die Healthcheck Benachrichtigungen Einzug in die App. Diese Benachrichtigen dich falls deine Systeme Down bzw. wieder Up sind. Um dies zu aktivieren musst du in der Oberfläche unter Healthcheck einfach dein Gerät auswählen." />
                 </LinearLayout>
             </LinearLayout>
-<!--            <LinearLayout-->
-<!--                android:layout_marginTop="25dp"-->
-<!--                android:layout_width="match_parent"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:layout_marginHorizontal="15dp"-->
-<!--                android:orientation="horizontal">-->
 
-<!--                <ImageView-->
-<!--                    android:layout_width="40dp"-->
-<!--                    android:layout_height="40dp"-->
-<!--                    android:layout_marginEnd="20dp"-->
-<!--                    android:src="@drawable/ic_account_circle_24"-->
-<!--                    app:tint="@color/ipv64" />-->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="15dp"
+                android:layout_marginTop="25dp"
+                android:orientation="horizontal">
 
-<!--                <LinearLayout-->
-<!--                    android:layout_width="match_parent"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:orientation="vertical">-->
+                <ImageView
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginEnd="20dp"
+                    android:src="@drawable/round_key_24"
+                    app:tint="@color/ipv64" />
 
-<!--                    <TextView-->
-<!--                        android:textAppearance="@style/TextAppearance.AppCompat.Title"-->
-<!--                        android:textStyle="bold"-->
-<!--                        android:layout_width="match_parent"-->
-<!--                        android:layout_height="wrap_content"-->
-<!--                        android:layout_marginBottom="5dp"-->
-<!--                        android:text="Account" />-->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
 
-<!--                    <TextView-->
-<!--                        android:layout_width="match_parent"-->
-<!--                        android:layout_height="wrap_content"-->
-<!--                        android:text="Unter Account siehst Du deinen Accountstatus, Logs, aktuelle IPv4 &amp; IPv6 Adressen und vieles mehr" />-->
-<!--                </LinearLayout>-->
-<!--            </LinearLayout>-->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="5dp"
+                        android:text="Login"
+                        android:textAppearance="@style/TextAppearance.AppCompat.Title"
+                        android:textStyle="bold" />
 
-            <!--<LinearLayout
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Auf Wunsch wurde der Login nun erweitert, du kannst diesen jetzt auch mit dem API-Key durchführen, ohne einen QR Code zu scannen." />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
                 android:layout_marginTop="25dp"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -193,8 +194,8 @@
                     android:layout_width="40dp"
                     android:layout_height="40dp"
                     android:layout_marginEnd="20dp"
-                    android:src="@drawable/ic_vpn_key_24"
-                    app:tint="@color/primary" />
+                    android:src="@drawable/ic_round_fingerprint_24"
+                    app:tint="@color/ipv64" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -207,16 +208,16 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="5dp"
-                        android:text="Passwort vergessen" />
+                        android:text="Bildschirmsperre" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Es wurde im Login Screen ein Passwort vergessen Button hinzugefügt" />
+                        android:text="Ja, du liest richtig, es ist jetzt auch hier möglich, deine Domainen vor ungewollten Blicken zu schützen." />
                 </LinearLayout>
             </LinearLayout>
 
-            <LinearLayout
+            <!--<LinearLayout
                 android:layout_marginTop="25dp"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

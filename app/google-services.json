@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "245002644962",
+    "project_id": "ipv64-b6e12",
+    "storage_bucket": "ipv64-b6e12.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:245002644962:android:deaa6c68c01bc5af451dbb",
+        "android_client_info": {
+          "package_name": "de.rpicloud.ipv64net"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "245002644962-pintffis4ucoahgp9g5eh0c0nied16bj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAnkoWlO0xZdk6XjvyMYVEsTUR_vA2kgD8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "245002644962-pintffis4ucoahgp9g5eh0c0nied16bj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "245002644962-rrkudf4qu75umfho26b7au5b9i0jl6il.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "de.rpicloud.IPv64",
+                "app_store_id": "6444267347"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

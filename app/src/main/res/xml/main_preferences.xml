@@ -37,7 +37,7 @@
         <androidx.preference.SwitchPreference
             app:icon="@drawable/ic_round_fingerprint_24"
             app:key="displaylock"
-            app:title="Bildschirmsperre (Coming Soon)"
+            app:title="Bildschirmsperre"
             app:summaryOff="deaktiviert"
             app:summaryOn="aktiviert"/>
     </androidx.preference.PreferenceCategory>
