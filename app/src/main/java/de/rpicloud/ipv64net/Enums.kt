@@ -1,7 +1,7 @@
 package de.rpicloud.ipv64net
 
 enum class LaunchScreens {
-    LOGIN , MAIN
+    LOGIN , MAIN, BIOMETRIC
 }
 
 enum class  ConsumptionType(val CType: Int) {

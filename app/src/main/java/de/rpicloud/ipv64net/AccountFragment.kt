@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.biometric.BiometricManager
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentManager
@@ -77,8 +78,13 @@ class AccountFragment : PreferenceFragmentCompat() {
             startActivity(intent)
             true
         }
+        val isAvailable = BiometricManager.from(requireActivity()).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS
+        displaylock?.isEnabled = isAvailable
+        displaylock?.isSelectable = isAvailable
+
         displaylock?.setOnPreferenceChangeListener { preference, newValue ->
             println(newValue)
+            activity?.setSharedBool("BIOMETRIC", "BIOMETRIC", newValue as Boolean)
             true
         }
         ip?.setOnPreferenceClickListener{
@@ -147,6 +153,7 @@ class AccountFragment : PreferenceFragmentCompat() {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             activity?.setSharedBool("ISLOGGEDIN", "ISLOGGEDIN", false)
             activity?.setSharedString("APIKEY", "APIKEY", "")
+            activity?.setSharedString("FCM_TOKEN", "FCM_TOKEN", "")
             intent.setClass(activity?.applicationContext!!, LaunchActivity::class.java)
             activity?.finish()
             startActivity(intent)

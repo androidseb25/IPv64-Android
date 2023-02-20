@@ -23,6 +23,20 @@ class LoginActivity: AppCompatActivity() {
 
         val scanCustomCode = this.registerForActivityResult(ScanCustomCode(), ::handleResult)
 
+        btn_login.setOnClickListener {
+            val text = tie_password.text.toString()
+            if (text.length >= 32) {
+                login(text)
+            } else {
+                val toastText = if (text.isEmpty()) {
+                    "API-KEY ist leer!"
+                } else {
+                    "API-KEY zu kurz!"
+                }
+                Toast.makeText(applicationContext, toastText, Toast.LENGTH_LONG).show()
+            }
+        }
+
         btn_scanqrcode.setOnClickListener {
             println("LOGIN")
 
