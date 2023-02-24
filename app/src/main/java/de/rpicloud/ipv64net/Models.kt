@@ -1,5 +1,6 @@
 package de.rpicloud.ipv64net
 
+import org.json.JSONObject
 import java.util.*
 
 data class DomainResult (
@@ -87,6 +88,45 @@ data class MyLogs (
 data class Logs (
     var logs: MutableList<MyLogs>? = mutableListOf(),
     var info: String? = "",
+)
+
+data class HealthCheckResult (
+    var domain: MutableList<HealthCheck> = mutableListOf(),
+    var info: String? = "",
+    var status: String? = "",
+    var get_account_info: String? = ""
+)
+
+data class HealthCheck(
+    // healthstatus == 1 = Active; 2 = Paused; 3 = Warning; 4 = Alarm;
+    var name: String = "",
+    var healthstatus: Int = 0,
+    var healthtoken: String = "",
+    var add_time: String? = "",
+    var last_update_time: String? = "",
+    var alarm_time: String? = "",
+    var alarm_down: Int = 0,
+    var alarm_up: Int = 0,
+    var integration_id: String = "0",
+    var alarm_count: Int = 0,
+    var alarm_unit: Int = 0,
+    var grace_count: Int = 0,
+    var grace_unit: Int = 0,
+    var pings_total: Int = 0,
+    var type: String = "",
+    var type_options: String = "",
+    var next_ping: String = "",
+    var events: MutableList<HealthEvents> = mutableListOf()
+)
+
+data class HealthEvents(
+    var event_time: String? = "",
+    var status: Int? = 0,
+    var text: String? = ""
+)
+
+data class StatusTypeClass(
+    var statusId: Int? = 0, var name: String? = "", var icon: Int? = 0, var color: Int? = 0
 )
 
 typealias OnChangedInRecyclerListener = (() -> Unit)

@@ -12,6 +12,7 @@ import com.github.kittinunf.fuel.httpGet
 import com.github.kittinunf.fuel.httpPost
 import com.github.kittinunf.result.Result
 import com.google.gson.Gson
+import org.json.JSONObject
 
 class ApiNetwork {
     companion object Factory {
@@ -253,9 +254,6 @@ class ApiNetwork {
             }
         }
 
-
-
-
         fun PostAddIntegration(integrationType: String, dtoken: String, dName: String): AddDomainResult {
             val APIKEY = context?.getSharedString("APIKEY", "APIKEY")
             val formData = listOf("add_integration" to integrationType, "integration_name" to dName, "devicetoken" to dtoken)
@@ -279,6 +277,33 @@ class ApiNetwork {
                     val data = httpAsync.third.get()
                     val response = gson.fromJson(data, AddDomainResult::class.java)
                     response
+                }
+            }
+        }
+
+        fun GetHealthchecks(): String {
+            val APIKEY = context?.getSharedString("APIKEY", "APIKEY")
+            //var jsonString = gson.toJson(apiUser)
+            val httpAsync = "${apiUrl}?get_healthchecks&events"
+                .httpGet()
+                .header("Authorization", "Authorization: Bearer $APIKEY" )
+                .responseString()
+
+            return when (httpAsync.third) {
+                is Result.Failure -> {
+                    val ex = (httpAsync.third as Result.Failure<FuelError>).getException()
+                    val errordata = String(ex.errorData)
+                    println(errordata)
+                    HealthCheckResult(info = errordata)
+                    errordata
+                }
+                is Result.Success -> {
+                    val data = httpAsync.third.get()
+                    println(data)
+                    val dynamicjson: JSONObject = JSONObject(data)
+                    println(dynamicjson)
+                    gson.fromJson(data, HealthCheckResult::class.java)
+                    data
                 }
             }
         }

@@ -61,5 +61,7 @@
     <color name="ipv64_red">#e44b3b</color>
     <color name="ipv64_red_trans20">#34E44B3B</color>
 
+    <color name="ipv64_teal">#32ADE6</color>
+
     <color name="menuIconTint">@color/black</color>
 </resources>

@@ -132,13 +132,12 @@ class DomainAdapter(
     private fun getData() {
         GlobalScope.launch(Dispatchers.Default) {
             val listOfDomains = ApiNetwork.GetDomains()
-
-            println(listOfDomains.subdomains!!.size)
-
-            if (listOfDomains.subdomains!!.isEmpty()) {
+            println(listOfDomains)
+            if (listOfDomains.subdomains == null) {
                 launch(Dispatchers.Main) {
                     Toast.makeText(activity, "Keine Domainen gefunden!", Toast.LENGTH_LONG)
                         .show()
+                    UpdateDataSet(mutableMapOf())
                 }
                 return@launch
             }

@@ -55,66 +55,6 @@ class AccountStatusFragment : PreferenceFragmentCompat() {
         fm = activity?.supportFragmentManager!!
 
         getData()
-
-        //whatsnew?.summary = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
-
-        // Switch preference click listener
-//        account?.setOnPreferenceClickListener{
-////            val newFragment = ProfilDialogFragment()
-////            newFragment.show(fm, "profilDialog")
-////            fm.executePendingTransactions()
-////            newFragment.setOnDismissListener { }
-//            true
-//        }
-//        logs?.setOnPreferenceClickListener{
-////            val newFragment = AddressDialogFragment()
-////            newFragment.show(fm, "addressDialog")
-////            fm.executePendingTransactions()
-////            newFragment.setOnDismissListener { }
-//            true
-//        }
-//        displaylock?.setOnPreferenceChangeListener { preference, newValue ->
-//            println(newValue)
-//            true
-//        }
-//        ip?.setOnPreferenceClickListener{
-////            val newFragment = PasswordDialogFragment()
-////            newFragment.show(fm, "passwordDialog")
-////            fm.executePendingTransactions()
-////            newFragment.setOnDismissListener { }
-//            true
-//        }
-//        about?.setOnPreferenceClickListener{
-////            val newFragment = PasswordDialogFragment()
-////            newFragment.show(fm, "passwordDialog")
-////            fm.executePendingTransactions()
-////            newFragment.setOnDismissListener { }
-//            true
-//        }
-//        youtube?.setOnPreferenceClickListener{
-//            val intent = Intent(Intent.ACTION_VIEW)
-//            intent.data = Uri.parse("https://www.youtube.com/c/RaspberryPiCloud")
-//            startActivity(intent)
-//            true
-//        }
-//        discord?.setOnPreferenceClickListener{
-//            val intent = Intent(Intent.ACTION_VIEW)
-//            intent.data = Uri.parse("https://discord.gg/rpicloud")
-//            startActivity(intent)
-//            true
-//        }
-//        logout?.setOnPreferenceClickListener{
-//            val intent = Intent(Intent.ACTION_VIEW)
-//            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-//            activity?.setSharedBool("ISLOGGEDIN", "ISLOGGEDIN", false)
-//            activity?.setSharedBool("ISACTIVATED", "ISACTIVATED", false)
-//            activity?.setSharedBool("CHANGEDPW", "CHANGEDPW", false)
-//            activity?.setSharedBool("CHANGEDADDR", "CHANGEDADDR", false)
-//            activity?.setSharedString("TOKEN", "TOKEN", "")
-//            intent.setClass(activity?.applicationContext!!, LoginActivity::class.java)
-//            activity?.finish()
-//            true
-//        }
     }
 
     private fun setUpViews() {
