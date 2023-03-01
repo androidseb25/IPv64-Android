@@ -6,9 +6,11 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
 import com.google.gson.Gson
+import kotlinx.android.synthetic.main.fragment_domain.*
 import kotlinx.android.synthetic.main.fragment_domain.view.*
 import kotlinx.android.synthetic.main.fragment_healthcheck.view.*
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +29,7 @@ private const val ARG_PARAM2 = "param2"
  * create an instance of this fragment.
  */
 
-class HealthcheckFragment : Fragment() {
+class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
 
     // TODO: Rename and change types of parameters
     private var param1: String? = null
@@ -53,6 +55,7 @@ class HealthcheckFragment : Fragment() {
         rootView = inflater.inflate(R.layout.fragment_healthcheck, container, false)
         ApiNetwork.context = activity?.applicationContext
         ErrorTypes.context = activity?.applicationContext
+        rootView.swipe_layout_hc.setOnRefreshListener(this)
 
         spinnDialog = MaterialDialog(requireActivity())
         spinnDialog.title(null, "Daten werden gesendet...")
@@ -66,6 +69,7 @@ class HealthcheckFragment : Fragment() {
     }
 
     private fun getData() {
+        rootView.swipe_layout_hc.isRefreshing = true
         spinnDialog.show()
         GlobalScope.launch(Dispatchers.Default) {
             val response = ApiNetwork.GetHealthchecks()
@@ -113,6 +117,7 @@ class HealthcheckFragment : Fragment() {
             if (healthCheckResult.info == null || healthCheckResult.status == null) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
+                    rootView.swipe_layout_hc.isRefreshing = false
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
                     newFragment.show(fragmentManager!!, "dialogError")
@@ -122,6 +127,7 @@ class HealthcheckFragment : Fragment() {
             } else if (healthCheckResult.info!!.contains("500") || healthCheckResult.status!!.contains("500")) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
+                    rootView.swipe_layout_hc.isRefreshing = false
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
                     newFragment.show(fragmentManager!!, "dialogError")
@@ -131,6 +137,7 @@ class HealthcheckFragment : Fragment() {
             } else if (healthCheckResult.info!!.contains("429") || healthCheckResult.status!!.contains("429")) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
+                    rootView.swipe_layout_hc.isRefreshing = false
                     println("SHOW ERROR")
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.tooManyRequests)
@@ -144,6 +151,7 @@ class HealthcheckFragment : Fragment() {
             } else if (healthCheckResult.info!!.contains("401") || healthCheckResult.status!!.contains("401")) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
+                    rootView.swipe_layout_hc.isRefreshing = false
                     println("SHOW ERROR")
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.unauthorized)
@@ -156,6 +164,7 @@ class HealthcheckFragment : Fragment() {
 
             launch(Dispatchers.Main) {
                 spinnDialog.hide()
+                rootView.swipe_layout_hc.isRefreshing = false
                 val activeCount = healthCheckResult.domain.count { it.healthstatus == 1 }
                 val pausedCount = healthCheckResult.domain.count { it.healthstatus == 2 }
                 val warningCount = healthCheckResult.domain.count { it.healthstatus == 3 }
@@ -174,6 +183,11 @@ class HealthcheckFragment : Fragment() {
                 rootView.recycler_healthcheckview?.adapter = healthAdapter
             }
         }
+    }
+
+    override fun onRefresh() {
+        rootView.swipe_layout_hc.isRefreshing = true
+        getData()
     }
 
     companion object {

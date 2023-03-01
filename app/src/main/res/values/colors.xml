@@ -57,6 +57,7 @@
 
     <color name="ipv64_error_orange">#fd921e</color>
     <color name="ipv64_error_green">#39bf52</color>
+    <color name="ipv64_gray">#8E8E93</color>
 
     <color name="ipv64_red">#e44b3b</color>
     <color name="ipv64_red_trans20">#34E44B3B</color>

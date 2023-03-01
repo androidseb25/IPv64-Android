@@ -22,12 +22,15 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical"
+                android:weightSum="6"
+                android:orientation="horizontal">
 
-                <androidx.cardview.widget.CardView
+                <com.google.android.material.card.MaterialCardView
                     android:id="@+id/statusCircle"
                     android:layout_width="10dp"
                     android:layout_height="10dp"
+                    android:layout_weight="0"
                     app:cardBackgroundColor="@color/ipv64_red"
                     app:cardCornerRadius="10dp"
                     app:cardElevation="0dp"
@@ -41,9 +44,17 @@
                     android:layout_height="match_parent"
                     android:gravity="center_vertical"
                     android:text="seb.nas64.de"
+                    android:layout_weight="2"
                     android:layout_margin="10dp"
                     android:textAppearance="?attr/textAppearanceHeadline6"
                     android:textStyle="bold" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recycler_pillView"
+                    android:layout_weight="4"
+                    android:scrollbars="none"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"/>
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

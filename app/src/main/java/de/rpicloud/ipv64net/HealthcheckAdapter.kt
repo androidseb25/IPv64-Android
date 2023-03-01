@@ -1,30 +1,24 @@
 package de.rpicloud.ipv64net
 
 import android.annotation.SuppressLint
+import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
-import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.FragmentActivity
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.afollestad.materialdialogs.MaterialDialog
-import com.afollestad.materialdialogs.customview.customView
-import com.google.android.material.button.MaterialButton
+import com.google.gson.Gson
 import kotlinx.android.synthetic.main.activity_main.*
-import kotlinx.android.synthetic.main.adapter_detail_domain.view.*
-import kotlinx.android.synthetic.main.adapter_domain.view.*
 import kotlinx.android.synthetic.main.adapter_healthcheck.view.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
+import kotlinx.android.synthetic.main.fragment_healthcheck.view.*
 
-class HealthcheckAdapter(private var dataSet: MutableList<HealthCheck>,
-                         private val activity: FragmentActivity
+class HealthcheckAdapter(
+    private var dataSet: MutableList<HealthCheck>,
+    private val activity: FragmentActivity
 ) : RecyclerView.Adapter<HealthcheckAdapter.ViewHolder>() {
     private var mOnChangedInRecyclerListener: OnChangedInRecyclerListener? = null
 
@@ -45,13 +39,17 @@ class HealthcheckAdapter(private var dataSet: MutableList<HealthCheck>,
      */
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
 
+        var cardView: CardView?
         var tv_healthcheck: TextView?
         var statusCircle: CardView?
+        var recycler_pillView: RecyclerView?
 
         init {
             // Define click listener for the ViewHolder's View.
+            cardView = view.card
             tv_healthcheck = view.tv_healthcheck
             statusCircle = view.statusCircle
+            recycler_pillView = view.recycler_pillView
         }
     }
 
@@ -95,7 +93,50 @@ class HealthcheckAdapter(private var dataSet: MutableList<HealthCheck>,
             }
         }
 
-        viewHolder.statusCircle?.setCardBackgroundColor(ContextCompat.getColor(activity.applicationContext!!, color))
+        viewHolder.statusCircle?.setCardBackgroundColor(
+            ContextCompat.getColor(
+                activity.applicationContext!!,
+                color
+            )
+        )
+
+        val lastXEvents = item.events.take(10).toMutableList()
+
+        if (lastXEvents.isNotEmpty()) {
+            if (lastXEvents.count() < 10) {
+                val diff = 10 - lastXEvents.count()
+
+                for (i in 1..diff) {
+                    lastXEvents.add(HealthEvents("", -1, ""))
+                }
+            }
+
+            viewHolder.recycler_pillView?.layoutManager = LinearLayoutManager(
+                activity.applicationContext,
+                LinearLayoutManager.HORIZONTAL,
+                false
+            )
+            val healthAdapter = HealthcheckPillAdapter(
+                lastXEvents.reversed().toMutableList(),
+                activity,
+                R.layout.adapter_healthcheck_small_pill
+            )
+            viewHolder.recycler_pillView?.isNestedScrollingEnabled = false;
+            viewHolder.recycler_pillView?.adapter = healthAdapter
+        }
+
+        viewHolder.cardView?.setOnClickListener {
+            val fragmentManager = activity?.supportFragmentManager
+            val newFragment = HealthcheckDetailFragmentDialog()
+            newFragment.arguments = Bundle().apply {
+                putString("HEALTHCHECK", Gson().toJson(item))
+            }
+            newFragment.show(fragmentManager!!, "dialogDomain")
+            fragmentManager.executePendingTransactions()
+            newFragment.setOnDismissListener { }
+        }
+
+        println(lastXEvents)
     }
 
     // Return the size of your dataset (invoked by the layout manager)

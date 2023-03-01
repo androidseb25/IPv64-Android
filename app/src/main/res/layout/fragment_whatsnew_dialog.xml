@@ -145,7 +145,40 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="In diesem Update hält die Übersicht der Healthchecks Einzug in die App. Details/Hinzufügen/Bearbeiten Coming Soon!" />
+                        android:text="In diesem Update wurde die Übersicht um die letzten 10 Event Pills erweitert" />
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout
+                android:layout_marginTop="25dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="15dp"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginEnd="20dp"
+                    android:src="@drawable/ic_monitor_heart_24"
+                    app:tint="@color/ipv64" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:textAppearance="@style/TextAppearance.AppCompat.Title"
+                        android:textStyle="bold"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="5dp"
+                        android:text="Healthcheck Details" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Es gibt nun die Detailsansicht für die Healthchecks mit allen nötigen Informationen!" />
                 </LinearLayout>
             </LinearLayout>
 

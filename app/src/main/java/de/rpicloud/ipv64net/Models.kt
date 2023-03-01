@@ -129,4 +129,6 @@ data class StatusTypeClass(
     var statusId: Int? = 0, var name: String? = "", var icon: Int? = 0, var color: Int? = 0
 )
 
+data class MTimeUnit(var unit: Int? = 0, var name: String? = "")
+
 typealias OnChangedInRecyclerListener = (() -> Unit)
