@@ -23,6 +23,7 @@
             app:elevation="15dp"
             app:navigationIcon="@drawable/ic_close_24"
             app:navigationIconTint="@color/menuIconTint"
+            app:menu="@menu/edit_hc_menu"
             app:title="seb.nas64.de" />
 
     </com.google.android.material.appbar.AppBarLayout>
@@ -38,9 +39,10 @@
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recycler_pill_big_view"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
+                android:paddingHorizontal="16dp"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
@@ -256,6 +258,50 @@
                             android:textColor="@color/kaltwasser"
                             app:backgroundTint="@color/kaltwasser_trans15"
                             app:cornerRadius="8dp" />
+
+                        <LinearLayout
+                            android:orientation="horizontal"
+                            android:layout_weight="2"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btn_pause_hc"
+                                android:layout_weight="1"
+                                style="@style/ThemeOverlay.Material3.Button.ElevatedButton"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="4dp"
+                                android:text="Pausieren"
+                                android:textColor="@color/ipv64_teal"
+                                app:backgroundTint="@color/ipv64_teal_trans20"
+                                app:cornerRadius="8dp" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:visibility="gone"
+                                android:id="@+id/btn_start_hc"
+                                android:layout_weight="1"
+                                style="@style/ThemeOverlay.Material3.Button.ElevatedButton"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="4dp"
+                                android:text="Starten"
+                                android:textColor="@color/ipv64_error_green"
+                                app:backgroundTint="@color/ipv64_error_green_trans20"
+                                app:cornerRadius="8dp" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btn_delete_hc"
+                                style="@style/ThemeOverlay.Material3.Button.ElevatedButton"
+                                android:layout_width="match_parent"
+                                android:layout_weight="1"
+                                android:layout_marginStart="4dp"
+                                android:layout_height="wrap_content"
+                                android:text="Löschen"
+                                android:textColor="@color/ipv64_red"
+                                app:backgroundTint="@color/ipv64_red_trans20"
+                                app:cornerRadius="8dp" />
+                        </LinearLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
             </androidx.appcompat.widget.LinearLayoutCompat>

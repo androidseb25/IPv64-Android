@@ -52,13 +52,13 @@ class ErrorDialogFragment(var errorTyp: ErrorTyp) : DialogFragment() {
         rootView.tv_title_error.text = errorTyp.errorTitle
         rootView.tv_detail_error.text = errorTyp.errorDescription
 
-        rootView.btn_error_cancel.visibility = if (errorTyp == ErrorTypes.deleteDNSRecord || errorTyp == ErrorTypes.deleteDomain) {
+        rootView.btn_error_cancel.visibility = if (errorTyp == ErrorTypes.deleteDNSRecord || errorTyp == ErrorTypes.deleteDomain || errorTyp == ErrorTypes.deletehealth) {
             View.VISIBLE
         } else {
             View.GONE
         }
 
-        rootView.btn_error_close.text = if (errorTyp == ErrorTypes.deleteDNSRecord || errorTyp == ErrorTypes.deleteDomain) {
+        rootView.btn_error_close.text = if (errorTyp == ErrorTypes.deleteDNSRecord || errorTyp == ErrorTypes.deleteDomain || errorTyp == ErrorTypes.deletehealth) {
             "Löschen"
         } else {
             "Schließen"

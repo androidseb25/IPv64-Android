@@ -1,29 +1,28 @@
 package de.rpicloud.ipv64net
 
-import org.json.JSONObject
 import java.util.*
 
-data class DomainResult (
+data class DomainResult(
     var subdomains: MutableMap<String, Domain>? = mutableMapOf(),
     var info: String? = "",
     var status: String? = "",
     var add_domain: String? = ""
 )
 
-data class AddDomainResult (
+data class AddDomainResult(
     var info: String? = "",
     var status: String? = "",
     var add_domain: String? = ""
 )
 
-data class Domain (
+data class Domain(
     var updates: Int? = 0,
     var wildcard: Int? = 0,
     var domain_update_hash: String? = "",
     var records: MutableList<RecordInfos>? = mutableListOf()
 )
 
-data class RecordInfos (
+data class RecordInfos(
     var record_id: Int? = 0,
     var content: String? = "",
     var ttl: Int? = 0,
@@ -32,11 +31,11 @@ data class RecordInfos (
     var last_update: String? = ""
 )
 
-data class MyIP (
+data class MyIP(
     var ip: String? = ""
 )
 
-data class ErrorTyp (
+data class ErrorTyp(
     var icon: Int? = 0,
     var iconColor: Int? = 0,
     var navigationTitle: String? = "",
@@ -45,7 +44,7 @@ data class ErrorTyp (
     var status: Int?
 )
 
-data class AccountInfo (
+data class AccountInfo(
     var email: String? = "",
     var account_status: Int? = 0,
     var reg_date: String? = "2022-01-01 00:00:00",
@@ -65,7 +64,7 @@ data class AccountInfo (
     var get_account_info: String? = ""
 )
 
-data class AccountClass (
+data class AccountClass(
     var class_name: String? = "",
     var dyndns_domain_limit: Int? = 0,
     var dyndns_update_limit: Int? = 0,
@@ -77,7 +76,7 @@ data class AccountClass (
     var sms_limit: Int? = 0
 )
 
-data class MyLogs (
+data class MyLogs(
     var id: UUID = UUID.randomUUID(),
     var subdomain: String? = "",
     var time: String? = "",
@@ -85,12 +84,12 @@ data class MyLogs (
     var content: String? = ""
 )
 
-data class Logs (
+data class Logs(
     var logs: MutableList<MyLogs>? = mutableListOf(),
     var info: String? = "",
 )
 
-data class HealthCheckResult (
+data class HealthCheckResult(
     var domain: MutableList<HealthCheck> = mutableListOf(),
     var info: String? = "",
     var status: String? = "",
@@ -131,4 +130,20 @@ data class StatusTypeClass(
 
 data class MTimeUnit(var unit: Int? = 0, var name: String? = "")
 
-typealias OnChangedInRecyclerListener = (() -> Unit)
+data class IntegrationResult(
+    var integration: MutableList<Integration> = mutableListOf(),
+    var service: String? = "",
+    var info: String? = "",
+    var status: String? = "",
+    var get_account_info: String? = ""
+)
+
+data class Integration(
+    var integration: String? = "",
+    var integration_id: Int = 0,
+    var integration_name: String? = "",
+    var add_time: String? = "",
+    var last_used: String? = ""
+)
+
+typealias OnChangedInRecyclerListener = (() -> kotlin.Unit)

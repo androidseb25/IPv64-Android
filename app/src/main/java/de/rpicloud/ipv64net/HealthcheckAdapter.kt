@@ -22,7 +22,7 @@ class HealthcheckAdapter(
 ) : RecyclerView.Adapter<HealthcheckAdapter.ViewHolder>() {
     private var mOnChangedInRecyclerListener: OnChangedInRecyclerListener? = null
 
-    fun setOnChangedInRecyclerListener(listener: OnChangedInRecyclerListener) {
+    fun setOnChangedInRecyclerListener(listener: () -> kotlin.Unit): kotlin.Unit {
         mOnChangedInRecyclerListener = listener
     }
 
@@ -133,7 +133,9 @@ class HealthcheckAdapter(
             }
             newFragment.show(fragmentManager!!, "dialogDomain")
             fragmentManager.executePendingTransactions()
-            newFragment.setOnDismissListener { }
+            newFragment.setOnDismissListener {
+                notifyDataSetChanged()
+            }
         }
 
         println(lastXEvents)

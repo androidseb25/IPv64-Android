@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
@@ -17,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.util.Objects
 
 // TODO: Rename parameter arguments, choose names that match
 // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
@@ -38,6 +40,7 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
     private lateinit var spinnDialog: MaterialDialog
 
     private var healthCheckResult: HealthCheckResult = HealthCheckResult()
+    private var integrationResult: IntegrationResult = IntegrationResult()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,12 +61,22 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
         rootView.swipe_layout_hc.setOnRefreshListener(this)
 
         spinnDialog = MaterialDialog(requireActivity())
-        spinnDialog.title(null, "Daten werden gesendet...")
+        spinnDialog.title(null, "Daten werden geladen...")
         spinnDialog.customView(R.layout.loading_spinner)
         spinnDialog.cancelable(false)
         spinnDialog.cancelOnTouchOutside(false)
 
-        getData()
+        onRefresh()
+
+        rootView.floating_action_button_hc.setOnClickListener {
+            val fragmentManager = activity?.supportFragmentManager
+            val newFragment = CreateHealthcheckDialogFragment()
+            newFragment.show(fragmentManager!!, "dialogCreateHealthcheck")
+            fragmentManager.executePendingTransactions()
+            newFragment.setOnDismissListener {
+                onRefresh()
+            }
+        }
 
         return rootView
     }
@@ -73,12 +86,45 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
         spinnDialog.show()
         GlobalScope.launch(Dispatchers.Default) {
             val response = ApiNetwork.GetHealthchecks()
+            val responseIntegration = ApiNetwork.GetIntegrations()
+
+            if (response.isEmpty()) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    rootView.swipe_layout_hc.isRefreshing = false
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            }
+
+            if (responseIntegration.isEmpty()) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    rootView.swipe_layout_hc.isRefreshing = false
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            }
+
             val healthCheckObject = JSONObject(response)
+            val integrationObject = JSONObject(responseIntegration)
 
             healthCheckResult = HealthCheckResult()
+            integrationResult = IntegrationResult()
             println(healthCheckObject.keys())
+            println(integrationObject.keys())
             val keys = healthCheckObject.keys()
+            val keysIntegration = integrationObject.keys()
             var inKeys = false
+            var inIntegrationKeys = false
             while (keys.hasNext()) { // loop to get the dynamic key
                 val currentDynamicKey = keys.next() as String
                 inKeys = true
@@ -106,15 +152,44 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                 }
             }
 
-            if (!inKeys) {
+            while (keysIntegration.hasNext()) { // loop to get the dynamic key
+                val currentDynamicKey = keysIntegration.next() as String
+                inIntegrationKeys = true
+                // get the value of the dynamic key
+                println("currentDynamicKey")
+                println(currentDynamicKey)
+                if (currentDynamicKey != "info" && currentDynamicKey != "status" && currentDynamicKey != "get_account_info") {
+                    val currentDynamicValue: JSONObject =
+                        integrationObject.getJSONObject(currentDynamicKey)
+                    val ig = Gson().fromJson(currentDynamicValue.toString(), Integration::class.java)
+                    // do something here with the value... or either make another while loop to Iterate further
+                    integrationResult.integration.add(ig)
+                    println("currentDynamicValue.toString()")
+                    println(currentDynamicValue.toString())
+                } else {
+                    if (currentDynamicKey == "info") {
+                        integrationResult.info = integrationObject[currentDynamicKey].toString()
+                    }
+                    if (currentDynamicKey == "status") {
+                        integrationResult.status = integrationObject[currentDynamicKey].toString()
+                    }
+                    if (currentDynamicKey == "get_account_info") {
+                        integrationResult.get_account_info = integrationObject[currentDynamicKey].toString()
+                    }
+                }
+            }
+
+            if (!inIntegrationKeys) {
                 val gson = Gson()
                 println(response)
-                healthCheckResult = gson.fromJson(response, HealthCheckResult::class.java)
+                integrationResult = gson.fromJson(response, IntegrationResult::class.java)
             }
 
             println("healthCheckResult")
             println(healthCheckResult)
-            if (healthCheckResult.info == null || healthCheckResult.status == null) {
+            println("integrationResult")
+            println(integrationResult)
+            if (healthCheckResult.info == null || healthCheckResult.status == null || integrationResult.info == null || integrationResult.status == null) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
                     rootView.swipe_layout_hc.isRefreshing = false
@@ -124,7 +199,7 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                     fragmentManager.executePendingTransactions()
                     newFragment.setOnDismissListener { }
                 }
-            } else if (healthCheckResult.info!!.contains("500") || healthCheckResult.status!!.contains("500")) {
+            } else if (healthCheckResult.info!!.contains("500") || healthCheckResult.status!!.contains("500") || integrationResult.info!!.contains("500") || integrationResult.status!!.contains("500")) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
                     rootView.swipe_layout_hc.isRefreshing = false
@@ -134,7 +209,7 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                     fragmentManager.executePendingTransactions()
                     newFragment.setOnDismissListener { }
                 }
-            } else if (healthCheckResult.info!!.contains("429") || healthCheckResult.status!!.contains("429")) {
+            } else if (healthCheckResult.info!!.contains("429") || healthCheckResult.status!!.contains("429") || integrationResult.info!!.contains("429") || integrationResult.status!!.contains("429")) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
                     rootView.swipe_layout_hc.isRefreshing = false
@@ -148,7 +223,7 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                     }
                 }
                 return@launch
-            } else if (healthCheckResult.info!!.contains("401") || healthCheckResult.status!!.contains("401")) {
+            } else if (healthCheckResult.info!!.contains("401") || healthCheckResult.status!!.contains("401") || integrationResult.info!!.contains("401") || integrationResult.status!!.contains("401")) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
                     rootView.swipe_layout_hc.isRefreshing = false
@@ -181,6 +256,15 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                     requireActivity()
                 )
                 rootView.recycler_healthcheckview?.adapter = healthAdapter
+
+                activity?.applicationContext?.setSharedString("INTEGRATIONS","INTEGRATIONS", Gson().toJson(integrationResult))
+
+                healthAdapter.registerAdapterDataObserver(object :  RecyclerView.AdapterDataObserver() {
+                    override fun onChanged() {
+                        //Do some task.
+                        onRefresh()
+                    }
+                })
             }
         }
     }

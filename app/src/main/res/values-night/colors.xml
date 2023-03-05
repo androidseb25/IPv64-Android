@@ -46,6 +46,7 @@
     <color name="ipv64_toolbar_status">#272319</color>
     <color name="ipv64">#ffc107</color>
     <color name="ipv64_trans20">#34ffc107</color>
+    <color name="ipv64_trans10">#1AFFC107</color>
     <color name="ipv64_lighter">#FFE596</color>
     <color name="ipv64_darker">#DAC37F</color>
     <color name="ipv64_selector_pill">#41FFC107</color>
@@ -57,11 +58,14 @@
 
     <color name="ipv64_error_orange">#fd921e</color>
     <color name="ipv64_error_green">#39bf52</color>
+    <color name="ipv64_error_green_trans20">#3339BF52</color>
 
     <color name="ipv64_red">#e44b3b</color>
     <color name="ipv64_red_trans20">#34E44B3B</color>
 
     <color name="ipv64_teal">#32ADE6</color>
+    <color name="ipv64_teal_trans20">#3332ADE6</color>
+    <color name="ipv64_turkey">#00B9CA</color>
 
     <color name="menuIconTint">@color/white</color>
 </resources>

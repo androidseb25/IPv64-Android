@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.DialogInterface
+import android.content.res.Resources
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -18,8 +19,12 @@ import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
 import com.google.gson.Gson
 import kotlinx.android.synthetic.main.fragment_detail_healthcheck_dialog.view.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 class HealthcheckDetailFragmentDialog : DialogFragment() {
 
@@ -46,13 +51,13 @@ class HealthcheckDetailFragmentDialog : DialogFragment() {
     private fun GetUnit(unit: Int): String {
         return when (unit) {
             Unit.Minuten.Unit.unit -> {
-                Unit.Minuten.name
+                Unit.Minuten.Unit.name!!
             }
             Unit.Stunden.Unit.unit -> {
-                Unit.Stunden.name
+                Unit.Stunden.Unit.name!!
             }
             Unit.Tage.Unit.unit -> {
-                Unit.Tage.name
+                Unit.Tage.Unit.name!!
             }
             else -> {
                 ""
@@ -91,8 +96,14 @@ class HealthcheckDetailFragmentDialog : DialogFragment() {
             false
         )
 
+        val width = screenRectDp.width() - 32 //rootView.recycler_pill_big_view.layoutParams.width + 32
+        val pillCount = (width / 15).roundToInt()
+
+        println("width: $width")
+        println("pillCount: $pillCount")
+
         val healthAdapter = HealthcheckPillAdapter(
-            healthcheck.events.reversed().toMutableList(),
+            healthcheck.events.take(pillCount).reversed().toMutableList(),
             requireActivity(),
             R.layout.adapter_healthcheck_pill
         )
@@ -135,118 +146,326 @@ class HealthcheckDetailFragmentDialog : DialogFragment() {
             ).show()
         }
 
+        rootView.btn_start_hc.visibility =
+            if (healthcheck.healthstatus == StatusType.Pause.type.statusId) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
+
+        rootView.btn_pause_hc.visibility =
+            if (healthcheck.healthstatus != StatusType.Pause.type.statusId) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
+
+        rootView.btn_start_hc.setOnClickListener {
+            startHC()
+        }
+
+        rootView.btn_pause_hc.setOnClickListener {
+            pauseHC()
+        }
+
+        rootView.btn_delete_hc.setOnClickListener {
+            val fragmentManager = activity?.supportFragmentManager
+            val newFragment = ErrorDialogFragment(ErrorTypes.deletehealth)
+            newFragment.show(fragmentManager!!, "dialogError")
+            fragmentManager.executePendingTransactions()
+            newFragment.setOnDismissListener {
+                var isCanceld = requireActivity().getSharedBool("ISCANCELD", "ISCANCELD") as Boolean
+                if (!isCanceld) {
+                    deleteHC()
+                    requireActivity().setSharedBool("ISCANCELD", "ISCANCELD", false)
+                }
+            }
+        }
+
         rootView.recycler_events?.layoutManager =
             GridLayoutManager(requireActivity().applicationContext, 1)
-        val adapterEvents = EventAdapter(healthcheck.events, requireActivity())
+
+        val adapterEvents = EventAdapter(healthcheck.events.take(pillCount).toMutableList(), requireActivity())
         rootView.recycler_events.adapter = adapterEvents
 
-        /*rootView.topAppBarDetail.setOnMenuItemClickListener { menuItem ->
+        rootView.topAppBarHDetail.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
-                R.id.new_dnsrecord -> {
-                    println("new dns")
-                    //saveUser()
+                R.id.edit_hc -> {
+                    println("edithc")
                     val fragmentManager = requireActivity().supportFragmentManager
-                    val newFragment = CreateDNSRecordDialogFragment()
+                    val newFragment = HealthcheckEditFragmentDialog()
                     newFragment.arguments = Bundle().apply {
-                        putString("DOMAINKEY", domainTitle)
+                        putString("HEALTHCHECK", Gson().toJson(healthcheck))
                     }
-                    newFragment.show(fragmentManager, "dialogDNS")
+                    newFragment.show(fragmentManager, "editHC")
                     fragmentManager.executePendingTransactions()
                     newFragment.setOnDismissListener {
                         val isDismissFromX = requireActivity().applicationContext.getSharedBool(
-                            "DNSRECORDDISMISS",
-                            "DNSRECORDDISMISS"
+                            "HCDISMISS",
+                            "HCDISMISS"
+                        )
+
+                        requireActivity().applicationContext.setSharedBool(
+                            "HCDISMISS",
+                            "HCDISMISS",
+                            false
                         )
                         if (!isDismissFromX)
                             dismiss()
-
-                        requireActivity().applicationContext.setSharedBool(
-                            "DNSRECORDDISMISS",
-                            "DNSRECORDDISMISS",
-                            false
-                        )
-                    }
-                    true
-                }
-                R.id.delete_domain -> {
-                    println("deleteDomain")
-                    //saveUser()
-
-                    val fragmentManager = activity?.supportFragmentManager
-                    val newFragment = ErrorDialogFragment(ErrorTypes.deleteDomain)
-                    newFragment.show(fragmentManager!!, "dialogError")
-                    fragmentManager.executePendingTransactions()
-                    newFragment.setOnDismissListener {
-                        var isCanceld =
-                            requireActivity().getSharedBool("ISCANCELD", "ISCANCELD") as Boolean
-                        if (!isCanceld) {
-                            spinnDialog.show()
-                            GlobalScope.launch(Dispatchers.Default) {
-                                val result = ApiNetwork.DeleteDomain(domainTitle)
-
-                                println(result)
-
-                                if (result.status == null) {
-                                    launch(Dispatchers.Main) {
-                                        spinnDialog.hide()
-                                        val fragmentManager = activity?.supportFragmentManager
-                                        val newFragment =
-                                            ErrorDialogFragment(ErrorTypes.websiteRequestError)
-                                        newFragment.show(fragmentManager!!, "dialogError")
-                                        fragmentManager.executePendingTransactions()
-                                        newFragment.setOnDismissListener { }
-                                    }
-                                    return@launch
-                                } else if (result.status!!.contains("500")) {
-                                    launch(Dispatchers.Main) {
-                                        spinnDialog.hide()
-                                        val fragmentManager = activity?.supportFragmentManager
-                                        val newFragment =
-                                            ErrorDialogFragment(ErrorTypes.websiteRequestError)
-                                        newFragment.show(fragmentManager!!, "dialogError")
-                                        fragmentManager.executePendingTransactions()
-                                        newFragment.setOnDismissListener { }
-                                    }
-                                    return@launch
-                                } else if (result.status!!.contains("401")) {
-                                    launch(Dispatchers.Main) {
-                                        spinnDialog.hide()
-                                        val fragmentManager = activity?.supportFragmentManager
-                                        val newFragment =
-                                            ErrorDialogFragment(ErrorTypes.unauthorized)
-                                        newFragment.show(fragmentManager!!, "dialogError")
-                                        fragmentManager.executePendingTransactions()
-                                        newFragment.setOnDismissListener { }
-                                    }
-                                    return@launch
-                                } else if (result.status!!.contains("429")) {
-                                    launch(Dispatchers.Main) {
-                                        spinnDialog.hide()
-                                        println("SHOW ERROR")
-                                        val fragmentManager = activity?.supportFragmentManager
-                                        val newFragment =
-                                            ErrorDialogFragment(ErrorTypes.tooManyRequests)
-                                        newFragment.show(fragmentManager!!, "dialogError")
-                                        fragmentManager.executePendingTransactions()
-                                        newFragment.setOnDismissListener { }
-                                    }
-                                    return@launch
-                                }
-
-                                launch(Dispatchers.Main) {
-                                    spinnDialog.hide()
-                                    dismiss()
-                                }
-                            }
-                        }
                     }
                     true
                 }
                 else -> false
             }
-        }*/
+        }
 
         return rootView
+    }
+
+    private fun startHC() {
+        GlobalScope.launch(Dispatchers.Default) {
+            val result = ApiNetwork.PostStartHealth(healthcheck.healthtoken)
+
+            println(result)
+
+            if (result?.status == null) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("403") && result.add_domain!!.contains("domain limit reached")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.domainLimit)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("403") && result.add_domain!!.contains("domainname rules")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.domainRules)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("500")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("401")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.unauthorized)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("429")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    println("SHOW ERROR")
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment =
+                        ErrorDialogFragment(ErrorTypes.tooManyRequests)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            }
+
+            launch(Dispatchers.Main) {
+                spinnDialog.hide()
+                Toast.makeText(
+                    requireActivity().applicationContext,
+                    "Healthcheck gelöscht!",
+                    Toast.LENGTH_LONG
+                ).show()
+                dismiss()
+            }
+        }
+    }
+
+    private fun pauseHC() {
+        GlobalScope.launch(Dispatchers.Default) {
+            val result = ApiNetwork.PostPauseHealth(healthcheck.healthtoken)
+
+            println(result)
+
+            if (result?.status == null) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("403") && result.add_domain!!.contains("domain limit reached")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.domainLimit)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("403") && result.add_domain!!.contains("domainname rules")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.domainRules)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("500")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("401")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.unauthorized)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("429")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    println("SHOW ERROR")
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment =
+                        ErrorDialogFragment(ErrorTypes.tooManyRequests)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            }
+
+            launch(Dispatchers.Main) {
+                spinnDialog.hide()
+                Toast.makeText(
+                    requireActivity().applicationContext,
+                    "Healthcheck pausiert!",
+                    Toast.LENGTH_LONG
+                ).show()
+                dismiss()
+            }
+        }
+    }
+
+    private fun deleteHC() {
+        GlobalScope.launch(Dispatchers.Default) {
+            val result = ApiNetwork.DeleteHealthcheck(healthcheck.healthtoken)
+
+            println(result)
+
+            if (result.status == null) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("403") && result.add_domain!!.contains("domain limit reached")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.domainLimit)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("403") && result.add_domain!!.contains("domainname rules")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.domainRules)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("500")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("401")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment = ErrorDialogFragment(ErrorTypes.unauthorized)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            } else if (result.status!!.contains("429")) {
+                launch(Dispatchers.Main) {
+                    spinnDialog.hide()
+                    println("SHOW ERROR")
+                    val fragmentManager = activity?.supportFragmentManager
+                    val newFragment =
+                        ErrorDialogFragment(ErrorTypes.tooManyRequests)
+                    newFragment.show(fragmentManager!!, "dialogError")
+                    fragmentManager.executePendingTransactions()
+                    newFragment.setOnDismissListener { }
+                }
+                return@launch
+            }
+
+            launch(Dispatchers.Main) {
+                spinnDialog.hide()
+                Toast.makeText(
+                    requireActivity().applicationContext,
+                    "Healthcheck gelöscht!",
+                    Toast.LENGTH_LONG
+                ).show()
+                dismiss()
+            }
+        }
     }
 
     /** The system calls this only when creating the layout in a dialog. */

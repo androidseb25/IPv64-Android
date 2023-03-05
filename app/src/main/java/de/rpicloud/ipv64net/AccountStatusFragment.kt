@@ -47,7 +47,7 @@ class AccountStatusFragment : PreferenceFragmentCompat() {
         }*/
 
         spinnDialog = MaterialDialog(requireActivity())
-        spinnDialog.title(null, "Daten werden gesendet...")
+        spinnDialog.title(null, "Daten werden geladen...")
         spinnDialog.customView(R.layout.loading_spinner)
         spinnDialog.cancelable(false)
         spinnDialog.cancelOnTouchOutside(false)

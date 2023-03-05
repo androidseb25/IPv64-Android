@@ -78,7 +78,7 @@
                                 android:autoSizePresetSizes="34sp"
                                 android:autoSizeTextType="uniform"
                                 android:gravity="bottom"
-                                android:text="5"
+                                android:text="0"
                                 android:textColor="@color/white" />
                         </LinearLayout>
 
@@ -153,7 +153,7 @@
                                 android:autoSizePresetSizes="34sp"
                                 android:autoSizeTextType="uniform"
                                 android:gravity="bottom"
-                                android:text="5"
+                                android:text="0"
                                 android:textColor="@color/white" />
                         </LinearLayout>
 
@@ -240,7 +240,7 @@
                                 android:autoSizePresetSizes="34sp"
                                 android:autoSizeTextType="uniform"
                                 android:gravity="bottom"
-                                android:text="5"
+                                android:text="0"
                                 android:textColor="@color/white" />
                         </LinearLayout>
 
@@ -315,7 +315,7 @@
                                 android:autoSizePresetSizes="34sp"
                                 android:autoSizeTextType="uniform"
                                 android:gravity="bottom"
-                                android:text="5"
+                                android:text="0"
                                 android:textColor="@color/white" />
                         </LinearLayout>
 
@@ -351,4 +351,17 @@
                 app:layout_constraintTop_toBottomOf="@id/ll_health_row2" />
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/floating_action_button_hc"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
+        android:contentDescription="Neue Domain"
+        app:backgroundTint="@color/ipv64"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:tint="@color/black"
+        app:srcCompat="@drawable/ic_add_24" />
 </androidx.constraintlayout.widget.ConstraintLayout>

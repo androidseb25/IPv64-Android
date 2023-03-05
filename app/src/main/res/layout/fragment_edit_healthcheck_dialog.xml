@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Appbar -->
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBarLayout_info_dialog"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:elevation="15dp"
+        android:fitsSystemWindows="true"
+        app:elevation="15dp"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/topAppBarHDetail"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/ipv64_toolbar"
+            android:elevation="15dp"
+            app:elevation="15dp"
+            app:menu="@menu/save_menu"
+            app:navigationIcon="@drawable/ic_close_24"
+            app:navigationIconTint="@color/menuIconTint"
+            app:title="Bearbeiten" />
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_hc_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="10dp"
+                android:hint="Bsp: Proxmox @Home"
+                app:layout_constraintTop_toTopOf="parent"
+                app:startIconDrawable="@drawable/ic_abc_24">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/tie_hc_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:lines="1"
+                    android:singleLine="true" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_zeitraum_value"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="25dp"
+                android:hint="Zeitraum"
+                app:layout_constraintTop_toBottomOf="@id/til_hc_name"
+                app:startIconDrawable="@drawable/round_123_24">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/tie_zeitraum_value"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:lines="1"
+                    android:singleLine="true" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_zeitraum_unit"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="5dp"
+                android:hint="Zeitraum Einheit"
+                app:layout_constraintTop_toBottomOf="@id/til_zeitraum_value">
+
+                <AutoCompleteTextView
+                    android:id="@+id/actv_zeitraum_unit"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_grace_value"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="25dp"
+                android:hint="Karenzeit"
+                app:layout_constraintTop_toBottomOf="@id/til_zeitraum_unit"
+                app:startIconDrawable="@drawable/round_123_24">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/tie_grace_value"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:lines="1"
+                    android:singleLine="true" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_grace_unit"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="5dp"
+                android:hint="Karenzeit Einheit"
+                app:layout_constraintTop_toBottomOf="@id/til_grace_value">
+
+                <AutoCompleteTextView
+                    android:id="@+id/actv_grace_unit"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_notify"
+                style="@style/ThemeOverlay.Material3.Button.ElevatedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="25dp"
+                android:text="Benachrichtigungsmethoden"
+                android:textColor="@color/ipv64"
+                app:backgroundTint="@color/ipv64_trans10"
+                app:layout_constraintTop_toBottomOf="@id/til_grace_unit"
+                app:cornerRadius="8dp" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/ms_down"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="10dp"
+                android:checked="false"
+                android:text="Benachrichtigung bei DOWN"
+                android:textSize="16sp"
+                app:layout_constraintTop_toBottomOf="@id/btn_notify"
+                app:thumbTint="@color/switch_down_thumb_indicator"
+                app:trackTint="@color/switch_down_track_indicator" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/ms_up"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="5dp"
+                android:checked="false"
+                android:text="Benachrichtigung bei UP"
+                android:textSize="16sp"
+                app:layout_constraintTop_toBottomOf="@id/ms_down"
+                app:thumbTint="@color/switch_up_thumb_indicator"
+                app:trackTint="@color/switch_up_track_indicator" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.core.widget.NestedScrollView>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

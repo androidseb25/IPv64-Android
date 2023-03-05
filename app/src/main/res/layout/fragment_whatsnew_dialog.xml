@@ -140,12 +140,12 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="5dp"
-                        android:text="Healthcheck Übersicht" />
+                        android:text="Healthchecks hinzufügen" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="In diesem Update wurde die Übersicht um die letzten 10 Event Pills erweitert" />
+                        android:text="Ihr könnt mit dem Update neue Healthchecks hinzufügen" />
                 </LinearLayout>
             </LinearLayout>
             <LinearLayout
@@ -159,7 +159,7 @@
                     android:layout_width="40dp"
                     android:layout_height="40dp"
                     android:layout_marginEnd="20dp"
-                    android:src="@drawable/ic_monitor_heart_24"
+                    android:src="@drawable/round_pause_circle_outline_24"
                     app:tint="@color/ipv64" />
 
                 <LinearLayout
@@ -173,12 +173,78 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="5dp"
-                        android:text="Healthcheck Details" />
+                        android:text="Healthchecks Pausieren/Starten/Löschen" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Es gibt nun die Detailsansicht für die Healthchecks mit allen nötigen Informationen!" />
+                        android:text="Eure Healthchecks können jetzt direkt über die App pausiert, gestartet oder gelöscht werden" />
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout
+                android:layout_marginTop="25dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="15dp"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginEnd="20dp"
+                    android:src="@drawable/ic_edit_24"
+                    app:tint="@color/ipv64" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:textAppearance="@style/TextAppearance.AppCompat.Title"
+                        android:textStyle="bold"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="5dp"
+                        android:text="Healthchecks bearbeiten" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Ab jetzt könnt Ihr euere Healthchecks bearbeiten, neue Namen vergeben, Down Benachrichtigungen aktiveren/deaktivieren oder die Karenzzeiten ändern" />
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout
+                android:layout_marginTop="25dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="15dp"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginEnd="20dp"
+                    android:src="@drawable/round_notifications_active_24"
+                    app:tint="@color/ipv64" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:textAppearance="@style/TextAppearance.AppCompat.Title"
+                        android:textStyle="bold"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="5dp"
+                        android:text="Healthcheck Benachrichtigungsmethoden" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Ihr könnt jetzt auswählen über welche Methode Ihr benachrichtigt werden wollt. (App, Telegram, Discord, ...)" />
                 </LinearLayout>
             </LinearLayout>
 
