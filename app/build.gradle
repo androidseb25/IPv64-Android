@@ -16,8 +16,8 @@ android {
         applicationId "de.rpicloud.ipv64net"
         minSdk 28
         targetSdk 33
-        versionCode 3
-        versionName "1.0.2"
+        versionCode 6
+        versionName "1.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -44,6 +44,7 @@ dependencies {
     /// com.google Libraries
     implementation platform('com.google.firebase:firebase-bom:31.2.1')
     implementation 'com.google.firebase:firebase-crashlytics-ktx'
+    implementation 'com.google.firebase:firebase-analytics-ktx'
     implementation 'com.google.firebase:firebase-messaging-ktx'
     implementation 'com.google.android.material:material:1.8.0'
     implementation 'com.google.code.gson:gson:2.10'

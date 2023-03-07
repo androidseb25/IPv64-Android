@@ -12,6 +12,7 @@ import com.github.kittinunf.fuel.httpGet
 import com.github.kittinunf.fuel.httpPost
 import com.github.kittinunf.result.Result
 import com.google.gson.Gson
+import org.json.JSONObject
 
 class ApiNetwork {
     companion object Factory {
@@ -253,9 +254,6 @@ class ApiNetwork {
             }
         }
 
-
-
-
         fun PostAddIntegration(integrationType: String, dtoken: String, dName: String): AddDomainResult {
             val APIKEY = context?.getSharedString("APIKEY", "APIKEY")
             val formData = listOf("add_integration" to integrationType, "integration_name" to dName, "devicetoken" to dtoken)
@@ -263,6 +261,216 @@ class ApiNetwork {
             val httpAsync = "$apiUrl"
                 .httpPost(parameters = formData)
                 .header("Authorization", "Authorization: Bearer $APIKEY" )
+                .responseString()
+
+            return when (httpAsync.third) {
+                is Result.Failure -> {
+                    val ex = (httpAsync.third as Result.Failure<FuelError>).getException()
+                    val errordata = String(ex.errorData)
+                    var errorMessage = AddDomainResult()
+                    if (errordata.isNotEmpty()) {
+                        errorMessage = gson.fromJson(errordata, AddDomainResult::class.java)
+                    }
+                    errorMessage
+                }
+                is Result.Success -> {
+                    val data = httpAsync.third.get()
+                    val response = gson.fromJson(data, AddDomainResult::class.java)
+                    response
+                }
+            }
+        }
+
+        fun GetHealthchecks(): String {
+            val APIKEY = context?.getSharedString("APIKEY", "APIKEY")
+            //var jsonString = gson.toJson(apiUser)
+            val httpAsync = "${apiUrl}?get_healthchecks&events"
+                .httpGet()
+                .header("Authorization", "Authorization: Bearer $APIKEY" )
+                .responseString()
+
+            return when (httpAsync.third) {
+                is Result.Failure -> {
+                    val ex = (httpAsync.third as Result.Failure<FuelError>).getException()
+                    val errordata = String(ex.errorData)
+                    println(errordata)
+                    HealthCheckResult(info = errordata)
+                    println(HealthCheckResult(info = errordata))
+                    errordata
+                }
+                is Result.Success -> {
+                    val data = httpAsync.third.get()
+                    println(data)
+                    val dynamicjson: JSONObject = JSONObject(data)
+                    println(dynamicjson)
+                    gson.fromJson(data, HealthCheckResult::class.java)
+                    data
+                }
+            }
+        }
+
+        fun PostHealth(add_healthcheck: String, alarm_count: Int, alarm_unit: Int): AddDomainResult {
+            val APIKEY = context?.getSharedString("APIKEY", "APIKEY")
+            val formData = listOf(
+                "add_healthcheck" to add_healthcheck,
+                "alarm_count" to alarm_count,
+                "alarm_unit" to alarm_unit
+            )
+
+            val httpAsync = "$apiUrl"
+                .httpPost(parameters = formData)
+                .header("Authorization", "Authorization: Bearer $APIKEY")
+                .responseString()
+
+            return when (httpAsync.third) {
+                is Result.Failure -> {
+                    val ex = (httpAsync.third as Result.Failure<FuelError>).getException()
+                    val errordata = String(ex.errorData)
+                    var errorMessage = AddDomainResult()
+                    if (errordata.isNotEmpty()) {
+                        errorMessage = gson.fromJson(errordata, AddDomainResult::class.java)
+                    }
+                    errorMessage
+                }
+                is Result.Success -> {
+                    val data = httpAsync.third.get()
+                    val response = gson.fromJson(data, AddDomainResult::class.java)
+                    response
+                }
+            }
+        }
+
+        fun PostStartHealth(healthtoken: String): AddDomainResult? {
+            val APIKEY = context?.getSharedString("APIKEY", "APIKEY")
+            val formData = listOf(
+                "start_healthcheck" to healthtoken
+            )
+
+            val httpAsync = "$apiUrl"
+                .httpPost(parameters = formData)
+                .header("Authorization", "Authorization: Bearer $APIKEY")
+                .responseString()
+
+            return when (httpAsync.third) {
+                is Result.Failure -> {
+                    val ex = (httpAsync.third as Result.Failure<FuelError>).getException()
+                    val errordata = String(ex.errorData)
+                    var errorMessage = AddDomainResult()
+                    if (errordata.isNotEmpty()) {
+                        errorMessage = gson.fromJson(errordata, AddDomainResult::class.java)
+                    }
+                    errorMessage
+                }
+                is Result.Success -> {
+                    val data = httpAsync.third.get()
+                    val response = gson.fromJson(data, AddDomainResult::class.java)
+                    response
+                }
+            }
+        }
+
+        fun PostPauseHealth(healthtoken: String): AddDomainResult? {
+            val APIKEY = context?.getSharedString("APIKEY", "APIKEY")
+            val formData = listOf(
+                "pause_healthcheck" to healthtoken
+            )
+
+            val httpAsync = "$apiUrl"
+                .httpPost(parameters = formData)
+                .header("Authorization", "Authorization: Bearer $APIKEY")
+                .responseString()
+
+            return when (httpAsync.third) {
+                is Result.Failure -> {
+                    val ex = (httpAsync.third as Result.Failure<FuelError>).getException()
+                    val errordata = String(ex.errorData)
+                    var errorMessage = AddDomainResult()
+                    if (errordata.isNotEmpty()) {
+                        errorMessage = gson.fromJson(errordata, AddDomainResult::class.java)
+                    }
+                    errorMessage
+                }
+                is Result.Success -> {
+                    val data = httpAsync.third.get()
+                    val response = gson.fromJson(data, AddDomainResult::class.java)
+                    response
+                }
+            }
+        }
+
+        fun DeleteHealthcheck(healthtoken: String): AddDomainResult {
+            val APIKEY = context?.getSharedString("APIKEY", "APIKEY")
+            println(healthtoken)
+            val httpAsync = "$apiUrl"
+                .httpDelete()
+                .header("Authorization", "Authorization: Bearer $APIKEY" )
+                .header(Headers.CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body("del_healthcheck=$healthtoken" )
+                .responseString()
+
+            return when (httpAsync.third) {
+                is Result.Failure -> {
+                    val ex = (httpAsync.third as Result.Failure<FuelError>).getException()
+                    val errordata = String(ex.errorData)
+                    var errorMessage = AddDomainResult()
+                    if (errordata.isNotEmpty()) {
+                        errorMessage = gson.fromJson(errordata, AddDomainResult::class.java)
+                    }
+                    errorMessage
+                }
+                is Result.Success -> {
+                    val data = httpAsync.third.get()
+                    val response = gson.fromJson(data, AddDomainResult::class.java)
+                    response
+                }
+            }
+        }
+
+        fun GetIntegrations(): String {
+            val APIKEY = context?.getSharedString("APIKEY", "APIKEY")
+            //var jsonString = gson.toJson(apiUser)
+            val httpAsync = "${apiUrl}?get_integrations"
+                .httpGet()
+                .header("Authorization", "Authorization: Bearer $APIKEY" )
+                .responseString()
+
+            return when (httpAsync.third) {
+                is Result.Failure -> {
+                    val ex = (httpAsync.third as Result.Failure<FuelError>).getException()
+                    val errordata = String(ex.errorData)
+                    println(errordata)
+                    IntegrationResult(info = errordata)
+                    println(IntegrationResult(info = errordata))
+                    errordata
+                }
+                is Result.Success -> {
+                    val data = httpAsync.third.get()
+                    println(data)
+                    val dynamicjson: JSONObject = JSONObject(data)
+                    println(dynamicjson)
+                    gson.fromJson(data, IntegrationResult::class.java)
+                    data
+                }
+            }
+        }
+
+        fun PostEditHealthcheck(healthcheck: HealthCheck, integrationId: MutableList<String>): AddDomainResult? {
+            val APIKEY = context?.getSharedString("APIKEY", "APIKEY")
+            val formData = listOf(
+                "edit_healthcheck" to healthcheck.healthtoken,
+                "healthcheck_name" to healthcheck.name,
+                "alarm_count" to healthcheck.alarm_count,
+                "alarm_unit" to healthcheck.alarm_unit,
+                "integration" to integrationId.joinToString("_"),
+                "grace_count" to healthcheck.grace_count,
+                "grace_unit" to healthcheck.grace_unit,
+                "alarm_down" to healthcheck.alarm_down,
+                "alarm_up" to healthcheck.alarm_up
+            )
+
+            val httpAsync = "$apiUrl"
+                .httpPost(parameters = formData)
+                .header("Authorization", "Authorization: Bearer $APIKEY")
                 .responseString()
 
             return when (httpAsync.third) {
