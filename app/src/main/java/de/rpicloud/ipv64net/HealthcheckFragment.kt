@@ -18,7 +18,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.util.Objects
 
 // TODO: Rename parameter arguments, choose names that match
 // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
@@ -78,6 +77,14 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             }
         }
 
+        rootView.nsv_healthcheck.setOnScrollChangeListener { v, scrollX, scrollY, oldScrollX, oldScrollY ->
+            if (scrollY > oldScrollY) {
+                rootView.floating_action_button_hc.hide();
+            } else {
+                rootView.floating_action_button_hc.show();
+            }
+        }
+
         return rootView
     }
 
@@ -86,7 +93,16 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
         spinnDialog.show()
         GlobalScope.launch(Dispatchers.Default) {
             val response = ApiNetwork.GetHealthchecks()
-            val responseIntegration = ApiNetwork.GetIntegrations()
+            var responseIntegration = ""
+            var setByApi = false
+
+            val sharedStorageIntegration =
+                activity?.applicationContext?.getSharedString("INTEGRATIONS", "INTEGRATIONS")
+
+            if (sharedStorageIntegration.isNullOrEmpty()) {
+                setByApi = true
+                responseIntegration = ApiNetwork.GetIntegrations()
+            }
 
             if (response.isEmpty()) {
                 launch(Dispatchers.Main) {
@@ -101,7 +117,7 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                 return@launch
             }
 
-            if (responseIntegration.isEmpty()) {
+            if (responseIntegration.isEmpty() && setByApi) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
                     rootView.swipe_layout_hc.isRefreshing = false
@@ -115,16 +131,12 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             }
 
             val healthCheckObject = JSONObject(response)
-            val integrationObject = JSONObject(responseIntegration)
 
             healthCheckResult = HealthCheckResult()
-            integrationResult = IntegrationResult()
             println(healthCheckObject.keys())
-            println(integrationObject.keys())
             val keys = healthCheckObject.keys()
-            val keysIntegration = integrationObject.keys()
+
             var inKeys = false
-            var inIntegrationKeys = false
             while (keys.hasNext()) { // loop to get the dynamic key
                 val currentDynamicKey = keys.next() as String
                 inKeys = true
@@ -134,7 +146,8 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                 if (currentDynamicKey != "info" && currentDynamicKey != "status" && currentDynamicKey != "get_account_info") {
                     val currentDynamicValue: JSONObject =
                         healthCheckObject.getJSONObject(currentDynamicKey)
-                    val hc = Gson().fromJson(currentDynamicValue.toString(), HealthCheck::class.java)
+                    val hc =
+                        Gson().fromJson(currentDynamicValue.toString(), HealthCheck::class.java)
                     // do something here with the value... or either make another while loop to Iterate further
                     healthCheckResult.domain.add(hc)
                     println("currentDynamicValue.toString()")
@@ -147,26 +160,34 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                         healthCheckResult.status = healthCheckObject[currentDynamicKey].toString()
                     }
                     if (currentDynamicKey == "get_account_info") {
-                        healthCheckResult.get_account_info = healthCheckObject[currentDynamicKey].toString()
+                        healthCheckResult.get_account_info =
+                            healthCheckObject[currentDynamicKey].toString()
                     }
                 }
             }
 
-            while (keysIntegration.hasNext()) { // loop to get the dynamic key
-                val currentDynamicKey = keysIntegration.next() as String
-                inIntegrationKeys = true
-                // get the value of the dynamic key
-                println("currentDynamicKey")
-                println(currentDynamicKey)
-                if (currentDynamicKey != "info" && currentDynamicKey != "status" && currentDynamicKey != "get_account_info") {
-                    val currentDynamicValue: JSONObject =
-                        integrationObject.getJSONObject(currentDynamicKey)
-                    val ig = Gson().fromJson(currentDynamicValue.toString(), Integration::class.java)
-                    // do something here with the value... or either make another while loop to Iterate further
-                    integrationResult.integration.add(ig)
-                    println("currentDynamicValue.toString()")
-                    println(currentDynamicValue.toString())
-                } else {
+            if (setByApi) {
+                val integrationObject = JSONObject(responseIntegration)
+                integrationResult = IntegrationResult()
+                println(integrationObject.keys())
+                val keysIntegration = integrationObject.keys()
+                var inIntegrationKeys = false
+                while (keysIntegration.hasNext()) { // loop to get the dynamic key
+                    val currentDynamicKey = keysIntegration.next() as String
+                    inIntegrationKeys = true
+                    // get the value of the dynamic key
+                    println("currentDynamicKey")
+                    println(currentDynamicKey)
+                    if (currentDynamicKey != "info" && currentDynamicKey != "status" && currentDynamicKey != "get_account_info") {
+                        val currentDynamicValue: JSONObject =
+                            integrationObject.getJSONObject(currentDynamicKey)
+                        val ig =
+                            Gson().fromJson(currentDynamicValue.toString(), Integration::class.java)
+                        // do something here with the value... or either make another while loop to Iterate further
+                        integrationResult.integration.add(ig)
+                        println("currentDynamicValue.toString()")
+                        println(currentDynamicValue.toString())
+                    } else {
                     if (currentDynamicKey == "info") {
                         integrationResult.info = integrationObject[currentDynamicKey].toString()
                     }
@@ -174,22 +195,24 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                         integrationResult.status = integrationObject[currentDynamicKey].toString()
                     }
                     if (currentDynamicKey == "get_account_info") {
-                        integrationResult.get_account_info = integrationObject[currentDynamicKey].toString()
+                        integrationResult.get_account_info =
+                            integrationObject[currentDynamicKey].toString()
+                    }
                     }
                 }
-            }
 
-            if (!inIntegrationKeys) {
-                val gson = Gson()
-                println(response)
-                integrationResult = gson.fromJson(response, IntegrationResult::class.java)
+                if (!inIntegrationKeys) {
+                    val gson = Gson()
+                    println(responseIntegration)
+                    integrationResult = gson.fromJson(responseIntegration, IntegrationResult::class.java)
+                }
+                println("integrationResult")
+                println(integrationResult)
             }
 
             println("healthCheckResult")
             println(healthCheckResult)
-            println("integrationResult")
-            println(integrationResult)
-            if (healthCheckResult.info == null || healthCheckResult.status == null || integrationResult.info == null || integrationResult.status == null) {
+            if (healthCheckResult.info == null || healthCheckResult.status == null || ((integrationResult.info == null || integrationResult.status == null) && setByApi)) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
                     rootView.swipe_layout_hc.isRefreshing = false
@@ -199,7 +222,12 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                     fragmentManager.executePendingTransactions()
                     newFragment.setOnDismissListener { }
                 }
-            } else if (healthCheckResult.info!!.contains("500") || healthCheckResult.status!!.contains("500") || integrationResult.info!!.contains("500") || integrationResult.status!!.contains("500")) {
+            } else if (healthCheckResult.info!!.contains("500") || healthCheckResult.status!!.contains(
+                    "500"
+                ) || ((integrationResult.info!!.contains("500") || integrationResult.status!!.contains(
+                    "500"
+                )) && setByApi)
+            ) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
                     rootView.swipe_layout_hc.isRefreshing = false
@@ -209,7 +237,12 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                     fragmentManager.executePendingTransactions()
                     newFragment.setOnDismissListener { }
                 }
-            } else if (healthCheckResult.info!!.contains("429") || healthCheckResult.status!!.contains("429") || integrationResult.info!!.contains("429") || integrationResult.status!!.contains("429")) {
+            } else if (healthCheckResult.info!!.contains("429") || healthCheckResult.status!!.contains(
+                    "429"
+                ) || ((integrationResult.info!!.contains("429") || integrationResult.status!!.contains(
+                    "429"
+                )) && setByApi)
+            ) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
                     rootView.swipe_layout_hc.isRefreshing = false
@@ -223,7 +256,12 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                     }
                 }
                 return@launch
-            } else if (healthCheckResult.info!!.contains("401") || healthCheckResult.status!!.contains("401") || integrationResult.info!!.contains("401") || integrationResult.status!!.contains("401")) {
+            } else if (healthCheckResult.info!!.contains("401") || healthCheckResult.status!!.contains(
+                    "401"
+                ) || ((integrationResult.info!!.contains("401") || integrationResult.status!!.contains(
+                    "401"
+                )) && setByApi)
+            ) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
                     rootView.swipe_layout_hc.isRefreshing = false
@@ -250,16 +288,25 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                 rootView.tv_warn_healthcheck.text = warningCount.toString()
                 rootView.tv_alarm_healthcheck.text = alarmCount.toString()
 
-                rootView.recycler_healthcheckview?.layoutManager = GridLayoutManager(activity?.applicationContext, 1)
+                rootView.recycler_healthcheckview?.layoutManager =
+                    GridLayoutManager(activity?.applicationContext, 1)
+                healthCheckResult.domain.sortWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
                 val healthAdapter = HealthcheckAdapter(
                     healthCheckResult.domain,
                     requireActivity()
                 )
                 rootView.recycler_healthcheckview?.adapter = healthAdapter
 
-                activity?.applicationContext?.setSharedString("INTEGRATIONS","INTEGRATIONS", Gson().toJson(integrationResult))
+                if (setByApi) {
+                    activity?.applicationContext?.setSharedString(
+                        "INTEGRATIONS",
+                        "INTEGRATIONS",
+                        Gson().toJson(integrationResult)
+                    )
+                }
 
-                healthAdapter.registerAdapterDataObserver(object :  RecyclerView.AdapterDataObserver() {
+                healthAdapter.registerAdapterDataObserver(object :
+                    RecyclerView.AdapterDataObserver() {
                     override fun onChanged() {
                         //Do some task.
                         onRefresh()

@@ -11,6 +11,11 @@
         android:icon="@drawable/ic_monitor_heart_24"
         android:title="Healthcheck" />
     <item
+        android:id="@+id/menu_integrations"
+        android:enabled="true"
+        android:icon="@drawable/round_notification_add_24"
+        android:title="Integrationen" />
+    <item
         android:id="@+id/menu_account"
         android:enabled="true"
         android:icon="@drawable/ic_account_circle_24"

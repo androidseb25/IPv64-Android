@@ -98,6 +98,23 @@ class MainActivity : AppCompatActivity() {
             // Respond to navigation item 2 click
             true
         }
+        R.id.menu_integrations -> {
+            val integrationFragment = IntegrationFragment()
+            topAppBar.title = "Integrationen" //resources.getString(R.string.dashboard)
+            topAppBar.menu.clear()
+            /*when (calendarTypes) {
+                CalendarTypes.Alle -> topAppBar.title = resources.getString(R.string.alle_termine)
+                CalendarTypes.Training -> topAppBar.title = resources.getString(R.string.trainings_termine)
+                CalendarTypes.Event -> topAppBar.title = resources.getString(R.string.event_termine)
+                else -> topAppBar.title = resources.getString(R.string.wettkampf_termine)
+            }
+            topAppBar.inflateMenu(R.menu.filter_menu);*/
+            supportFragmentManager.beginTransaction()
+                .replace(R.id.main_container, integrationFragment, "integrations")
+                .commit()
+            // Respond to navigation item 2 click
+            true
+        }
         else -> false
     }
 }

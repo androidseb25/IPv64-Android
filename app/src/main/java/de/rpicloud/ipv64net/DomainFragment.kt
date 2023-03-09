@@ -7,6 +7,7 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import kotlinx.android.synthetic.main.fragment_domain.*
 import kotlinx.android.synthetic.main.fragment_domain.view.*
+import kotlinx.android.synthetic.main.fragment_healthcheck.view.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -62,6 +63,14 @@ class DomainFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             fragmentManager.executePendingTransactions()
             newFragment.setOnDismissListener {
                 onRefresh()
+            }
+        }
+
+        rootView.recycler_domain.setOnScrollChangeListener { v, scrollX, scrollY, oldScrollX, oldScrollY ->
+            if (scrollY > oldScrollY) {
+                rootView.floating_action_button.hide();
+            } else {
+                rootView.floating_action_button.show();
             }
         }
 
@@ -139,9 +148,10 @@ class DomainFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                 rootView.swipe_layout.isRefreshing = false
                 rootView.recycler_domain?.layoutManager =
                     GridLayoutManager(activity?.applicationContext, 1)
+                val sortedSubdomains = listOfDomains.subdomains!!.toSortedMap()
                 if (listOfDomains.subdomains != null) {
                     domainAdapter = DomainAdapter(
-                        listOfDomains.subdomains!!,
+                        sortedSubdomains,
                         activity,
                         myIP4,
                         myIP6,
