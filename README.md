@@ -1,4 +1,6 @@
 
+![Action Build](https://github.com/github/docs/actions/workflows/android.yml/badge.svg)
+
 # IPv64.net Android App
 
 Das ist die dazugehörige App zum DynDNS - Service von Dennis Schröder für Android Geräte.
