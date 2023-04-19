@@ -1,5 +1,5 @@
 
-![Action Build](https://github.com/github/docs/actions/workflows/android.yml/badge.svg)
+![Action Build](https://github.com/androidseb25/IPv64-Android/actions/workflows/android.yml/badge.svg)
 
 # IPv64.net Android App
 
