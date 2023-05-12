@@ -11,12 +11,16 @@ import android.view.Window
 import androidx.fragment.app.DialogFragment
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
-import kotlinx.android.synthetic.main.fragment_create_healthcheck_dialog.view.*
+import de.rpicloud.ipv64net.databinding.FragmentCreateHealthcheckDialogBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
-class CreateHealthcheckDialogFragment : DialogFragment() {
+class CreateHealthcheckDialogFragment :
+    DialogFragment(R.layout.fragment_create_healthcheck_dialog) {
+
+    private var _binding: FragmentCreateHealthcheckDialogBinding? = null
+    private val binding get() = _binding!!
 
     private var onDismissCalDialog: DialogInterface.OnDismissListener? = null
 
@@ -42,12 +46,12 @@ class CreateHealthcheckDialogFragment : DialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        // Inflate the layout to use as dialog or embedded fragment
-        rootView = inflater.inflate(R.layout.fragment_create_healthcheck_dialog, container, false)
+        _binding = FragmentCreateHealthcheckDialogBinding.inflate(inflater, container, false)
+        rootView = binding.root
 
-        rootView.topAppBarDetail.title = "Neuer Healthcheck"
+        binding.topAppBarDetail.title = "Neuer Healthcheck"
 
-        rootView.topAppBarDetail.setNavigationOnClickListener {
+        binding.topAppBarDetail.setNavigationOnClickListener {
             dismiss()
         }
 
@@ -63,17 +67,17 @@ class CreateHealthcheckDialogFragment : DialogFragment() {
 
         val adapterDomains =
             SelectAdapter(requireActivity(), R.layout.list_item, strList = unitList)
-        rootView.actv_unit.setAdapter(adapterDomains)
+        binding.actvUnit.setAdapter(adapterDomains)
 
-        rootView.tie_unitvalue.filters = arrayOf<InputFilter>(InputFilterMinMax(1f, 60f))
+        binding.tieUnitvalue.filters = arrayOf<InputFilter>(InputFilterMinMax(1f, 60f))
 
-        rootView.actv_unit.setOnItemClickListener { parent, view, position, id ->
+        binding.actvUnit.setOnItemClickListener { parent, view, position, id ->
             val item = parent.getItemAtPosition(position) as String
             println(item)
             selectedUnit = item
         }
 
-        rootView.topAppBarDetail.setOnMenuItemClickListener { menuItem ->
+        binding.topAppBarDetail.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.save -> {
                     spinnDialog.show()
@@ -81,17 +85,17 @@ class CreateHealthcheckDialogFragment : DialogFragment() {
                         spinnDialog.hide()
                         return@setOnMenuItemClickListener true
                     }
-                    if (rootView.tie_unitvalue.text.toString().isEmpty()) {
+                    if (binding.tieUnitvalue.text.toString().isEmpty()) {
                         spinnDialog.hide()
                         return@setOnMenuItemClickListener true
                     }
-                    if (rootView.tie_hc_name.text.toString().isEmpty()) {
+                    if (binding.tieHcName.text.toString().isEmpty()) {
                         spinnDialog.hide()
                         return@setOnMenuItemClickListener true
                     }
 
-                    val unitValue = rootView.tie_unitvalue.text.toString().toInt()
-                    val hc_name = rootView.tie_hc_name.text.toString()
+                    val unitValue = binding.tieUnitvalue.text.toString().toInt()
+                    val hc_name = binding.tieHcName.text.toString()
                     val unit = if (Unit.Minuten.Unit.name == selectedUnit) {
                         Unit.Minuten.Unit.unit
                     } else if (Unit.Stunden.Unit.name == selectedUnit) {
@@ -112,7 +116,8 @@ class CreateHealthcheckDialogFragment : DialogFragment() {
                             launch(Dispatchers.Main) {
                                 spinnDialog.hide()
                                 val fragmentManager = activity?.supportFragmentManager
-                                val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
+                                val newFragment =
+                                    ErrorDialogFragment(ErrorTypes.websiteRequestError)
                                 newFragment.show(fragmentManager!!, "dialogError")
                                 fragmentManager.executePendingTransactions()
                                 newFragment.setOnDismissListener { }
@@ -142,7 +147,8 @@ class CreateHealthcheckDialogFragment : DialogFragment() {
                             launch(Dispatchers.Main) {
                                 spinnDialog.hide()
                                 val fragmentManager = activity?.supportFragmentManager
-                                val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
+                                val newFragment =
+                                    ErrorDialogFragment(ErrorTypes.websiteRequestError)
                                 newFragment.show(fragmentManager!!, "dialogError")
                                 fragmentManager.executePendingTransactions()
                                 newFragment.setOnDismissListener { }
@@ -176,7 +182,8 @@ class CreateHealthcheckDialogFragment : DialogFragment() {
                         launch(Dispatchers.Main) {
                             spinnDialog.hide()
                             val fragmentManager = activity?.supportFragmentManager
-                            val newFragment = ErrorDialogFragment(ErrorTypes.healthcheckCreatedSuccesfully)
+                            val newFragment =
+                                ErrorDialogFragment(ErrorTypes.healthcheckCreatedSuccesfully)
                             newFragment.show(fragmentManager!!, "dialogError")
                             fragmentManager.executePendingTransactions()
                             newFragment.setOnDismissListener {
@@ -186,6 +193,7 @@ class CreateHealthcheckDialogFragment : DialogFragment() {
                     }
                     true
                 }
+
                 else -> false
             }
         }
@@ -207,5 +215,10 @@ class CreateHealthcheckDialogFragment : DialogFragment() {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.window?.setWindowAnimations(R.style.SlideAnimation)
         return dialog
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

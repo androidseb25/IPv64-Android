@@ -7,16 +7,21 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
-import android.widget.Toast
 import androidx.fragment.app.DialogFragment
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
-import kotlinx.android.synthetic.main.fragment_create_dnsrecord_dialog.view.*
+import de.rpicloud.ipv64net.databinding.FragmentCreateDnsrecordDialogBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
-class CreateDNSRecordDialogFragment : DialogFragment() {
+class CreateDNSRecordDialogFragment : DialogFragment(R.layout.fragment_create_dnsrecord_dialog) {
+
+    private var _binding: FragmentCreateDnsrecordDialogBinding? = null
+
+    // This property is only valid between onCreateView and
+// onDestroyView.
+    private val binding get() = _binding!!
 
     private var onDismissCalDialog: DialogInterface.OnDismissListener? = null
 
@@ -44,13 +49,17 @@ class CreateDNSRecordDialogFragment : DialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        // Inflate the layout to use as dialog or embedded fragment
-        rootView = inflater.inflate(R.layout.fragment_create_dnsrecord_dialog, container, false)
+        _binding = FragmentCreateDnsrecordDialogBinding.inflate(inflater, container, false)
+        rootView = binding.root
 
-        rootView.topAppBarDetail.title = "Neuer DNS-Record"
+        binding.topAppBarDetail.title = "Neuer DNS-Record"
 
-        rootView.topAppBarDetail.setNavigationOnClickListener {
-            requireActivity().applicationContext.setSharedBool("DNSRECORDDISMISS", "DNSRECORDDISMISS", true)
+        binding.topAppBarDetail.setNavigationOnClickListener {
+            requireActivity().applicationContext.setSharedBool(
+                "DNSRECORDDISMISS",
+                "DNSRECORDDISMISS",
+                true
+            )
             dismiss()
         }
 
@@ -71,21 +80,21 @@ class CreateDNSRecordDialogFragment : DialogFragment() {
 
         val adapterDomains =
             SelectAdapter(requireActivity(), R.layout.list_item, strList = typList)
-        rootView.actv_typ.setAdapter(adapterDomains)
+        binding.actvTyp.setAdapter(adapterDomains)
 
-        rootView.actv_typ.setOnItemClickListener { parent, view, position, id ->
+        binding.actvTyp.setOnItemClickListener { parent, view, position, id ->
             val item = parent.getItemAtPosition(position) as String
             println(item)
             selectedTyp = item
         }
 
-        rootView.topAppBarDetail.setOnMenuItemClickListener { menuItem ->
+        binding.topAppBarDetail.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.save -> {
                     spinnDialog.show()
                     println("SAVE")
-                    val praefix = rootView.tie_praefix.text.toString().trim()
-                    val wert = rootView.tie_wert.text.toString().trim()
+                    val praefix = binding.tiePraefix.text.toString().trim()
+                    val wert = binding.tieWert.text.toString().trim()
                     val typ = selectedTyp
 
                     if (wert.isEmpty() || typ.isEmpty()) {
@@ -103,7 +112,8 @@ class CreateDNSRecordDialogFragment : DialogFragment() {
                             launch(Dispatchers.Main) {
                                 spinnDialog.hide()
                                 val fragmentManager = activity?.supportFragmentManager
-                                val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
+                                val newFragment =
+                                    ErrorDialogFragment(ErrorTypes.websiteRequestError)
                                 newFragment.show(fragmentManager!!, "dialogError")
                                 fragmentManager.executePendingTransactions()
                                 newFragment.setOnDismissListener { }
@@ -133,7 +143,8 @@ class CreateDNSRecordDialogFragment : DialogFragment() {
                             launch(Dispatchers.Main) {
                                 spinnDialog.hide()
                                 val fragmentManager = activity?.supportFragmentManager
-                                val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
+                                val newFragment =
+                                    ErrorDialogFragment(ErrorTypes.websiteRequestError)
                                 newFragment.show(fragmentManager!!, "dialogError")
                                 fragmentManager.executePendingTransactions()
                                 newFragment.setOnDismissListener { }
@@ -166,17 +177,23 @@ class CreateDNSRecordDialogFragment : DialogFragment() {
                         launch(Dispatchers.Main) {
                             spinnDialog.hide()
                             val fragmentManager = activity?.supportFragmentManager
-                            val newFragment = ErrorDialogFragment(ErrorTypes.dnsRecordSuccesfullyCreated)
+                            val newFragment =
+                                ErrorDialogFragment(ErrorTypes.dnsRecordSuccesfullyCreated)
                             newFragment.show(fragmentManager!!, "dialogError")
                             fragmentManager.executePendingTransactions()
                             newFragment.setOnDismissListener {
-                                requireActivity().applicationContext.setSharedBool("DNSRECORDDISMISS", "DNSRECORDDISMISS", false)
+                                requireActivity().applicationContext.setSharedBool(
+                                    "DNSRECORDDISMISS",
+                                    "DNSRECORDDISMISS",
+                                    false
+                                )
                                 dismiss()
                             }
                         }
                     }
                     true
                 }
+
                 else -> false
             }
         }
@@ -198,5 +215,10 @@ class CreateDNSRecordDialogFragment : DialogFragment() {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.window?.setWindowAnimations(R.style.SlideAnimation)
         return dialog
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

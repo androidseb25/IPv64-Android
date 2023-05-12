@@ -8,8 +8,7 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.gson.Gson
-import kotlinx.android.synthetic.main.fragment_healthcheck.view.*
-import kotlinx.android.synthetic.main.fragment_integrations.view.*
+import de.rpicloud.ipv64net.databinding.FragmentIntegrationsBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -26,7 +25,11 @@ private const val ARG_PARAM2 = "param2"
  * create an instance of this fragment.
  */
 
-class IntegrationFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
+class IntegrationFragment : Fragment(R.layout.fragment_integrations),
+    SwipeRefreshLayout.OnRefreshListener {
+
+    private var _binding: FragmentIntegrationsBinding? = null
+    private val binding get() = _binding!!
 
     // TODO: Rename and change types of parameters
     private var param1: String? = null
@@ -45,15 +48,16 @@ class IntegrationFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
     }
 
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        // Inflate the layout for this fragment
-        rootView = inflater.inflate(R.layout.fragment_integrations, container, false)
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
+    ): View {
+
+        _binding = FragmentIntegrationsBinding.inflate(inflater, container, false)
+        rootView = binding.root
+
         ApiNetwork.context = activity?.applicationContext
         ErrorTypes.context = activity?.applicationContext
-        rootView.swipe_layout_integration.setOnRefreshListener(this)
-        rootView.recycler_integration?.layoutManager =
+        binding.swipeLayoutIntegration.setOnRefreshListener(this)
+        binding.recyclerIntegration.layoutManager =
             GridLayoutManager(activity?.applicationContext, 1)
         getData()
 
@@ -67,7 +71,7 @@ class IntegrationFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
 
             if (responseIntegration.isEmpty()) {
                 launch(Dispatchers.Main) {
-                    rootView.swipe_layout_integration.isRefreshing = false
+                    binding.swipeLayoutIntegration.isRefreshing = false
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
                     newFragment.show(fragmentManager!!, "dialogError")
@@ -123,7 +127,7 @@ class IntegrationFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
 
             if (integrationResult.info == null || integrationResult.status == null) {
                 launch(Dispatchers.Main) {
-                    rootView.swipe_layout_integration.isRefreshing = false
+                    binding.swipeLayoutIntegration.isRefreshing = false
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
                     newFragment.show(fragmentManager!!, "dialogError")
@@ -135,7 +139,7 @@ class IntegrationFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                 )
             ) {
                 launch(Dispatchers.Main) {
-                    rootView.swipe_layout_integration.isRefreshing = false
+                    binding.swipeLayoutIntegration.isRefreshing = false
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
                     newFragment.show(fragmentManager!!, "dialogError")
@@ -147,7 +151,7 @@ class IntegrationFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                 )
             ) {
                 launch(Dispatchers.Main) {
-                    rootView.swipe_layout_integration.isRefreshing = false
+                    binding.swipeLayoutIntegration.isRefreshing = false
                     println("SHOW ERROR")
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.tooManyRequests)
@@ -163,7 +167,7 @@ class IntegrationFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                 )
             ) {
                 launch(Dispatchers.Main) {
-                    rootView.swipe_layout_integration.isRefreshing = false
+                    binding.swipeLayoutIntegration.isRefreshing = false
                     println("SHOW ERROR")
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.unauthorized)
@@ -175,24 +179,21 @@ class IntegrationFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             }
 
             launch(Dispatchers.Main) {
-                rootView.swipe_layout_integration.isRefreshing = false
+                binding.swipeLayoutIntegration.isRefreshing = false
                 activity?.applicationContext?.setSharedString(
-                    "INTEGRATIONS",
-                    "INTEGRATIONS",
-                    Gson().toJson(integrationResult)
+                    "INTEGRATIONS", "INTEGRATIONS", Gson().toJson(integrationResult)
                 )
                 integrationResult.integration.sortWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.integration_name!! })
                 integrationAdapter = IntegrationAdapter(
-                    integrationResult.integration,
-                    requireActivity()
+                    integrationResult.integration, requireActivity()
                 )
-                rootView.recycler_integration?.adapter = integrationAdapter
+                binding.recyclerIntegration.adapter = integrationAdapter
             }
         }
     }
 
     override fun onRefresh() {
-        rootView.swipe_layout_integration.isRefreshing = true
+        binding.swipeLayoutIntegration.isRefreshing = true
         getData()
     }
 
@@ -207,12 +208,16 @@ class IntegrationFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
          */
         // TODO: Rename and change types and number of parameters
         @JvmStatic
-        fun newInstance(param1: String, param2: String) =
-            IntegrationFragment().apply {
-                arguments = Bundle().apply {
-                    putString(ARG_PARAM1, param1)
-                    putString(ARG_PARAM2, param2)
-                }
+        fun newInstance(param1: String, param2: String) = IntegrationFragment().apply {
+            arguments = Bundle().apply {
+                putString(ARG_PARAM1, param1)
+                putString(ARG_PARAM2, param2)
             }
+        }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

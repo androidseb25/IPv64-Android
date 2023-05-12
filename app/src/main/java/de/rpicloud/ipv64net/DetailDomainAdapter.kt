@@ -4,23 +4,20 @@ import android.annotation.SuppressLint
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.TextView
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.FragmentActivity
 import androidx.recyclerview.widget.RecyclerView
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
-import com.google.android.material.button.MaterialButton
-import kotlinx.android.synthetic.main.activity_main.*
-import kotlinx.android.synthetic.main.adapter_detail_domain.view.*
+import de.rpicloud.ipv64net.databinding.AdapterDetailDomainBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-class DetailDomainAdapter(private var dataSet: MutableList<RecordInfos>,
-                          private val activity: FragmentActivity
+class DetailDomainAdapter(
+    private var dataSet: MutableList<RecordInfos>, private val activity: FragmentActivity
 ) : RecyclerView.Adapter<DetailDomainAdapter.ViewHolder>() {
     private var mOnChangedInRecyclerListener: OnChangedInRecyclerListener? = null
     private lateinit var spinnDialog: MaterialDialog
@@ -41,24 +38,26 @@ class DetailDomainAdapter(private var dataSet: MutableList<RecordInfos>,
      * (custom ViewHolder).
      */
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        var tv_header_typ: TextView?
-        var tv_ttl: TextView?
-        var tv_typ: TextView?
-        var tv_wert: TextView?
-        var tv_datum: TextView?
-        var tv_praefix: TextView?
-        var btn_deleteBtn: MaterialButton?
+        val binding = AdapterDetailDomainBinding.bind(view)
 
-        init {
-            // Define click listener for the ViewHolder's View.
-            tv_header_typ = view.tv_header_typ
-            tv_ttl = view.tv_ttl
-            tv_typ = view.tv_typ
-            tv_wert = view.tv_wert
-            tv_datum = view.tv_datum
-            tv_praefix = view.tv_praefix
-            btn_deleteBtn = view.btn_deleteRecord
-        }
+//        var tv_header_typ: TextView?
+//        var tv_ttl: TextView?
+//        var tv_typ: TextView?
+//        var tv_wert: TextView?
+//        var tv_datum: TextView?
+//        var tv_praefix: TextView?
+//        var btn_deleteBtn: MaterialButton?
+//
+//        init {
+//            // Define click listener for the ViewHolder's View.
+//            tv_header_typ = view.tv_header_typ
+//            tv_ttl = view.tv_ttl
+//            tv_typ = view.tv_typ
+//            tv_wert = view.tv_wert
+//            tv_datum = view.tv_datum
+//            tv_praefix = view.tv_praefix
+//            btn_deleteBtn = view.btn_deleteRecord
+//        }
     }
 
     // Create new views (invoked by the layout manager)
@@ -79,41 +78,42 @@ class DetailDomainAdapter(private var dataSet: MutableList<RecordInfos>,
 
     // Replace the contents of a view (invoked by the layout manager)
     override fun onBindViewHolder(
-        viewHolder: ViewHolder,
-        @SuppressLint("RecyclerView") position: Int
+        viewHolder: ViewHolder, @SuppressLint("RecyclerView") position: Int
     ) {
-        val item = dataSet[position]
-        println(item)
+        with(viewHolder) {
+            val item = dataSet[position]
+            println(item)
 
-        viewHolder.tv_header_typ!!.text = item.type
+            binding.tvHeaderTyp.text = item.type
 
-        viewHolder.tv_ttl!!.text = item.ttl!!.toString()
+            binding.tvTtl.text = item.ttl!!.toString()
 
-        viewHolder.tv_typ!!.text = item.type
+            binding.tvTyp.text = item.type
 
-        viewHolder.tv_wert!!.text = item.content
+            binding.tvWert.text = item.content
 
-        val df = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-        val localDateTime: LocalDateTime = LocalDateTime.parse(item.last_update, df)
-        val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")
-        val output: String = formatter.format(localDateTime)
+            val df = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+            val localDateTime: LocalDateTime = LocalDateTime.parse(item.last_update, df)
+            val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")
+            val output: String = formatter.format(localDateTime)
 
-        viewHolder.tv_datum!!.text = output
+            binding.tvDatum.text = output
 
-        viewHolder.tv_praefix!!.text = item.praefix
+            binding.tvPraefix.text = item.praefix
 
-        viewHolder.btn_deleteBtn!!.setOnClickListener {
-            val fragmentManager = activity.supportFragmentManager
-            val newFragment = ErrorDialogFragment(ErrorTypes.deleteDNSRecord)
-            newFragment.show(fragmentManager, "dialoDelete")
-            fragmentManager.executePendingTransactions()
-            newFragment.setOnDismissListener {
-                val isCanceld = activity.getSharedBool("ISCANCELD", "ISCANCELD") as Boolean
-                if (!isCanceld) {
-                    spinnDialog.show()
-                    activity.setSharedBool("ISCANCELD", "ISCANCELD", true)
-                    println(item.record_id)
-                    deleteRecord(item.record_id!!)
+            binding.btnDeleteRecord.setOnClickListener {
+                val fragmentManager = activity.supportFragmentManager
+                val newFragment = ErrorDialogFragment(ErrorTypes.deleteDNSRecord)
+                newFragment.show(fragmentManager, "dialoDelete")
+                fragmentManager.executePendingTransactions()
+                newFragment.setOnDismissListener {
+                    val isCanceld = activity.getSharedBool("ISCANCELD", "ISCANCELD")
+                    if (!isCanceld) {
+                        spinnDialog.show()
+                        activity.setSharedBool("ISCANCELD", "ISCANCELD", true)
+                        println(item.record_id)
+                        deleteRecord(item.record_id!!)
+                    }
                 }
             }
         }
@@ -156,15 +156,15 @@ class DetailDomainAdapter(private var dataSet: MutableList<RecordInfos>,
                     val newFragment = ErrorDialogFragment(ErrorTypes.unauthorized)
                     newFragment.show(fragmentManager, "dialogError")
                     fragmentManager.executePendingTransactions()
-                    newFragment.setOnDismissListener {
-                    }
+                    newFragment.setOnDismissListener {}
                 }
                 return@launch
             }
 
             launch(Dispatchers.Main) {
                 spinnDialog.hide()
-                val frag = activity.supportFragmentManager.fragments.firstOrNull { it.tag == "dialogDomain" } as DialogFragment
+                val frag =
+                    activity.supportFragmentManager.fragments.firstOrNull { it.tag == "dialogDomain" } as DialogFragment
                 frag.dismiss()
             }
         }

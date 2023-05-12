@@ -8,9 +8,12 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import androidx.fragment.app.DialogFragment
-import kotlinx.android.synthetic.main.fragment_whatsnew_dialog.view.*
+import de.rpicloud.ipv64net.databinding.FragmentWhatsnewDialogBinding
 
-class WhatsNewDialogFragment : DialogFragment() {
+class WhatsNewDialogFragment : DialogFragment(R.layout.fragment_whatsnew_dialog) {
+
+    private var _binding: FragmentWhatsnewDialogBinding? = null
+    private val binding get() = _binding!!
 
     private var onDismissDialog: DialogInterface.OnDismissListener? = null
 
@@ -34,10 +37,11 @@ class WhatsNewDialogFragment : DialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        // Inflate the layout to use as dialog or embedded fragment
-        rootView = inflater.inflate(R.layout.fragment_whatsnew_dialog, container, false)
 
-        rootView.topAppBarWhatsNew.setNavigationOnClickListener {
+        _binding = FragmentWhatsnewDialogBinding.inflate(inflater, container, false)
+        rootView = binding.root
+
+        binding.topAppBarWhatsNew.setNavigationOnClickListener {
             dismiss()
         }
 
@@ -48,7 +52,7 @@ class WhatsNewDialogFragment : DialogFragment() {
 
     /** The system calls this only when creating the layout in a dialog. */
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
-        setStyle(STYLE_NO_TITLE, R.style.Theme_IPv64net);
+        setStyle(STYLE_NO_TITLE, R.style.Theme_IPv64net)
 
         // The only reason you might override this method when using onCreateView() is
         // to modify any dialog characteristics. For example, the dialog includes a
@@ -64,6 +68,11 @@ class WhatsNewDialogFragment : DialogFragment() {
         val activity = requireActivity()
         dialogFragment = dialog!!
 
-        rootView.whatsnewTitle.text = "Was ist neu in\nv${BuildConfig.VERSION_NAME}"
+        binding.whatsnewTitle.text = "Was ist neu in\nv${BuildConfig.VERSION_NAME}"
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

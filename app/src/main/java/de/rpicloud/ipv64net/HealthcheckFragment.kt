@@ -11,9 +11,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
 import com.google.gson.Gson
-import kotlinx.android.synthetic.main.fragment_domain.*
-import kotlinx.android.synthetic.main.fragment_domain.view.*
-import kotlinx.android.synthetic.main.fragment_healthcheck.view.*
+import de.rpicloud.ipv64net.databinding.FragmentHealthcheckBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -30,7 +28,11 @@ private const val ARG_PARAM2 = "param2"
  * create an instance of this fragment.
  */
 
-class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
+class HealthcheckFragment : Fragment(R.layout.fragment_healthcheck),
+    SwipeRefreshLayout.OnRefreshListener {
+
+    private var _binding: FragmentHealthcheckBinding? = null
+    private val binding get() = _binding!!
 
     // TODO: Rename and change types of parameters
     private var param1: String? = null
@@ -50,14 +52,16 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
     }
 
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
+    ): View {
+
+        _binding = FragmentHealthcheckBinding.inflate(inflater, container, false)
+        rootView = binding.root
+
         // Inflate the layout for this fragment
-        rootView = inflater.inflate(R.layout.fragment_healthcheck, container, false)
         ApiNetwork.context = activity?.applicationContext
         ErrorTypes.context = activity?.applicationContext
-        rootView.swipe_layout_hc.setOnRefreshListener(this)
+        binding.swipeLayoutHc.setOnRefreshListener(this)
 
         spinnDialog = MaterialDialog(requireActivity())
         spinnDialog.title(null, "Daten werden geladen...")
@@ -67,7 +71,7 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
 
         onRefresh()
 
-        rootView.floating_action_button_hc.setOnClickListener {
+        binding.floatingActionButtonHc.setOnClickListener {
             val fragmentManager = activity?.supportFragmentManager
             val newFragment = CreateHealthcheckDialogFragment()
             newFragment.show(fragmentManager!!, "dialogCreateHealthcheck")
@@ -77,11 +81,11 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             }
         }
 
-        rootView.nsv_healthcheck.setOnScrollChangeListener { v, scrollX, scrollY, oldScrollX, oldScrollY ->
+        binding.nsvHealthcheck.setOnScrollChangeListener { v, scrollX, scrollY, oldScrollX, oldScrollY ->
             if (scrollY > oldScrollY) {
-                rootView.floating_action_button_hc.hide();
+                binding.floatingActionButtonHc.hide()
             } else {
-                rootView.floating_action_button_hc.show();
+                binding.floatingActionButtonHc.show()
             }
         }
 
@@ -89,7 +93,7 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
     }
 
     private fun getData() {
-        rootView.swipe_layout_hc.isRefreshing = true
+        binding.swipeLayoutHc.isRefreshing = true
         spinnDialog.show()
         GlobalScope.launch(Dispatchers.Default) {
             val response = ApiNetwork.GetHealthchecks()
@@ -107,7 +111,7 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             if (response.isEmpty()) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
-                    rootView.swipe_layout_hc.isRefreshing = false
+                    binding.swipeLayoutHc.isRefreshing = false
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
                     newFragment.show(fragmentManager!!, "dialogError")
@@ -120,7 +124,7 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             if (responseIntegration.isEmpty() && setByApi) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
-                    rootView.swipe_layout_hc.isRefreshing = false
+                    binding.swipeLayoutHc.isRefreshing = false
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
                     newFragment.show(fragmentManager!!, "dialogError")
@@ -188,23 +192,25 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                         println("currentDynamicValue.toString()")
                         println(currentDynamicValue.toString())
                     } else {
-                    if (currentDynamicKey == "info") {
-                        integrationResult.info = integrationObject[currentDynamicKey].toString()
-                    }
-                    if (currentDynamicKey == "status") {
-                        integrationResult.status = integrationObject[currentDynamicKey].toString()
-                    }
-                    if (currentDynamicKey == "get_account_info") {
-                        integrationResult.get_account_info =
-                            integrationObject[currentDynamicKey].toString()
-                    }
+                        if (currentDynamicKey == "info") {
+                            integrationResult.info = integrationObject[currentDynamicKey].toString()
+                        }
+                        if (currentDynamicKey == "status") {
+                            integrationResult.status =
+                                integrationObject[currentDynamicKey].toString()
+                        }
+                        if (currentDynamicKey == "get_account_info") {
+                            integrationResult.get_account_info =
+                                integrationObject[currentDynamicKey].toString()
+                        }
                     }
                 }
 
                 if (!inIntegrationKeys) {
                     val gson = Gson()
                     println(responseIntegration)
-                    integrationResult = gson.fromJson(responseIntegration, IntegrationResult::class.java)
+                    integrationResult =
+                        gson.fromJson(responseIntegration, IntegrationResult::class.java)
                 }
                 println("integrationResult")
                 println(integrationResult)
@@ -215,7 +221,7 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             if (healthCheckResult.info == null || healthCheckResult.status == null || ((integrationResult.info == null || integrationResult.status == null) && setByApi)) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
-                    rootView.swipe_layout_hc.isRefreshing = false
+                    binding.swipeLayoutHc.isRefreshing = false
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
                     newFragment.show(fragmentManager!!, "dialogError")
@@ -230,7 +236,7 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             ) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
-                    rootView.swipe_layout_hc.isRefreshing = false
+                    binding.swipeLayoutHc.isRefreshing = false
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
                     newFragment.show(fragmentManager!!, "dialogError")
@@ -245,7 +251,7 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             ) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
-                    rootView.swipe_layout_hc.isRefreshing = false
+                    binding.swipeLayoutHc.isRefreshing = false
                     println("SHOW ERROR")
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.tooManyRequests)
@@ -264,7 +270,7 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             ) {
                 launch(Dispatchers.Main) {
                     spinnDialog.hide()
-                    rootView.swipe_layout_hc.isRefreshing = false
+                    binding.swipeLayoutHc.isRefreshing = false
                     println("SHOW ERROR")
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.unauthorized)
@@ -277,47 +283,44 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
 
             launch(Dispatchers.Main) {
                 spinnDialog.hide()
-                rootView.swipe_layout_hc.isRefreshing = false
+                binding.swipeLayoutHc.isRefreshing = false
                 val activeCount = healthCheckResult.domain.count { it.healthstatus == 1 }
                 val pausedCount = healthCheckResult.domain.count { it.healthstatus == 2 }
                 val warningCount = healthCheckResult.domain.count { it.healthstatus == 3 }
                 val alarmCount = healthCheckResult.domain.count { it.healthstatus == 4 }
 
-                rootView.tv_active_healthcheck.text = activeCount.toString()
-                rootView.tv_pause_healthcheck.text = pausedCount.toString()
-                rootView.tv_warn_healthcheck.text = warningCount.toString()
-                rootView.tv_alarm_healthcheck.text = alarmCount.toString()
+                binding.tvActiveHealthcheck.text = activeCount.toString()
+                binding.tvPauseHealthcheck.text = pausedCount.toString()
+                binding.tvWarnHealthcheck.text = warningCount.toString()
+                binding.tvAlarmHealthcheck.text = alarmCount.toString()
 
-                rootView.recycler_healthcheckview?.layoutManager =
+                binding.recyclerHealthcheckview.layoutManager =
                     GridLayoutManager(activity?.applicationContext, 1)
                 healthCheckResult.domain.sortWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
                 val healthAdapter = HealthcheckAdapter(
-                    healthCheckResult.domain,
-                    requireActivity()
+                    healthCheckResult.domain, requireActivity()
                 )
-                rootView.recycler_healthcheckview?.adapter = healthAdapter
+                binding.recyclerHealthcheckview.adapter = healthAdapter
 
                 if (setByApi) {
                     activity?.applicationContext?.setSharedString(
-                        "INTEGRATIONS",
-                        "INTEGRATIONS",
-                        Gson().toJson(integrationResult)
+                        "INTEGRATIONS", "INTEGRATIONS", Gson().toJson(integrationResult)
                     )
                 }
 
-                healthAdapter.registerAdapterDataObserver(object :
-                    RecyclerView.AdapterDataObserver() {
-                    override fun onChanged() {
-                        //Do some task.
-                        onRefresh()
-                    }
-                })
+//                healthAdapter.registerAdapterDataObserver(object :
+//                    RecyclerView.AdapterDataObserver() {
+//                    override fun onChanged() {
+//                        //Do some task.
+//                        onRefresh()
+//                    }
+//                })
             }
         }
     }
 
     override fun onRefresh() {
-        rootView.swipe_layout_hc.isRefreshing = true
+        binding.swipeLayoutHc.isRefreshing = true
         getData()
     }
 
@@ -338,5 +341,10 @@ class HealthcheckFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                 putString(ARG_PARAM2, param2)
             }
         }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

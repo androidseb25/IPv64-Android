@@ -5,9 +5,7 @@ import android.view.*
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import kotlinx.android.synthetic.main.fragment_domain.*
-import kotlinx.android.synthetic.main.fragment_domain.view.*
-import kotlinx.android.synthetic.main.fragment_healthcheck.view.*
+import de.rpicloud.ipv64net.databinding.FragmentDomainBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -23,7 +21,10 @@ private const val ARG_PARAM2 = "param2"
  * create an instance of this fragment.
  */
 
-class DomainFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
+class DomainFragment : Fragment(R.layout.fragment_domain), SwipeRefreshLayout.OnRefreshListener {
+
+    private var _binding: FragmentDomainBinding? = null
+    private val binding get() = _binding!!
 
     // TODO: Rename and change types of parameters
     private var param1: String? = null
@@ -46,17 +47,17 @@ class DomainFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
     }
 
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        // Inflate the layout for this fragment
-        rootView = inflater.inflate(R.layout.fragment_domain, container, false)
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
+    ): View {
+        _binding = FragmentDomainBinding.inflate(inflater, container, false)
+        rootView = binding.root
+
         ApiNetwork.context = activity?.applicationContext
         ErrorTypes.context = activity?.applicationContext
-        rootView.swipe_layout.setOnRefreshListener(this)
+        binding.swipeLayout.setOnRefreshListener(this)
         getData()
 
-        rootView.floating_action_button.setOnClickListener {
+        binding.floatingActionButton.setOnClickListener {
             val fragmentManager = activity?.supportFragmentManager
             val newFragment = CreateDomainDialogFragment()
             newFragment.show(fragmentManager!!, "dialogCreateDomain")
@@ -66,11 +67,11 @@ class DomainFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             }
         }
 
-        rootView.recycler_domain.setOnScrollChangeListener { v, scrollX, scrollY, oldScrollX, oldScrollY ->
+        binding.recyclerDomain.setOnScrollChangeListener { v, scrollX, scrollY, oldScrollX, oldScrollY ->
             if (scrollY > oldScrollY) {
-                rootView.floating_action_button.hide();
+                binding.floatingActionButton.hide()
             } else {
-                rootView.floating_action_button.show();
+                binding.floatingActionButton.show()
             }
         }
 
@@ -96,7 +97,7 @@ class DomainFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
 
             if (listOfDomains.info == null) {
                 launch(Dispatchers.Main) {
-                    rootView.swipe_layout.isRefreshing = false
+                    binding.swipeLayout.isRefreshing = false
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
                     newFragment.show(fragmentManager!!, "dialogError")
@@ -107,7 +108,7 @@ class DomainFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
                 }
             } else if (listOfDomains.info!!.contains("500")) {
                 launch(Dispatchers.Main) {
-                    rootView.swipe_layout.isRefreshing = false
+                    binding.swipeLayout.isRefreshing = false
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
                     newFragment.show(fragmentManager!!, "dialogError")
@@ -119,11 +120,11 @@ class DomainFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             } else if (listOfDomains.info!!.contains("429")) {
                 launch(Dispatchers.Main) {
                     println("SHOW ERROR")
-                    rootView.swipe_layout.isRefreshing = false
+                    binding.swipeLayout.isRefreshing = false
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.tooManyRequests)
                     if (fragmentManager != null) {
-                        newFragment.show(fragmentManager!!, "dialogError")
+                        newFragment.show(fragmentManager, "dialogError")
                         fragmentManager.executePendingTransactions()
                         newFragment.setOnDismissListener { }
                     }
@@ -132,8 +133,7 @@ class DomainFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             } else if (listOfDomains.info!!.contains("401")) {
                 launch(Dispatchers.Main) {
                     println("SHOW ERROR")
-                    rootView.swipe_layout.isRefreshing = false
-                    /*Toast.makeText(applicationContext, "Keine Domainen gefunden!", Toast.LENGTH_LONG)
+                    binding.swipeLayout.isRefreshing = false/*Toast.makeText(applicationContext, "Keine Domainen gefunden!", Toast.LENGTH_LONG)
                         .show()*/
                     val fragmentManager = activity?.supportFragmentManager
                     val newFragment = ErrorDialogFragment(ErrorTypes.unauthorized)
@@ -145,26 +145,22 @@ class DomainFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
             }
 
             launch(Dispatchers.Main) {
-                rootView.swipe_layout.isRefreshing = false
-                rootView.recycler_domain?.layoutManager =
+                binding.swipeLayout.isRefreshing = false
+                binding.recyclerDomain.layoutManager =
                     GridLayoutManager(activity?.applicationContext, 1)
                 val sortedSubdomains = listOfDomains.subdomains!!.toSortedMap()
                 if (listOfDomains.subdomains != null) {
                     domainAdapter = DomainAdapter(
-                        sortedSubdomains,
-                        activity,
-                        myIP4,
-                        myIP6,
-                        accountInfo
+                        sortedSubdomains, activity, myIP4, myIP6, accountInfo
                     )
-                    rootView.recycler_domain?.adapter = domainAdapter
+                    binding.recyclerDomain.adapter = domainAdapter
                 }
             }
         }
     }
 
     override fun onRefresh() {
-        swipe_layout.isRefreshing = true
+        binding.swipeLayout.isRefreshing = true
         getData()
         getMyIPs()
     }
@@ -180,12 +176,16 @@ class DomainFragment : Fragment(), SwipeRefreshLayout.OnRefreshListener {
          */
         // TODO: Rename and change types and number of parameters
         @JvmStatic
-        fun newInstance(param1: String, param2: String) =
-            DomainFragment().apply {
-                arguments = Bundle().apply {
-                    putString(ARG_PARAM1, param1)
-                    putString(ARG_PARAM2, param2)
-                }
+        fun newInstance(param1: String, param2: String) = DomainFragment().apply {
+            arguments = Bundle().apply {
+                putString(ARG_PARAM1, param1)
+                putString(ARG_PARAM2, param2)
             }
+        }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

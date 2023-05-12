@@ -11,12 +11,15 @@ import androidx.fragment.app.DialogFragment
 import androidx.recyclerview.widget.GridLayoutManager
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
-import kotlinx.android.synthetic.main.fragment_logs_dialog.view.*
+import de.rpicloud.ipv64net.databinding.FragmentLogsDialogBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
-class LogsDialogFragment : DialogFragment() {
+class LogsDialogFragment : DialogFragment(R.layout.fragment_logs_dialog) {
+
+    private var _binding: FragmentLogsDialogBinding? = null
+    private val binding get() = _binding!!
 
     private var onDismissCalDialog: DialogInterface.OnDismissListener? = null
     private var logs = Logs()
@@ -39,11 +42,13 @@ class LogsDialogFragment : DialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        // Inflate the layout to use as dialog or embedded fragment
-        rootView = inflater.inflate(R.layout.fragment_logs_dialog, container, false)
-        rootView.recycler_logs?.layoutManager = GridLayoutManager(requireActivity().applicationContext, 1)
 
-        spinnDialog = MaterialDialog(requireActivity())
+        _binding = FragmentLogsDialogBinding.inflate(inflater, container, false)
+        rootView = binding.root
+
+        binding.recyclerLogs.layoutManager = GridLayoutManager(requireActivity().applicationContext, 1)
+
+        spinnDialog = MaterialDialog(rootView.context)
         spinnDialog.title(null, "Daten werden geladen...")
         spinnDialog.customView(R.layout.loading_spinner)
         spinnDialog.cancelable(false)
@@ -106,7 +111,7 @@ class LogsDialogFragment : DialogFragment() {
             launch(Dispatchers.Main) {
                 spinnDialog.hide()
                 val adapterLogs = LogsAdapter(logs.logs!!.subList(0, 10), requireActivity())
-                rootView.recycler_logs.adapter = adapterLogs
+                binding.recyclerLogs.adapter = adapterLogs
             }
         }
     }
@@ -123,5 +128,10 @@ class LogsDialogFragment : DialogFragment() {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.window?.setWindowAnimations(R.style.SlideAnimation)
         return dialog
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

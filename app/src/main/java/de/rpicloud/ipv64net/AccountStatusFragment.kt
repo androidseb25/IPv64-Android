@@ -9,10 +9,8 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
-import androidx.recyclerview.widget.GridLayoutManager
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
-import kotlinx.android.synthetic.main.fragment_domain.view.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -36,6 +34,18 @@ class AccountStatusFragment : PreferenceFragmentCompat() {
     var accountInfo: AccountInfo = AccountInfo()
     private lateinit var spinnDialog: MaterialDialog
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        spinnDialog = MaterialDialog(requireActivity())
+        spinnDialog.title(null, "Daten werden geladen...")
+        spinnDialog.customView(R.layout.loading_spinner)
+        spinnDialog.cancelable(false)
+        spinnDialog.cancelOnTouchOutside(false)
+
+        getData()
+    }
+
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
 
         /*val isPortrait = resources.getBoolean(R.bool.portrait_only)
@@ -46,15 +56,7 @@ class AccountStatusFragment : PreferenceFragmentCompat() {
             setPreferencesFromResource(R.xml.main_preferences_tablet, rootKey)
         }*/
 
-        spinnDialog = MaterialDialog(requireActivity())
-        spinnDialog.title(null, "Daten werden geladen...")
-        spinnDialog.customView(R.layout.loading_spinner)
-        spinnDialog.cancelable(false)
-        spinnDialog.cancelOnTouchOutside(false)
-
         fm = activity?.supportFragmentManager!!
-
-        getData()
     }
 
     private fun setUpViews() {
@@ -81,29 +83,46 @@ class AccountStatusFragment : PreferenceFragmentCompat() {
         val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")
         val output: String = formatter.format(localDateTime)
         registered?.summary = output
-        dyndns?.summary = "${accountInfo.dyndns_subdomains} / ${accountInfo.account_class?.dyndns_domain_limit}"
-        domains?.summary = "${accountInfo.owndomains} / ${accountInfo.account_class?.owndomain_limit}"
-        dyndns_update_limit?.summary = "${accountInfo.dyndns_updates} / ${accountInfo.account_class?.dyndns_update_limit}"
+        dyndns?.summary =
+            "${accountInfo.dyndns_subdomains} / ${accountInfo.account_class?.dyndns_domain_limit}"
+        domains?.summary =
+            "${accountInfo.owndomains} / ${accountInfo.account_class?.owndomain_limit}"
+        dyndns_update_limit?.summary =
+            "${accountInfo.dyndns_updates} / ${accountInfo.account_class?.dyndns_update_limit}"
 
-        healthchecks?.summary = "${accountInfo.healthchecks} / ${accountInfo.account_class?.healthcheck_limit}"
-        healthchecks_updates?.summary = "${accountInfo.healthchecks_updates} / ${accountInfo.account_class?.healthcheck_update_limit}"
+        healthchecks?.summary =
+            "${accountInfo.healthchecks} / ${accountInfo.account_class?.healthcheck_limit}"
+        healthchecks_updates?.summary =
+            "${accountInfo.healthchecks_updates} / ${accountInfo.account_class?.healthcheck_update_limit}"
 
-        val unendlich = if (accountInfo.account_class?.api_limit == 0) "∞" else "" + accountInfo.account_class?.api_limit
+        val unendlich =
+            if (accountInfo.account_class?.api_limit == 0) "∞" else "" + accountInfo.account_class?.api_limit
         api_limits?.summary = "${accountInfo.api_updates} / $unendlich"
         sms_limits?.summary = "${accountInfo.sms_count} / ${accountInfo.account_class?.sms_limit}"
 
         dyndns_updatehash?.setOnPreferenceClickListener {
-            val clipboard: ClipboardManager = requireActivity().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip: ClipData = ClipData.newPlainText("DynDNS Updatehash kopiert!", accountInfo.update_hash)
+            val clipboard: ClipboardManager =
+                requireActivity().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip: ClipData =
+                ClipData.newPlainText("DynDNS Updatehash kopiert!", accountInfo.update_hash)
             clipboard.setPrimaryClip(clip)
-            Toast.makeText(requireActivity().applicationContext, "DynDNS Updatehash kopiert!", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                requireActivity().applicationContext,
+                "DynDNS Updatehash kopiert!",
+                Toast.LENGTH_LONG
+            ).show()
             true
         }
         apikey?.setOnPreferenceClickListener {
-            val clipboard: ClipboardManager = requireActivity().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clipboard: ClipboardManager =
+                requireActivity().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip: ClipData = ClipData.newPlainText("API Key kopiert!", accountInfo.api_key)
             clipboard.setPrimaryClip(clip)
-            Toast.makeText(requireActivity().applicationContext, "API Key kopiert!", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                requireActivity().applicationContext,
+                "API Key kopiert!",
+                Toast.LENGTH_LONG
+            ).show()
             true
         }
     }

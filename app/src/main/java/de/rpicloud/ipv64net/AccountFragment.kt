@@ -15,7 +15,6 @@ import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreference
-import kotlinx.android.synthetic.main.fragment_domain.view.*
 
 // TODO: Rename parameter arguments, choose names that match
 // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
@@ -37,8 +36,7 @@ class AccountFragment : PreferenceFragmentCompat() {
         /*val isPortrait = resources.getBoolean(R.bool.portrait_only)
 
         if (isPortrait) {*/
-            setPreferencesFromResource(R.xml.main_preferences, rootKey)
-        /*} else {
+        setPreferencesFromResource(R.xml.main_preferences, rootKey)/*} else {
             setPreferencesFromResource(R.xml.main_preferences_tablet, rootKey)
         }*/
 
@@ -58,11 +56,16 @@ class AccountFragment : PreferenceFragmentCompat() {
         //whatsnew?.summary = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
 
         val themeArr = resources.getStringArray(R.array.arrTheme)
-        val themeActive = requireActivity().applicationContext.let { activity?.applicationContext!!.getSharedInt("THEME", "THEME") } as Int
+        val themeActive = requireActivity().applicationContext.let {
+            activity?.applicationContext!!.getSharedInt(
+                "THEME",
+                "THEME"
+            )
+        }
         themes!!.summary = themeArr[themeActive]
 
         // Switch preference click listener
-        account?.setOnPreferenceClickListener{
+        account?.setOnPreferenceClickListener {
             activity?.setSharedInt("SettingsView", "SettingsView", 1)
             val intent = Intent(Intent.ACTION_VIEW)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -70,7 +73,7 @@ class AccountFragment : PreferenceFragmentCompat() {
             startActivity(intent)
             true
         }
-        logs?.setOnPreferenceClickListener{
+        logs?.setOnPreferenceClickListener {
             activity?.setSharedInt("SettingsView", "SettingsView", 2)
             val intent = Intent(Intent.ACTION_VIEW)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -78,7 +81,8 @@ class AccountFragment : PreferenceFragmentCompat() {
             startActivity(intent)
             true
         }
-        val isAvailable = BiometricManager.from(requireActivity()).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS
+        val isAvailable = BiometricManager.from(requireActivity())
+            .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS
         displaylock?.isEnabled = isAvailable
         displaylock?.isSelectable = isAvailable
 
@@ -87,7 +91,7 @@ class AccountFragment : PreferenceFragmentCompat() {
             activity?.setSharedBool("BIOMETRIC", "BIOMETRIC", newValue as Boolean)
             true
         }
-        ip?.setOnPreferenceClickListener{
+        ip?.setOnPreferenceClickListener {
             activity?.setSharedInt("SettingsView", "SettingsView", 3)
             val intent = Intent(Intent.ACTION_VIEW)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -95,7 +99,7 @@ class AccountFragment : PreferenceFragmentCompat() {
             startActivity(intent)
             true
         }
-        themes?.setOnPreferenceChangeListener { preference, newValue ->
+        themes.setOnPreferenceChangeListener { preference, newValue ->
             val stringValue = newValue.toString()
 
             if (preference is ListPreference) {
@@ -104,10 +108,8 @@ class AccountFragment : PreferenceFragmentCompat() {
                 val index = preference.findIndexOfValue(stringValue)
 
                 // Set the summary to reflect the new value.
-                themes.summary = if (index >= 0)
-                    preference.entries[index]
-                else
-                    preference.entries[0]
+                themes.summary = if (index >= 0) preference.entries[index]
+                else preference.entries[0]
                 preference.context.let { activity?.setSharedInt("THEME", "THEME", index) }
                 when (index) {
                     1 -> setTheme(AppCompatDelegate.MODE_NIGHT_NO, requireActivity())
@@ -128,7 +130,7 @@ class AccountFragment : PreferenceFragmentCompat() {
 
             true
         }
-        about?.setOnPreferenceClickListener{
+        about?.setOnPreferenceClickListener {
             activity?.setSharedInt("SettingsView", "SettingsView", 4)
             val intent = Intent(Intent.ACTION_VIEW)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -136,19 +138,19 @@ class AccountFragment : PreferenceFragmentCompat() {
             startActivity(intent)
             true
         }
-        youtube?.setOnPreferenceClickListener{
+        youtube?.setOnPreferenceClickListener {
             val intent = Intent(Intent.ACTION_VIEW)
             intent.data = Uri.parse("https://www.youtube.com/c/RaspberryPiCloud")
             startActivity(intent)
             true
         }
-        discord?.setOnPreferenceClickListener{
+        discord?.setOnPreferenceClickListener {
             val intent = Intent(Intent.ACTION_VIEW)
             intent.data = Uri.parse("https://discord.gg/rpicloud")
             startActivity(intent)
             true
         }
-        logout?.setOnPreferenceClickListener{
+        logout?.setOnPreferenceClickListener {
             val intent = Intent(Intent.ACTION_VIEW)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             activity?.setSharedBool("ISLOGGEDIN", "ISLOGGEDIN", false)
@@ -167,7 +169,8 @@ class AccountFragment : PreferenceFragmentCompat() {
             if (mode == -1) {
                 m = UiModeManager.MODE_NIGHT_AUTO
             }
-            val man = activity.applicationContext!!.getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
+            val man =
+                activity.applicationContext!!.getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
             man.setApplicationNightMode(m)
         } else {
             AppCompatDelegate.setDefaultNightMode(mode)

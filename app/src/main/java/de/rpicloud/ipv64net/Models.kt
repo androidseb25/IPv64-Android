@@ -1,6 +1,6 @@
 package de.rpicloud.ipv64net
 
-import java.util.*
+import java.util.UUID
 
 data class DomainResult(
     var subdomains: MutableMap<String, Domain>? = mutableMapOf(),

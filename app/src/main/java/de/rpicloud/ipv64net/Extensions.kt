@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.res.Resources
 import android.graphics.Rect
 import android.graphics.RectF
-import android.os.Build
 import android.text.Editable
 import android.text.InputFilter
 import android.text.Spanned
@@ -103,14 +102,22 @@ val screenRectDp: RectF
  */
 val Context.physicalScreenRectPx: Rect
     get() = (applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager)
-            .run { DisplayMetrics().also { defaultDisplay.getRealMetrics(it) } }
-            .run { Rect(0, 0, widthPixels, heightPixels) }
+        .run { DisplayMetrics().also { defaultDisplay.getRealMetrics(it) } }
+        .run { Rect(0, 0, widthPixels, heightPixels) }
 
 /**
  * Returns boundary of the physical screen including system decor elements (if any) like navigation
  * bar in density independent pixels (dp).
  */
-val Context.physicalScreenRectDp: RectF get() = physicalScreenRectPx.run { RectF(0f, 0f, right.px2dp, bottom.px2dp) }
+val Context.physicalScreenRectDp: RectF
+    get() = physicalScreenRectPx.run {
+        RectF(
+            0f,
+            0f,
+            right.px2dp,
+            bottom.px2dp
+        )
+    }
 
 /**
  * Converts any given number from pixels (px) into density independent pixels (dp).

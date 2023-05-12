@@ -7,13 +7,13 @@ import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.recyclerview.widget.RecyclerView
-import de.rpicloud.ipv64net.databinding.AdapterLogsBinding
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
+import de.rpicloud.ipv64net.databinding.AdapterHealthcheckPillBinding
+import de.rpicloud.ipv64net.databinding.AdapterHealthcheckSmallPillBinding
 
-class EventAdapter(
-    private var dataSet: MutableList<HealthEvents>, private val activity: FragmentActivity
-) : RecyclerView.Adapter<EventAdapter.ViewHolder>() {
+class HealthcheckSmallPillAdapter(
+    private var dataSet: MutableList<HealthEvents>,
+    private val activity: FragmentActivity
+) : RecyclerView.Adapter<HealthcheckSmallPillAdapter.ViewHolder>() {
     private var mOnChangedInRecyclerListener: OnChangedInRecyclerListener? = null
 
     fun setOnChangedInRecyclerListener(listener: OnChangedInRecyclerListener) {
@@ -32,16 +32,14 @@ class EventAdapter(
      * (custom ViewHolder).
      */
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val binding = AdapterLogsBinding.bind(view)
-//        var tv_event_time: TextView?
-//        var tv_status: TextView?
-//        var tv_text: TextView?
+        var binding: AdapterHealthcheckSmallPillBinding =
+            AdapterHealthcheckSmallPillBinding.bind(view)
+
+//        var cv_pill: CardView?
 //
 //        init {
 //            // Define click listener for the ViewHolder's View.
-//            tv_event_time = view.tv_log_date
-//            tv_status = view.tv_log_title
-//            tv_text = view.tv_log_content
+//            cv_pill = view.cv_pill
 //        }
     }
 
@@ -49,8 +47,7 @@ class EventAdapter(
     override fun onCreateViewHolder(viewGroup: ViewGroup, viewType: Int): ViewHolder {
         // Create a new view, which defines the UI of the list item
 
-        val view =
-            LayoutInflater.from(viewGroup.context).inflate(R.layout.adapter_logs, viewGroup, false)
+        val view = LayoutInflater.from(viewGroup.context).inflate(R.layout.adapter_healthcheck_small_pill, viewGroup, false)
 
         return ViewHolder(view)
     }
@@ -63,35 +60,7 @@ class EventAdapter(
             val item = dataSet[position]
             println(item)
 
-            var text = when (item.status) {
-                StatusType.Active.type.statusId -> {
-                    StatusType.Active.type.name!!
-                }
-
-                StatusType.Pause.type.statusId -> {
-                    StatusType.Pause.type.name!!
-                }
-
-                StatusType.Warning.type.statusId -> {
-                    StatusType.Warning.type.name!!
-                }
-
-                StatusType.Alarm.type.statusId -> {
-                    StatusType.Alarm.type.name!!
-                }
-
-                StatusType.Fallback.type.statusId -> {
-                    StatusType.Fallback.type.name!!
-                }
-
-                else -> {
-                    ""
-                }
-            }
-
-            binding.tvLogTitle.text = text
-
-            var color = R.color.ipv64_red
+            var color = StatusType.Fallback.type.color!!
 
             color = when (item.status) {
                 StatusType.Active.type.statusId -> {
@@ -110,29 +79,20 @@ class EventAdapter(
                     StatusType.Alarm.type.color!!
                 }
 
-                StatusType.Fallback.type.statusId -> {
-                    StatusType.Fallback.type.color!!
+                StatusType.Transparent.type.statusId -> {
+                    StatusType.Transparent.type.color!!
                 }
 
                 else -> {
-                    R.color.ipv64_red
+                    StatusType.Fallback.type.color!!
                 }
             }
 
-            binding.tvLogTitle.setTextColor(
+            binding.cvPill.setCardBackgroundColor(
                 ContextCompat.getColor(
                     activity.applicationContext!!, color
                 )
             )
-
-            binding.tvLogTitle.text = item.text
-
-            val df = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-            val localDateTime: LocalDateTime = LocalDateTime.parse(item.event_time, df)
-            val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")
-            val output: String = formatter.format(localDateTime)
-
-            binding.tvLogDate.text = output
         }
     }
 
@@ -143,6 +103,6 @@ class EventAdapter(
     }
 
     override fun getItemViewType(position: Int): Int {
-        return R.layout.adapter_logs
+        return R.layout.adapter_healthcheck_small_pill
     }
 }

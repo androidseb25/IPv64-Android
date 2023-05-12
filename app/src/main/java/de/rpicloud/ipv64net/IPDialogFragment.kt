@@ -12,17 +12,17 @@ import android.view.ViewGroup
 import android.view.Window
 import android.widget.Toast
 import androidx.fragment.app.DialogFragment
-import androidx.recyclerview.widget.GridLayoutManager
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
-import kotlinx.android.synthetic.main.fragment_domain.view.*
-import kotlinx.android.synthetic.main.fragment_ip_dialog.view.*
-import kotlinx.android.synthetic.main.fragment_logs_dialog.view.*
+import de.rpicloud.ipv64net.databinding.FragmentIpDialogBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
-class IPDialogFragment : DialogFragment() {
+class IPDialogFragment : DialogFragment(R.layout.fragment_ip_dialog) {
+
+    private var _binding: FragmentIpDialogBinding? = null
+    private val binding get() = _binding!!
 
     private var onDismissCalDialog: DialogInterface.OnDismissListener? = null
     private var myIP4 = MyIP()
@@ -46,10 +46,11 @@ class IPDialogFragment : DialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        // Inflate the layout to use as dialog or embedded fragment
-        rootView = inflater.inflate(R.layout.fragment_ip_dialog, container, false)
 
-        spinnDialog = MaterialDialog(requireActivity())
+        _binding = FragmentIpDialogBinding.inflate(inflater, container, false)
+        rootView = binding.root
+
+        spinnDialog = MaterialDialog(rootView.context)
         spinnDialog.title(null, "Daten werden geladen...")
         spinnDialog.customView(R.layout.loading_spinner)
         spinnDialog.cancelable(false)
@@ -57,18 +58,28 @@ class IPDialogFragment : DialogFragment() {
 
         getData()
 
-        rootView.cv_ipv4.setOnClickListener {
-            val clipboard: ClipboardManager = requireActivity().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        binding.cvIpv4.setOnClickListener {
+            val clipboard: ClipboardManager =
+                requireActivity().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip: ClipData = ClipData.newPlainText("IPv4 Adresse kopiert!", myIP4.ip)
             clipboard.setPrimaryClip(clip)
-            Toast.makeText(requireActivity().applicationContext, "IPv4 Adresse kopiert!", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                requireActivity().applicationContext,
+                "IPv4 Adresse kopiert!",
+                Toast.LENGTH_LONG
+            ).show()
         }
 
-        rootView.cv_ipv6.setOnClickListener {
-            val clipboard: ClipboardManager = requireActivity().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        binding.cvIpv6.setOnClickListener {
+            val clipboard: ClipboardManager =
+                requireActivity().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip: ClipData = ClipData.newPlainText("IPv6 Adresse kopiert!", myIP6.ip)
             clipboard.setPrimaryClip(clip)
-            Toast.makeText(requireActivity().applicationContext, "IPv6 Adresse kopiert!", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                requireActivity().applicationContext,
+                "IPv6 Adresse kopiert!",
+                Toast.LENGTH_LONG
+            ).show()
         }
 
         return rootView
@@ -82,8 +93,8 @@ class IPDialogFragment : DialogFragment() {
 
             launch(Dispatchers.Main) {
                 spinnDialog.hide()
-                rootView.tv_ip4.text = if (myIP4.ip?.isEmpty()!!) "0.0.0.0" else myIP4.ip
-                rootView.tv_ip6.text = if (myIP6.ip?.isEmpty()!!) "0.0.0.0" else myIP6.ip
+                binding.tvIp4.text = if (myIP4.ip?.isEmpty()!!) "0.0.0.0" else myIP4.ip
+                binding.tvIp6.text = if (myIP6.ip?.isEmpty()!!) "0.0.0.0" else myIP6.ip
             }
         }
     }
@@ -100,5 +111,10 @@ class IPDialogFragment : DialogFragment() {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.window?.setWindowAnimations(R.style.SlideAnimation)
         return dialog
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

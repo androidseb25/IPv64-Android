@@ -8,7 +8,7 @@ class ErrorTypes {
         @SuppressLint("StaticFieldLeak")
         var context: Context? = null
 
-        var tooManyRequests: ErrorTyp = ErrorTyp (
+        var tooManyRequests: ErrorTyp = ErrorTyp(
             R.drawable.ic_sync_24,
             R.color.ipv64_error_orange,
             "Information",
@@ -17,7 +17,7 @@ class ErrorTypes {
             429
         )
 
-        var updateCoolDown: ErrorTyp = ErrorTyp (
+        var updateCoolDown: ErrorTyp = ErrorTyp(
             R.drawable.round_bolt_24,
             R.color.ipv64_error_orange,
             "Information",
@@ -26,7 +26,7 @@ class ErrorTypes {
             429
         )
 
-        var domainNotAvailable: ErrorTyp = ErrorTyp (
+        var domainNotAvailable: ErrorTyp = ErrorTyp(
             R.drawable.ic_cloud_off_24,
             R.color.ipv64_red,
             "Fehler",
@@ -35,7 +35,7 @@ class ErrorTypes {
             403
         )
 
-        var domainCreatedSuccesfully: ErrorTyp = ErrorTyp (
+        var domainCreatedSuccesfully: ErrorTyp = ErrorTyp(
             R.drawable.ic_cloud_done_24,
             R.color.ipv64_error_green,
             "Erfolgreich",
@@ -44,7 +44,7 @@ class ErrorTypes {
             201
         )
 
-        var deleteDomain: ErrorTyp = ErrorTyp (
+        var deleteDomain: ErrorTyp = ErrorTyp(
             R.drawable.ic_delete_forever_24,
             R.color.ipv64_red,
             "Wirklick löschen?",
@@ -53,7 +53,7 @@ class ErrorTypes {
             202
         )
 
-        var deletehealth: ErrorTyp = ErrorTyp (
+        var deletehealth: ErrorTyp = ErrorTyp(
             R.drawable.ic_delete_forever_24,
             R.color.ipv64_red,
             "Wirklick löschen?",
@@ -62,7 +62,7 @@ class ErrorTypes {
             202
         )
 
-        var dnsRecordSuccesfullyCreated: ErrorTyp = ErrorTyp (
+        var dnsRecordSuccesfullyCreated: ErrorTyp = ErrorTyp(
             R.drawable.ic_cloud_done_24,
             R.color.ipv64_error_green,
             "Erfolgreich",
@@ -71,7 +71,7 @@ class ErrorTypes {
             201
         )
 
-        var deleteDNSRecord: ErrorTyp = ErrorTyp (
+        var deleteDNSRecord: ErrorTyp = ErrorTyp(
             R.drawable.ic_delete_forever_24,
             R.color.ipv64_red,
             "Wirklick löschen?",
@@ -80,7 +80,7 @@ class ErrorTypes {
             202
         )
 
-        var unauthorized: ErrorTyp = ErrorTyp (
+        var unauthorized: ErrorTyp = ErrorTyp(
             R.drawable.ic_vpn_key_off_24,
             R.color.ipv64_red,
             "Fehlgeschlagen",
@@ -89,7 +89,7 @@ class ErrorTypes {
             401
         )
 
-        var domainLimit: ErrorTyp = ErrorTyp (
+        var domainLimit: ErrorTyp = ErrorTyp(
             R.drawable.ic_cloud_off_24,
             R.color.ipv64_red,
             "Fehlgeschlagen",
@@ -98,7 +98,7 @@ class ErrorTypes {
             403
         )
 
-        var domainRules: ErrorTyp = ErrorTyp (
+        var domainRules: ErrorTyp = ErrorTyp(
             R.drawable.ic_cloud_off_24,
             R.color.ipv64_red,
             "Fehlgeschlagen",
@@ -107,7 +107,7 @@ class ErrorTypes {
             403
         )
 
-        var websiteRequestError: ErrorTyp = ErrorTyp (
+        var websiteRequestError: ErrorTyp = ErrorTyp(
             R.drawable.round_bolt_24,
             R.color.ipv64_red,
             "Fehlgeschlagen",
@@ -116,7 +116,7 @@ class ErrorTypes {
             500
         )
 
-        var healthcheckCreatedSuccesfully: ErrorTyp = ErrorTyp (
+        var healthcheckCreatedSuccesfully: ErrorTyp = ErrorTyp(
             R.drawable.ic_cloud_done_24,
             R.color.ipv64_error_green,
             "Erfolgreich",
@@ -125,7 +125,7 @@ class ErrorTypes {
             201
         )
 
-        var healthcheckUpdatedSuccesfully: ErrorTyp = ErrorTyp (
+        var healthcheckUpdatedSuccesfully: ErrorTyp = ErrorTyp(
             R.drawable.ic_cloud_done_24,
             R.color.ipv64_error_green,
             "Erfolgreich",

@@ -13,12 +13,15 @@ import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
 import com.afollestad.materialdialogs.list.listItemsMultiChoice
 import com.google.gson.Gson
-import kotlinx.android.synthetic.main.fragment_edit_healthcheck_dialog.view.*
+import de.rpicloud.ipv64net.databinding.FragmentEditHealthcheckDialogBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
-class HealthcheckEditFragmentDialog : DialogFragment() {
+class HealthcheckEditFragmentDialog : DialogFragment(R.layout.fragment_edit_healthcheck_dialog) {
+
+    private var _binding: FragmentEditHealthcheckDialogBinding? = null
+    private val binding get() = _binding!!
 
     private var onDismissCalDialog: DialogInterface.OnDismissListener? = null
     lateinit var healthcheck: HealthCheck
@@ -43,12 +46,15 @@ class HealthcheckEditFragmentDialog : DialogFragment() {
             Unit.Minuten.Unit.unit -> {
                 Unit.Minuten.Unit.name!!
             }
+
             Unit.Stunden.Unit.unit -> {
                 Unit.Stunden.Unit.name!!
             }
+
             Unit.Tage.Unit.unit -> {
                 Unit.Tage.Unit.name!!
             }
+
             else -> {
                 ""
             }
@@ -62,8 +68,8 @@ class HealthcheckEditFragmentDialog : DialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        // Inflate the layout to use as dialog or embedded fragment
-        rootView = inflater.inflate(R.layout.fragment_edit_healthcheck_dialog, container, false)
+        _binding = FragmentEditHealthcheckDialogBinding.inflate(inflater, container, false)
+        rootView = binding.root
 
         integrationList = Gson().fromJson(
             requireActivity().applicationContext.getSharedString(
@@ -87,9 +93,9 @@ class HealthcheckEditFragmentDialog : DialogFragment() {
             }
         }
 
-        rootView.topAppBarHDetail.title = "Bearbeiten"
+        binding.topAppBarHDetail.title = "Bearbeiten"
 
-        rootView.topAppBarHDetail.setNavigationOnClickListener {
+        binding.topAppBarHDetail.setNavigationOnClickListener {
             requireActivity().applicationContext.setSharedBool(
                 "HCDISMISS",
                 "HCDISMISS",
@@ -110,36 +116,36 @@ class HealthcheckEditFragmentDialog : DialogFragment() {
 
         val adapterUnits =
             SelectAdapter(requireActivity(), R.layout.list_item, strList = unitList)
-        rootView.actv_zeitraum_unit.setAdapter(adapterUnits)
-        rootView.actv_grace_unit.setAdapter(adapterUnits)
+        binding.actvZeitraumUnit.setAdapter(adapterUnits)
+        binding.actvGraceUnit.setAdapter(adapterUnits)
 
         var selectedZeitraum = GetUnit(healthcheck.alarm_unit)
         var selectedGrace = GetUnit(healthcheck.grace_unit)
 
-        rootView.actv_zeitraum_unit.setText(selectedZeitraum.toEditable(), false)
-        rootView.actv_grace_unit.setText(selectedGrace.toEditable(), false)
+        binding.actvZeitraumUnit.setText(selectedZeitraum.toEditable(), false)
+        binding.actvGraceUnit.setText(selectedGrace.toEditable(), false)
 
-        rootView.actv_grace_unit.setOnItemClickListener { parent, view, position, id ->
+        binding.actvGraceUnit.setOnItemClickListener { parent, view, position, id ->
             val item = parent.getItemAtPosition(position) as String
             println(item)
             selectedGrace = item
         }
-        rootView.actv_zeitraum_unit.setOnItemClickListener { parent, view, position, id ->
+        binding.actvZeitraumUnit.setOnItemClickListener { parent, view, position, id ->
             val item = parent.getItemAtPosition(position) as String
             println(item)
             selectedZeitraum = item
         }
 
-        rootView.tie_hc_name.text = healthcheck.name.toEditable()
-        rootView.tie_zeitraum_value.filters = arrayOf<InputFilter>(InputFilterMinMax(1f, 60f))
-        rootView.tie_grace_value.filters = arrayOf<InputFilter>(InputFilterMinMax(1f, 60f))
-        rootView.tie_zeitraum_value.text = healthcheck.alarm_count.toString().toEditable()
-        rootView.tie_grace_value.text = healthcheck.grace_count.toString().toEditable()
+        binding.tieHcName.text = healthcheck.name.toEditable()
+        binding.tieZeitraumValue.filters = arrayOf<InputFilter>(InputFilterMinMax(1f, 60f))
+        binding.tieGraceValue.filters = arrayOf<InputFilter>(InputFilterMinMax(1f, 60f))
+        binding.tieZeitraumValue.text = healthcheck.alarm_count.toString().toEditable()
+        binding.tieGraceValue.text = healthcheck.grace_count.toString().toEditable()
 
-        rootView.ms_down.isChecked = healthcheck.alarm_down == 1
-        rootView.ms_up.isChecked = healthcheck.alarm_up == 1
+        binding.msDown.isChecked = healthcheck.alarm_down == 1
+        binding.msUp.isChecked = healthcheck.alarm_up == 1
 
-        rootView.btn_notify.setOnClickListener {
+        binding.btnNotify.setOnClickListener {
             MaterialDialog(requireActivity()).show {
                 title(text = "Benachrichten auf:")
                 listItemsMultiChoice(
@@ -174,7 +180,7 @@ class HealthcheckEditFragmentDialog : DialogFragment() {
             }
         }
 
-        rootView.topAppBarHDetail.setOnMenuItemClickListener { menuItem ->
+        binding.topAppBarHDetail.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.save -> {
                     spinnDialog.show()
@@ -186,22 +192,22 @@ class HealthcheckEditFragmentDialog : DialogFragment() {
                         spinnDialog.hide()
                         return@setOnMenuItemClickListener true
                     }
-                    if (rootView.tie_zeitraum_value.text.toString().isEmpty()) {
+                    if (binding.tieZeitraumValue.text.toString().isEmpty()) {
                         spinnDialog.hide()
                         return@setOnMenuItemClickListener true
                     }
-                    if (rootView.tie_grace_value.text.toString().isEmpty()) {
+                    if (binding.tieGraceValue.text.toString().isEmpty()) {
                         spinnDialog.hide()
                         return@setOnMenuItemClickListener true
                     }
-                    if (rootView.tie_hc_name.text.toString().isEmpty()) {
+                    if (binding.tieHcName.text.toString().isEmpty()) {
                         spinnDialog.hide()
                         return@setOnMenuItemClickListener true
                     }
 
-                    val zeitraum_value = rootView.tie_zeitraum_value.text.toString().toInt()
-                    val grace_value = rootView.tie_grace_value.text.toString().toInt()
-                    val hc_name = rootView.tie_hc_name.text.toString()
+                    val zeitraum_value = binding.tieZeitraumValue.text.toString().toInt()
+                    val grace_value = binding.tieGraceValue.text.toString().toInt()
+                    val hc_name = binding.tieHcName.text.toString()
 
                     val selectedGraceUnit = if (Unit.Minuten.Unit.name == selectedGrace) {
                         Unit.Minuten.Unit.unit
@@ -225,14 +231,17 @@ class HealthcheckEditFragmentDialog : DialogFragment() {
                     healthcheck.grace_unit = selectedGraceUnit!!
                     healthcheck.alarm_unit = selectedZeitraumUnit!!
 
-                    val down = rootView.ms_down.isChecked
-                    val up = rootView.ms_up.isChecked
+                    val down = binding.msDown.isChecked
+                    val up = binding.msUp.isChecked
                     healthcheck.alarm_down = if (down) 1 else 0
                     healthcheck.alarm_up = if (up) 1 else 0
 
                     println("SAVE")
                     GlobalScope.launch(Dispatchers.Default) {
-                        val result = ApiNetwork.PostEditHealthcheck(healthcheck, splitListIntegrations.toMutableList())
+                        val result = ApiNetwork.PostEditHealthcheck(
+                            healthcheck,
+                            splitListIntegrations.toMutableList()
+                        )
 
                         println(result)
 
@@ -321,6 +330,7 @@ class HealthcheckEditFragmentDialog : DialogFragment() {
                     }
                     true
                 }
+
                 else -> false
             }
         }
@@ -340,5 +350,10 @@ class HealthcheckEditFragmentDialog : DialogFragment() {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.window?.setWindowAnimations(R.style.SlideAnimation)
         return dialog
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }
