@@ -45,10 +45,17 @@ class HealthcheckFragment : Fragment(R.layout.fragment_healthcheck),
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         arguments?.let {
             param1 = it.getString(ARG_PARAM1)
             param2 = it.getString(ARG_PARAM2)
         }
+
+        spinnDialog = MaterialDialog(requireActivity())
+        spinnDialog.title(null, "Daten werden geladen...")
+        spinnDialog.customView(R.layout.loading_spinner)
+        spinnDialog.cancelable(false)
+        spinnDialog.cancelOnTouchOutside(false)
     }
 
     override fun onCreateView(
@@ -62,12 +69,6 @@ class HealthcheckFragment : Fragment(R.layout.fragment_healthcheck),
         ApiNetwork.context = activity?.applicationContext
         ErrorTypes.context = activity?.applicationContext
         binding.swipeLayoutHc.setOnRefreshListener(this)
-
-        spinnDialog = MaterialDialog(requireActivity())
-        spinnDialog.title(null, "Daten werden geladen...")
-        spinnDialog.customView(R.layout.loading_spinner)
-        spinnDialog.cancelable(false)
-        spinnDialog.cancelOnTouchOutside(false)
 
         onRefresh()
 

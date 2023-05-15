@@ -148,12 +148,14 @@ class DomainFragment : Fragment(R.layout.fragment_domain), SwipeRefreshLayout.On
                 binding.swipeLayout.isRefreshing = false
                 binding.recyclerDomain.layoutManager =
                     GridLayoutManager(activity?.applicationContext, 1)
-                val sortedSubdomains = listOfDomains.subdomains!!.toSortedMap()
-                if (listOfDomains.subdomains != null) {
-                    domainAdapter = DomainAdapter(
-                        sortedSubdomains, activity, myIP4, myIP6, accountInfo
-                    )
-                    binding.recyclerDomain.adapter = domainAdapter
+                if (!listOfDomains.subdomains.isNullOrEmpty()) {
+                    val sortedSubdomains = listOfDomains.subdomains!!.toSortedMap()
+                    if (listOfDomains.subdomains != null) {
+                        domainAdapter = DomainAdapter(
+                            sortedSubdomains, activity, myIP4, myIP6, accountInfo
+                        )
+                        binding.recyclerDomain.adapter = domainAdapter
+                    }
                 }
             }
         }

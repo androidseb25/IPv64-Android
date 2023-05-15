@@ -110,8 +110,10 @@ class LogsDialogFragment : DialogFragment(R.layout.fragment_logs_dialog) {
 
             launch(Dispatchers.Main) {
                 spinnDialog.hide()
-                val adapterLogs = LogsAdapter(logs.logs!!.subList(0, 10), requireActivity())
-                binding.recyclerLogs.adapter = adapterLogs
+                if (!logs.logs.isNullOrEmpty()) {
+                    val adapterLogs = LogsAdapter(logs.logs!!.subList(0, 10), requireActivity())
+                    binding.recyclerLogs.adapter = adapterLogs
+                }
             }
         }
     }
