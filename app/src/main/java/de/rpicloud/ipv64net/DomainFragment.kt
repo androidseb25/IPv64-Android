@@ -44,6 +44,7 @@ class DomainFragment : Fragment(R.layout.fragment_domain), SwipeRefreshLayout.On
             param1 = it.getString(ARG_PARAM1)
             param2 = it.getString(ARG_PARAM2)
         }
+        getData()
     }
 
     override fun onCreateView(
@@ -55,7 +56,6 @@ class DomainFragment : Fragment(R.layout.fragment_domain), SwipeRefreshLayout.On
         ApiNetwork.context = activity?.applicationContext
         ErrorTypes.context = activity?.applicationContext
         binding.swipeLayout.setOnRefreshListener(this)
-        getData()
 
         binding.floatingActionButton.setOnClickListener {
             val fragmentManager = activity?.supportFragmentManager
@@ -95,7 +95,7 @@ class DomainFragment : Fragment(R.layout.fragment_domain), SwipeRefreshLayout.On
 
             println(listOfDomains)
 
-            if (listOfDomains.info == null) {
+            if (listOfDomains.info == null || listOfDomains.info!!.isEmpty()) {
                 launch(Dispatchers.Main) {
                     binding.swipeLayout.isRefreshing = false
                     val fragmentManager = activity?.supportFragmentManager

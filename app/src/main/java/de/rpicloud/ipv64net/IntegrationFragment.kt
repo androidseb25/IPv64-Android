@@ -45,6 +45,7 @@ class IntegrationFragment : Fragment(R.layout.fragment_integrations),
             param1 = it.getString(ARG_PARAM1)
             param2 = it.getString(ARG_PARAM2)
         }
+        getData()
     }
 
     override fun onCreateView(
@@ -59,7 +60,6 @@ class IntegrationFragment : Fragment(R.layout.fragment_integrations),
         binding.swipeLayoutIntegration.setOnRefreshListener(this)
         binding.recyclerIntegration.layoutManager =
             GridLayoutManager(activity?.applicationContext, 1)
-        getData()
 
         return rootView
     }
