@@ -115,7 +115,7 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <LinearLayout
+<!--            <LinearLayout
                 android:layout_marginTop="25dp"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -246,7 +246,7 @@
                         android:layout_height="wrap_content"
                         android:text="Ihr könnt jetzt auswählen über welche Methode Ihr benachrichtigt werden wollt. (App, Telegram, Discord, ...)" />
                 </LinearLayout>
-            </LinearLayout>
+            </LinearLayout>-->
 
 <!--            <LinearLayout-->
 <!--                android:layout_width="match_parent"-->

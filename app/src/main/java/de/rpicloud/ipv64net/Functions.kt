@@ -2,7 +2,6 @@ package de.rpicloud.ipv64net
 
 import android.content.Context
 import android.content.pm.ActivityInfo
-import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
@@ -10,7 +9,7 @@ import java.sql.Date
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.*
+import java.util.Locale
 
 class Functions {
 
@@ -24,9 +23,9 @@ class Functions {
 
     fun GetStringAsDateFromDB(date: Date): String {
         val defaultZoneId: ZoneId = ZoneId.of("Europe/Berlin")
-        val localDate = date.toInstant().atZone(defaultZoneId).toLocalDateTime();
+        val localDate = date.toInstant().atZone(defaultZoneId).toLocalDateTime()
         val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.GERMAN)
-        return localDate.format(formatter);
+        return localDate.format(formatter)
     }
 
     fun GetFormettedDateString(dbString: String): String {
@@ -34,7 +33,7 @@ class Functions {
         val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy, HH:mm:ss", Locale.GERMAN)
         val formatterDb = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.GERMAN)
         val date = LocalDateTime.parse(dbString, formatterDb)
-        return date.format(formatter);
+        return date.format(formatter)
     }
 
     fun GetFormettedOnlyDateString(dbString: String): String {
@@ -42,7 +41,7 @@ class Functions {
         val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.GERMAN)
         val formatterDb = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.GERMAN)
         val date = LocalDateTime.parse(dbString, formatterDb)
-        return date.format(formatter);
+        return date.format(formatter)
     }
 
     /*fun GetConsumptionValue(consumptionType: ConsumptionType, value: Double): String {

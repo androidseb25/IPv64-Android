@@ -16,12 +16,15 @@ import androidx.recyclerview.widget.GridLayoutManager
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
 import com.google.gson.Gson
-import kotlinx.android.synthetic.main.fragment_detail_domain_dialog.view.*
+import de.rpicloud.ipv64net.databinding.FragmentDetailDomainDialogBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
-class DetailDomainDialogFragment : DialogFragment() {
+class DetailDomainDialogFragment : DialogFragment(R.layout.fragment_detail_domain_dialog) {
+
+    private var _binding: FragmentDetailDomainDialogBinding? = null
+    private val binding get() = _binding!!
 
     private var onDismissCalDialog: DialogInterface.OnDismissListener? = null
 
@@ -49,17 +52,17 @@ class DetailDomainDialogFragment : DialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        // Inflate the layout to use as dialog or embedded fragment
-        rootView = inflater.inflate(R.layout.fragment_detail_domain_dialog, container, false)
+        _binding = FragmentDetailDomainDialogBinding.inflate(inflater, container, false)
+        rootView = binding.root
 
         domain = Gson().fromJson(arguments?.getString("DOMAIN"), Domain::class.java)
         myIp = Gson().fromJson(arguments?.getString("MYIP"), MyIP::class.java)
         accountInfo = Gson().fromJson(arguments?.getString("ACCOUNTINFO"), AccountInfo::class.java)
         domainTitle = arguments?.getString("DOMAINKEY").toString()
 
-        rootView.topAppBarDetail.title = domainTitle
+        binding.topAppBarDetail.title = domainTitle
 
-        rootView.topAppBarDetail.setNavigationOnClickListener {
+        binding.topAppBarDetail.setNavigationOnClickListener {
             dismiss()
         }
 
@@ -69,7 +72,7 @@ class DetailDomainDialogFragment : DialogFragment() {
         spinnDialog.cancelable(false)
         spinnDialog.cancelOnTouchOutside(false)
 
-        rootView.tv_updates.text = domain.updates.toString()
+        binding.tvUpdates.text = domain.updates.toString()
 
         val wildcard = if (domain.wildcard == 1) {
             "ja"
@@ -77,16 +80,16 @@ class DetailDomainDialogFragment : DialogFragment() {
             "nein"
         }
 
-        rootView.llc_hinweis.visibility = if (CheckIfIPCorrect()) View.GONE else View.VISIBLE
+        binding.llcHinweis.visibility = if (CheckIfIPCorrect()) View.GONE else View.VISIBLE
 
-        rootView.tv_wildcard.text = wildcard
+        binding.tvWildcard.text = wildcard
 
-        rootView.recycler_detail_domain?.layoutManager =
+        binding.recyclerDetailDomain.layoutManager =
             GridLayoutManager(requireActivity().applicationContext, 1)
         detailDomainAdapter = DetailDomainAdapter(domain.records!!, requireActivity())
-        rootView.recycler_detail_domain?.adapter = detailDomainAdapter
+        binding.recyclerDetailDomain.adapter = detailDomainAdapter
 
-        rootView.btn_refreshRecord.setOnClickListener {
+        binding.btnRefreshRecord.setOnClickListener {
             spinnDialog.show()
             GlobalScope.launch(Dispatchers.Default) {
                 val result = ApiNetwork.UpdateDomainIp(accountInfo.update_hash!!, domainTitle)
@@ -156,7 +159,7 @@ class DetailDomainDialogFragment : DialogFragment() {
             }
         }
 
-        rootView.btn_copyAccountUpdateUrl.setOnClickListener {
+        binding.btnCopyAccountUpdateUrl.setOnClickListener {
             val clipboard: ClipboardManager =
                 requireActivity().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip: ClipData =
@@ -169,7 +172,7 @@ class DetailDomainDialogFragment : DialogFragment() {
             ).show()
         }
 
-        rootView.btn_copyDomainUpdateUrl.setOnClickListener {
+        binding.btnCopyDomainUpdateUrl.setOnClickListener {
             val clipboard: ClipboardManager =
                 requireActivity().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip: ClipData = ClipData.newPlainText("Domain URL kopiert!", GetDomainUpdateUrl())
@@ -181,7 +184,7 @@ class DetailDomainDialogFragment : DialogFragment() {
             ).show()
         }
 
-        rootView.topAppBarDetail.setOnMenuItemClickListener { menuItem ->
+        binding.topAppBarDetail.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.new_dnsrecord -> {
                     println("new dns")
@@ -209,6 +212,7 @@ class DetailDomainDialogFragment : DialogFragment() {
                     }
                     true
                 }
+
                 R.id.delete_domain -> {
                     println("deleteDomain")
                     //saveUser()
@@ -219,7 +223,7 @@ class DetailDomainDialogFragment : DialogFragment() {
                     fragmentManager.executePendingTransactions()
                     newFragment.setOnDismissListener {
                         var isCanceld =
-                            requireActivity().getSharedBool("ISCANCELD", "ISCANCELD") as Boolean
+                            requireActivity().getSharedBool("ISCANCELD", "ISCANCELD")
                         if (!isCanceld) {
                             spinnDialog.show()
                             GlobalScope.launch(Dispatchers.Default) {
@@ -283,6 +287,7 @@ class DetailDomainDialogFragment : DialogFragment() {
                     }
                     true
                 }
+
                 else -> false
             }
         }
@@ -320,5 +325,10 @@ class DetailDomainDialogFragment : DialogFragment() {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.window?.setWindowAnimations(R.style.SlideAnimation)
         return dialog
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

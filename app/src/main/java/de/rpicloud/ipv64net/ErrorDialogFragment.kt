@@ -10,11 +10,13 @@ import android.view.ViewGroup
 import android.view.Window
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.DialogFragment
-import kotlinx.android.synthetic.main.fragment_error_dialog.view.*
-import kotlin.math.roundToInt
+import de.rpicloud.ipv64net.databinding.FragmentErrorDialogBinding
 
 
-class ErrorDialogFragment(var errorTyp: ErrorTyp) : DialogFragment() {
+class ErrorDialogFragment(var errorTyp: ErrorTyp) : DialogFragment(R.layout.fragment_error_dialog) {
+
+    private var _binding: FragmentErrorDialogBinding? = null
+    private val binding get() = _binding!!
 
     private var onDismissCalDialog: DialogInterface.OnDismissListener? = null
 
@@ -41,43 +43,51 @@ class ErrorDialogFragment(var errorTyp: ErrorTyp) : DialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        // Inflate the layout to use as dialog or embedded fragment
-        rootView = inflater.inflate(R.layout.fragment_error_dialog, container, false)
+        _binding = FragmentErrorDialogBinding.inflate(inflater, container, false)
+        rootView = binding.root
 
-        rootView.topAppBarDetail.title = errorTyp.navigationTitle
-        rootView.iv_error_icon.setImageResource(errorTyp.icon!!)
-        rootView.iv_error_icon.setColorFilter(ContextCompat.getColor(requireActivity(),
-            errorTyp.iconColor!!
-        ), android.graphics.PorterDuff.Mode.SRC_IN);
-        rootView.tv_title_error.text = errorTyp.errorTitle
-        rootView.tv_detail_error.text = errorTyp.errorDescription
+        binding.topAppBarDetail.title = errorTyp.navigationTitle
+        binding.ivErrorIcon.setImageResource(errorTyp.icon!!)
+        binding.ivErrorIcon.setColorFilter(
+            ContextCompat.getColor(
+                requireActivity(),
+                errorTyp.iconColor!!
+            ), android.graphics.PorterDuff.Mode.SRC_IN
+        )
+        binding.tvTitleError.text = errorTyp.errorTitle
+        binding.tvDetailError.text = errorTyp.errorDescription
 
-        rootView.btn_error_cancel.visibility = if (errorTyp == ErrorTypes.deleteDNSRecord || errorTyp == ErrorTypes.deleteDomain || errorTyp == ErrorTypes.deletehealth) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
+        binding.btnErrorCancel.visibility =
+            if (errorTyp == ErrorTypes.deleteDNSRecord || errorTyp == ErrorTypes.deleteDomain || errorTyp == ErrorTypes.deletehealth) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
 
-        rootView.btn_error_close.text = if (errorTyp == ErrorTypes.deleteDNSRecord || errorTyp == ErrorTypes.deleteDomain || errorTyp == ErrorTypes.deletehealth) {
-            "Löschen"
-        } else {
-            "Schließen"
-        }
+        binding.btnErrorClose.text =
+            if (errorTyp == ErrorTypes.deleteDNSRecord || errorTyp == ErrorTypes.deleteDomain || errorTyp == ErrorTypes.deletehealth) {
+                "Löschen"
+            } else {
+                "Schließen"
+            }
 
         if (errorTyp == ErrorTypes.tooManyRequests || errorTyp == ErrorTypes.updateCoolDown) {
             startTimer()
         }
 
-        rootView.btn_error_close.setBackgroundColor(ContextCompat.getColor(requireActivity(),
-            errorTyp.iconColor!!
-        ))
+        binding.btnErrorClose.setBackgroundColor(
+            ContextCompat.getColor(
+                requireActivity(),
+                errorTyp.iconColor!!
+            )
+        )
 
-        rootView.btn_error_close.setOnClickListener {
+        binding.btnErrorClose.setOnClickListener {
             requireActivity().setSharedBool("ISCANCELD", "ISCANCELD", false)
             dismiss()
         }
 
-        rootView.btn_error_cancel.setOnClickListener {
+        binding.btnErrorCancel.setOnClickListener {
             requireActivity().setSharedBool("ISCANCELD", "ISCANCELD", true)
             dismiss()
         }
@@ -87,17 +97,17 @@ class ErrorDialogFragment(var errorTyp: ErrorTyp) : DialogFragment() {
 
     //start timer function
     fun startTimer() {
-        val cTimer = object: CountDownTimer(5000, 1000) {
+        val cTimer = object : CountDownTimer(5000, 1000) {
             override fun onTick(millisUntilFinished: Long) {
                 val seco = millisUntilFinished / 1000
                 secounds = seco.toInt()
-                rootView.btn_error_close.text = "Schließen ($secounds)"
-                rootView.btn_error_close.isEnabled = false
+                binding.btnErrorClose.text = "Schließen ($secounds)"
+                binding.btnErrorClose.isEnabled = false
             }
 
             override fun onFinish() {
-                rootView.btn_error_close.text = "Schließen"
-                rootView.btn_error_close.isEnabled = true
+                binding.btnErrorClose.text = "Schließen"
+                binding.btnErrorClose.isEnabled = true
                 cancelTimer()
             }
         }
@@ -122,5 +132,10 @@ class ErrorDialogFragment(var errorTyp: ErrorTyp) : DialogFragment() {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.window?.setWindowAnimations(R.style.SlideAnimation)
         return dialog
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

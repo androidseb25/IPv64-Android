@@ -7,22 +7,21 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
-import android.widget.Toast
 import androidx.fragment.app.DialogFragment
-import androidx.recyclerview.widget.GridLayoutManager
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
-import com.google.gson.Gson
-import kotlinx.android.synthetic.main.activity_main.*
-import kotlinx.android.synthetic.main.fragment_create_domain_dialog.view.*
-import kotlinx.android.synthetic.main.fragment_detail_domain_dialog.view.*
-import kotlinx.android.synthetic.main.fragment_detail_domain_dialog.view.topAppBarDetail
-import kotlinx.android.synthetic.main.fragment_domain.view.*
+import de.rpicloud.ipv64net.databinding.FragmentCreateDomainDialogBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
-class CreateDomainDialogFragment : DialogFragment() {
+class CreateDomainDialogFragment : DialogFragment(R.layout.fragment_create_domain_dialog) {
+
+    private var _binding: FragmentCreateDomainDialogBinding? = null
+
+    // This property is only valid between onCreateView and
+// onDestroyView.
+    private val binding get() = _binding!!
 
     private var onDismissCalDialog: DialogInterface.OnDismissListener? = null
 
@@ -44,16 +43,14 @@ class CreateDomainDialogFragment : DialogFragment() {
     /** The system calls this to get the DialogFragment's layout, regardless
     of whether it's being displayed as a dialog or an embedded fragment. */
     override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View {
-        // Inflate the layout to use as dialog or embedded fragment
-        rootView = inflater.inflate(R.layout.fragment_create_domain_dialog, container, false)
+        _binding = FragmentCreateDomainDialogBinding.inflate(inflater, container, false)
+        rootView = binding.root
 
-        rootView.topAppBarDetail.title = "Neue Domain"
+        binding.topAppBarDetail.title = "Neue Domain"
 
-        rootView.topAppBarDetail.setNavigationOnClickListener {
+        binding.topAppBarDetail.setNavigationOnClickListener {
             dismiss()
         }
 
@@ -80,15 +77,15 @@ class CreateDomainDialogFragment : DialogFragment() {
 
         val adapterDomains =
             SelectAdapter(requireActivity(), R.layout.list_item, strList = domainList)
-        rootView.actv_domain.setAdapter(adapterDomains)
+        binding.actvDomain.setAdapter(adapterDomains)
 
-        rootView.actv_domain.setOnItemClickListener { parent, view, position, id ->
+        binding.actvDomain.setOnItemClickListener { parent, view, position, id ->
             val item = parent.getItemAtPosition(position) as String
             println(item)
             selectedDomain = item
         }
 
-        rootView.topAppBarDetail.setOnMenuItemClickListener { menuItem ->
+        binding.topAppBarDetail.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.save -> {
                     spinnDialog.show()
@@ -98,7 +95,8 @@ class CreateDomainDialogFragment : DialogFragment() {
                     }
 
                     println("SAVE")
-                    val domainReg = rootView.tie_subdomain.text.toString().trim() + "." + selectedDomain
+                    val domainReg =
+                        binding.tieSubdomain.text.toString().trim() + "." + selectedDomain
                     //saveUser()
                     GlobalScope.launch(Dispatchers.Default) {
                         val result = ApiNetwork.PostDomain(domainReg)
@@ -109,7 +107,8 @@ class CreateDomainDialogFragment : DialogFragment() {
                             launch(Dispatchers.Main) {
                                 spinnDialog.hide()
                                 val fragmentManager = activity?.supportFragmentManager
-                                val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
+                                val newFragment =
+                                    ErrorDialogFragment(ErrorTypes.websiteRequestError)
                                 newFragment.show(fragmentManager!!, "dialogError")
                                 fragmentManager.executePendingTransactions()
                                 newFragment.setOnDismissListener { }
@@ -139,7 +138,8 @@ class CreateDomainDialogFragment : DialogFragment() {
                             launch(Dispatchers.Main) {
                                 spinnDialog.hide()
                                 val fragmentManager = activity?.supportFragmentManager
-                                val newFragment = ErrorDialogFragment(ErrorTypes.websiteRequestError)
+                                val newFragment =
+                                    ErrorDialogFragment(ErrorTypes.websiteRequestError)
                                 newFragment.show(fragmentManager!!, "dialogError")
                                 fragmentManager.executePendingTransactions()
                                 newFragment.setOnDismissListener { }
@@ -160,8 +160,7 @@ class CreateDomainDialogFragment : DialogFragment() {
                                 spinnDialog.hide()
                                 println("SHOW ERROR")
                                 val fragmentManager = activity?.supportFragmentManager
-                                val newFragment =
-                                    ErrorDialogFragment(ErrorTypes.tooManyRequests)
+                                val newFragment = ErrorDialogFragment(ErrorTypes.tooManyRequests)
                                 newFragment.show(fragmentManager!!, "dialogError")
                                 fragmentManager.executePendingTransactions()
                                 newFragment.setOnDismissListener { }
@@ -173,7 +172,8 @@ class CreateDomainDialogFragment : DialogFragment() {
                         launch(Dispatchers.Main) {
                             spinnDialog.hide()
                             val fragmentManager = activity?.supportFragmentManager
-                            val newFragment = ErrorDialogFragment(ErrorTypes.domainCreatedSuccesfully)
+                            val newFragment =
+                                ErrorDialogFragment(ErrorTypes.domainCreatedSuccesfully)
                             newFragment.show(fragmentManager!!, "dialogError")
                             fragmentManager.executePendingTransactions()
                             newFragment.setOnDismissListener {
@@ -183,6 +183,7 @@ class CreateDomainDialogFragment : DialogFragment() {
                     }
                     true
                 }
+
                 else -> false
             }
         }
@@ -204,5 +205,10 @@ class CreateDomainDialogFragment : DialogFragment() {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.window?.setWindowAnimations(R.style.SlideAnimation)
         return dialog
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

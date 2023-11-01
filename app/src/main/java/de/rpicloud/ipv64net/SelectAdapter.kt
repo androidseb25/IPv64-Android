@@ -7,15 +7,14 @@ import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Filter
 import android.widget.TextView
-import java.util.*
-import kotlin.collections.ArrayList
+import java.util.Locale
 
 class SelectAdapter(
     private val mContext: Context,
     private val mLayoutResourceId: Int,
     strList: MutableList<String>
 ) :
-ArrayAdapter<String>(mContext, mLayoutResourceId, strList) {
+    ArrayAdapter<String>(mContext, mLayoutResourceId, strList) {
     private val strings: MutableList<String> = ArrayList(strList)
     private var allStrings: List<String> = ArrayList(strList)
 

@@ -5,7 +5,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.DialogInterface
-import android.content.res.Resources
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -18,7 +17,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
 import com.google.gson.Gson
-import kotlinx.android.synthetic.main.fragment_detail_healthcheck_dialog.view.*
+import de.rpicloud.ipv64net.databinding.FragmentDetailHealthcheckDialogBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -26,7 +25,11 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
-class HealthcheckDetailFragmentDialog : DialogFragment() {
+class HealthcheckDetailFragmentDialog :
+    DialogFragment(R.layout.fragment_detail_healthcheck_dialog) {
+
+    private var _binding: FragmentDetailHealthcheckDialogBinding? = null
+    private val binding get() = _binding!!
 
     private var onDismissCalDialog: DialogInterface.OnDismissListener? = null
     lateinit var healthcheck: HealthCheck
@@ -53,12 +56,15 @@ class HealthcheckDetailFragmentDialog : DialogFragment() {
             Unit.Minuten.Unit.unit -> {
                 Unit.Minuten.Unit.name!!
             }
+
             Unit.Stunden.Unit.unit -> {
                 Unit.Stunden.Unit.name!!
             }
+
             Unit.Tage.Unit.unit -> {
                 Unit.Tage.Unit.name!!
             }
+
             else -> {
                 ""
             }
@@ -72,15 +78,14 @@ class HealthcheckDetailFragmentDialog : DialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        // Inflate the layout to use as dialog or embedded fragment
-        rootView = inflater.inflate(R.layout.fragment_detail_healthcheck_dialog, container, false)
-
+        _binding = FragmentDetailHealthcheckDialogBinding.inflate(inflater, container, false)
+        rootView = binding.root
 
         healthcheck = Gson().fromJson(arguments?.getString("HEALTHCHECK"), HealthCheck::class.java)
         println(healthcheck)
-        rootView.topAppBarHDetail.title = healthcheck.name
+        binding.topAppBarHDetail.title = healthcheck.name
 
-        rootView.topAppBarHDetail.setNavigationOnClickListener {
+        binding.topAppBarHDetail.setNavigationOnClickListener {
             dismiss()
         }
 
@@ -90,13 +95,14 @@ class HealthcheckDetailFragmentDialog : DialogFragment() {
         spinnDialog.cancelable(false)
         spinnDialog.cancelOnTouchOutside(false)
 
-        rootView.recycler_pill_big_view?.layoutManager = LinearLayoutManager(
+        binding.recyclerPillBigView.layoutManager = LinearLayoutManager(
             activity?.applicationContext,
             LinearLayoutManager.HORIZONTAL,
             false
         )
 
-        val width = screenRectDp.width() - 32 //rootView.recycler_pill_big_view.layoutParams.width + 32
+        val width =
+            screenRectDp.width() - 32 //rootView.recycler_pill_big_view.layoutParams.width + 32
         val pillCount = (width / 15).roundToInt()
 
         println("width: $width")
@@ -104,23 +110,22 @@ class HealthcheckDetailFragmentDialog : DialogFragment() {
 
         val healthAdapter = HealthcheckPillAdapter(
             healthcheck.events.take(pillCount).reversed().toMutableList(),
-            requireActivity(),
-            R.layout.adapter_healthcheck_pill
+            requireActivity()
         )
-        rootView.recycler_pill_big_view?.isNestedScrollingEnabled = false;
-        rootView.recycler_pill_big_view?.adapter = healthAdapter
+        binding.recyclerPillBigView.isNestedScrollingEnabled = false
+        binding.recyclerPillBigView.adapter = healthAdapter
 
-        rootView.tv_time.text = "${healthcheck.alarm_count} ${GetUnit(healthcheck.alarm_unit)}"
-        rootView.tv_karenzzeit.text =
+        binding.tvTime.text = "${healthcheck.alarm_count} ${GetUnit(healthcheck.alarm_unit)}"
+        binding.tvKarenzzeit.text =
             "${healthcheck.grace_count} ${GetUnit(healthcheck.grace_unit)}"
-        rootView.tv_notification.text =
+        binding.tvNotification.text =
             (healthcheck.integration_id.count { it == ',' } + 1).toString()
-        rootView.tv_noti_down.text = if (healthcheck.alarm_down == 0) {
+        binding.tvNotiDown.text = if (healthcheck.alarm_down == 0) {
             "aus"
         } else {
             "an"
         }
-        rootView.tv_noti_up.text = if (healthcheck.alarm_up == 0) {
+        binding.tvNotiUp.text = if (healthcheck.alarm_up == 0) {
             "aus"
         } else {
             "an"
@@ -131,9 +136,9 @@ class HealthcheckDetailFragmentDialog : DialogFragment() {
         val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")
         val output: String = formatter.format(localDateTime)
 
-        rootView.tv_created.text = output
+        binding.tvCreated.text = output
 
-        rootView.btn_copy_health_url.setOnClickListener {
+        binding.btnCopyHealthUrl.setOnClickListener {
             val clipboard: ClipboardManager =
                 requireActivity().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip: ClipData =
@@ -146,35 +151,35 @@ class HealthcheckDetailFragmentDialog : DialogFragment() {
             ).show()
         }
 
-        rootView.btn_start_hc.visibility =
+        binding.btnStartHc.visibility =
             if (healthcheck.healthstatus == StatusType.Pause.type.statusId) {
                 View.VISIBLE
             } else {
                 View.GONE
             }
 
-        rootView.btn_pause_hc.visibility =
+        binding.btnPauseHc.visibility =
             if (healthcheck.healthstatus != StatusType.Pause.type.statusId) {
                 View.VISIBLE
             } else {
                 View.GONE
             }
 
-        rootView.btn_start_hc.setOnClickListener {
+        binding.btnStartHc.setOnClickListener {
             startHC()
         }
 
-        rootView.btn_pause_hc.setOnClickListener {
+        binding.btnPauseHc.setOnClickListener {
             pauseHC()
         }
 
-        rootView.btn_delete_hc.setOnClickListener {
+        binding.btnDeleteHc.setOnClickListener {
             val fragmentManager = activity?.supportFragmentManager
             val newFragment = ErrorDialogFragment(ErrorTypes.deletehealth)
             newFragment.show(fragmentManager!!, "dialogError")
             fragmentManager.executePendingTransactions()
             newFragment.setOnDismissListener {
-                var isCanceld = requireActivity().getSharedBool("ISCANCELD", "ISCANCELD") as Boolean
+                var isCanceld = requireActivity().getSharedBool("ISCANCELD", "ISCANCELD")
                 if (!isCanceld) {
                     deleteHC()
                     requireActivity().setSharedBool("ISCANCELD", "ISCANCELD", false)
@@ -182,13 +187,14 @@ class HealthcheckDetailFragmentDialog : DialogFragment() {
             }
         }
 
-        rootView.recycler_events?.layoutManager =
+        binding.recyclerEvents.layoutManager =
             GridLayoutManager(requireActivity().applicationContext, 1)
 
-        val adapterEvents = EventAdapter(healthcheck.events.take(pillCount).toMutableList(), requireActivity())
-        rootView.recycler_events.adapter = adapterEvents
+        val adapterEvents =
+            EventAdapter(healthcheck.events.take(pillCount).toMutableList(), requireActivity())
+        binding.recyclerEvents.adapter = adapterEvents
 
-        rootView.topAppBarHDetail.setOnMenuItemClickListener { menuItem ->
+        binding.topAppBarHDetail.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.edit_hc -> {
                     println("edithc")
@@ -215,6 +221,7 @@ class HealthcheckDetailFragmentDialog : DialogFragment() {
                     }
                     true
                 }
+
                 else -> false
             }
         }
@@ -480,5 +487,10 @@ class HealthcheckDetailFragmentDialog : DialogFragment() {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.window?.setWindowAnimations(R.style.SlideAnimation)
         return dialog
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }
