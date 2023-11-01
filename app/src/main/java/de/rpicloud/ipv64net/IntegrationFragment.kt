@@ -45,6 +45,9 @@ class IntegrationFragment : Fragment(R.layout.fragment_integrations),
             param1 = it.getString(ARG_PARAM1)
             param2 = it.getString(ARG_PARAM2)
         }
+
+        ApiNetwork.context = activity?.applicationContext
+        ErrorTypes.context = activity?.applicationContext
         getData()
     }
 
@@ -55,8 +58,6 @@ class IntegrationFragment : Fragment(R.layout.fragment_integrations),
         _binding = FragmentIntegrationsBinding.inflate(inflater, container, false)
         rootView = binding.root
 
-        ApiNetwork.context = activity?.applicationContext
-        ErrorTypes.context = activity?.applicationContext
         binding.swipeLayoutIntegration.setOnRefreshListener(this)
         binding.recyclerIntegration.layoutManager =
             GridLayoutManager(activity?.applicationContext, 1)

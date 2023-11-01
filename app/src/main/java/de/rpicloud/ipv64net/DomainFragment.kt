@@ -44,6 +44,9 @@ class DomainFragment : Fragment(R.layout.fragment_domain), SwipeRefreshLayout.On
             param1 = it.getString(ARG_PARAM1)
             param2 = it.getString(ARG_PARAM2)
         }
+
+        ApiNetwork.context = activity?.applicationContext
+        ErrorTypes.context = activity?.applicationContext
         getData()
     }
 
@@ -52,9 +55,6 @@ class DomainFragment : Fragment(R.layout.fragment_domain), SwipeRefreshLayout.On
     ): View {
         _binding = FragmentDomainBinding.inflate(inflater, container, false)
         rootView = binding.root
-
-        ApiNetwork.context = activity?.applicationContext
-        ErrorTypes.context = activity?.applicationContext
         binding.swipeLayout.setOnRefreshListener(this)
 
         binding.floatingActionButton.setOnClickListener {
