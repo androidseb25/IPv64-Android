@@ -10,7 +10,7 @@ plugins {
 
 android {
     namespace 'de.rpicloud.ipv64net'
-    compileSdk 33
+    compileSdk 34
 
     defaultConfig {
         applicationId "de.rpicloud.ipv64net"
