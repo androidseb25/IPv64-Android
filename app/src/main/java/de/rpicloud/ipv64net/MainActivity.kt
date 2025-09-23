@@ -1,127 +1,47 @@
 package de.rpicloud.ipv64net
 
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
-import de.rpicloud.ipv64net.databinding.ActivityMainBinding
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import de.rpicloud.ipv64net.ui.theme.IPv64netTheme
 
-class MainActivity : AppCompatActivity() {
-
-    var listOfDomains: DomainResult = DomainResult()
-    lateinit var domainAdapter: DomainAdapter
-    private lateinit var binding: ActivityMainBinding
-
-    override fun onResume() {
-        super.onResume()
-        val isRestart = getSharedBool("THEME_RESTART", "THEME_RESTART")
-        if (isRestart) {
-            binding.navigation.menu.findItem(R.id.menu_domain).isChecked = true
-            setSharedBool("THEME_RESTART", "THEME_RESTART", false)
-        }
-    }
-
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-//        setContentView(R.layout.activity_main)
-
-
-        val isPortrait = resources.getBoolean(R.bool.portrait_only)
-        Functions().setOrientaiton(this, isPortrait)
-
-        binding.topAppBar.title = "Domain"//resources.getString(R.string.dashboard)
-
-        val domainFragment = DomainFragment()
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.main_container, domainFragment, "domain").commit()
-
-        val lastVersionCode = getSharedInt("LASTBUILDNUMBER", "LASTBUILDNUMBER")
-        if (BuildConfig.VERSION_CODE != lastVersionCode) {
-            val newFragment = WhatsNewDialogFragment()
-            newFragment.show(supportFragmentManager, "whatsnewDialog")
-            supportFragmentManager.executePendingTransactions()
-            newFragment.setOnDismissListener {
-                setSharedInt("LASTBUILDNUMBER", "LASTBUILDNUMBER", BuildConfig.VERSION_CODE)
+        enableEdgeToEdge()
+        setContent {
+            IPv64netTheme {
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    Greeting(
+                        name = "Android",
+                        modifier = Modifier.padding(innerPadding)
+                    )
+                }
             }
         }
-
-        if (isPortrait) {
-            binding.navigation.setOnItemSelectedListener { item ->
-                setSelectedView(item.itemId)
-            }
-        } else {
-            /*navigation_rail.setOnItemSelectedListener { item ->
-                setSelectedView(item.itemId)
-            }*/
-        }
-        setSupportActionBar(binding.topAppBar)
     }
+}
 
-    private fun setSelectedView(itemId: Int) = when (itemId) {
-        R.id.menu_domain -> {
-            val domainFragment = DomainFragment()
-            binding.topAppBar.title = "Domain"//resources.getString(R.string.dashboard)
-            binding.topAppBar.menu.clear()
-            val isPortrait = resources.getBoolean(R.bool.portrait_only)
-            supportFragmentManager.beginTransaction()
-                .replace(R.id.main_container, domainFragment, "domain").commit()
-            true
-        }
+@Composable
+fun Greeting(name: String, modifier: Modifier = Modifier) {
+    Text(
+        text = "Hello $name!",
+        modifier = modifier
+    )
+}
 
-        R.id.menu_account -> {
-            val accountFragment = AccountFragment()
-            binding.topAppBar.title = "Account" //resources.getString(R.string.dashboard)
-            binding.topAppBar.menu.clear()
-            /*when (calendarTypes) {
-                CalendarTypes.Alle -> topAppBar.title = resources.getString(R.string.alle_termine)
-                CalendarTypes.Training -> topAppBar.title = resources.getString(R.string.trainings_termine)
-                CalendarTypes.Event -> topAppBar.title = resources.getString(R.string.event_termine)
-                else -> topAppBar.title = resources.getString(R.string.wettkampf_termine)
-            }
-            topAppBar.inflateMenu(R.menu.filter_menu);*/
-            supportFragmentManager.beginTransaction()
-                .replace(R.id.main_container, accountFragment, "account")
-                .commit()
-            // Respond to navigation item 2 click
-            true
-        }
-
-        R.id.menu_healthcheck -> {
-            val healthcheckFragment = HealthcheckFragment()
-            binding.topAppBar.title = "Healthcheck" //resources.getString(R.string.dashboard)
-            binding.topAppBar.menu.clear()
-            /*when (calendarTypes) {
-                CalendarTypes.Alle -> topAppBar.title = resources.getString(R.string.alle_termine)
-                CalendarTypes.Training -> topAppBar.title = resources.getString(R.string.trainings_termine)
-                CalendarTypes.Event -> topAppBar.title = resources.getString(R.string.event_termine)
-                else -> topAppBar.title = resources.getString(R.string.wettkampf_termine)
-            }
-            topAppBar.inflateMenu(R.menu.filter_menu);*/
-            supportFragmentManager.beginTransaction()
-                .replace(R.id.main_container, healthcheckFragment, "healthcheck")
-                .commit()
-            // Respond to navigation item 2 click
-            true
-        }
-
-        R.id.menu_integrations -> {
-            val integrationFragment = IntegrationFragment()
-            binding.topAppBar.title = "Integrationen" //resources.getString(R.string.dashboard)
-            binding.topAppBar.menu.clear()
-            /*when (calendarTypes) {
-                CalendarTypes.Alle -> topAppBar.title = resources.getString(R.string.alle_termine)
-                CalendarTypes.Training -> topAppBar.title = resources.getString(R.string.trainings_termine)
-                CalendarTypes.Event -> topAppBar.title = resources.getString(R.string.event_termine)
-                else -> topAppBar.title = resources.getString(R.string.wettkampf_termine)
-            }
-            topAppBar.inflateMenu(R.menu.filter_menu);*/
-            supportFragmentManager.beginTransaction()
-                .replace(R.id.main_container, integrationFragment, "integrations")
-                .commit()
-            // Respond to navigation item 2 click
-            true
-        }
-
-        else -> false
+@Preview(showBackground = true)
+@Composable
+fun GreetingPreview() {
+    IPv64netTheme {
+        Greeting("Android")
     }
 }

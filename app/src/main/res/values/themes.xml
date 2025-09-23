@@ -1,45 +1,5 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.IPv64net" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <item name="colorPrimary">@color/ipv64</item>
-        <item name="colorAccent">@color/black</item>
-        <item name="android:statusBarColor">@color/ipv64_toolbar_status</item>
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
 
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:colorControlActivated">@color/ipv64</item>
-    </style>
-
-    <style name="Theme.IPv64net" parent="Base.Theme.IPv64net" />
-
-    <style name="SlideAnimation">
-        <item name="android:windowEnterAnimation">@anim/slide_up</item>
-        <item name="android:windowExitAnimation">@anim/slide_down</item>
-    </style>
-
-    <style name="MyBottomNavigationView" parent="Widget.MaterialComponents.BottomNavigationView">
-        <item name="android:background">?attr/colorSurface</item>
-        <item name="backgroundTint">@null</item>
-        <item name="elevation">@dimen/m3_sys_elevation_level2</item>
-        <item name="itemActiveIndicatorStyle">@style/MyActiveIndicator</item>
-        <item name="itemTextAppearanceInactive">?attr/textAppearanceTitleSmall</item>
-        <item name="itemTextAppearanceActive">?attr/textAppearanceTitleSmall</item>
-        <item name="itemRippleColor">@color/m3_navigation_bar_ripple_color_selector</item>
-        <item name="itemIconTint">@color/navigationbar_indicator</item>
-        <item name="itemTextColor">@color/navigationbar_indicator_text</item>
-        <item name="itemPaddingTop">@dimen/m3_bottom_nav_item_padding_top</item>
-        <item name="itemPaddingBottom">@dimen/m3_bottom_nav_item_padding_bottom</item>
-        <item name="android:minHeight">@dimen/m3_bottom_nav_min_height</item>
-    </style>
-
-    <style name="MyActiveIndicator" parent="">
-        <item name="android:width">@dimen/m3_bottom_nav_item_active_indicator_width</item>
-        <item name="android:height">@dimen/m3_bottom_nav_item_active_indicator_height</item>
-        <item name="marginHorizontal">@dimen/m3_bottom_nav_item_active_indicator_margin_horizontal</item>
-        <item name="shapeAppearance">
-            @style/ShapeAppearance.Material3.NavigationBarView.ActiveIndicator
-        </item>
-        <item name="android:color">@color/ipv64_selector_pill</item>
-
-    </style>
+    <style name="Theme.IPv64net" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>
