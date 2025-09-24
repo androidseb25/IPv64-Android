@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">IPv64.net</string>
+    <string name="retry">Retry</string>
 </resources>
