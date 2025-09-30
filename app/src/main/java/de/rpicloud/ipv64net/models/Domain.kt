@@ -2,6 +2,7 @@ package de.rpicloud.ipv64net.models
 
 import androidx.compose.ui.graphics.Color
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.helper.v64domains
 
 data class Domain(
     var updates: Int? = 0,
@@ -21,15 +22,30 @@ data class Domain(
             else -> "yes"
         }
 
+    var ipv4: String = "0.0.0.0"
+    var ipv6: String = "::1"
+
     val isSameTypeAAddress: Boolean
-        get() = records?.count { it.content == "62.149.104.72" && it.type == "A" } == 1
+        get() = records?.count { it.content == ipv4 && it.type == "A" }!! >= 1
 
     val isSameTypeAAAAAddress: Boolean
-        get() = records?.count { it.content == "2a01:4f8:c010:974b::1" && it.type == "AAAA" } == 1
+        get() = records?.count { it.content == ipv6 && it.type == "AAAA" }!! >= 1
 
     val tintColor: Color
         get() = when(isSameTypeAAddress || isSameTypeAAAAAddress) {
             true -> Color.Green
             else -> Color.Red
+        }
+
+    val baseDomain: String
+        get() {
+            val parts = fqdn?.split(".")
+            parts?.size?.let {
+                if (it >= 2) {
+                    val domain = parts.takeLast(2).joinToString(".")
+                    return if (domain in String().v64domains()) domain else "Own Domain"
+                }
+            }
+            return "Own Domain"
         }
 }

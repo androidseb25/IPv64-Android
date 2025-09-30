@@ -16,7 +16,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import de.rpicloud.ipv64net.R
 
 enum class Tab {
-    welcome, login, domains, healthcheck, integrations, settings, account
+    welcome, login, domains, domain_details, domain_new, healthcheck, integrations, settings, account
 }
 
 sealed class Tabs {
@@ -69,6 +69,8 @@ sealed class Tabs {
                 Tab.integrations -> "integrations"
                 Tab.settings -> "settings"
                 Tab.account -> "account"
+                Tab.domain_details -> "domain_details"
+                Tab.domain_new -> "domain_new"
             }
         }
 
