@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.NetworkService
+import de.rpicloud.ipv64net.helper.v64DnsRecordTypes
 import de.rpicloud.ipv64net.helper.v64domains
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
@@ -56,9 +58,10 @@ import de.rpicloud.ipv64net.models.Tabs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+@SuppressLint("UnrememberedGetBackStackEntry")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) {
+fun DomainDnsNewView(navController: NavHostController, mainPadding: PaddingValues) {
 
     val ctx = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -68,27 +71,41 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
     var showLoadingDialog by remember { mutableStateOf(false) }
     var showDialog by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
-    var domain by remember { mutableStateOf(String().v64domains().first()) }
-    var subDomain by remember { mutableStateOf("") }
+    var dnsRecordType by remember { mutableStateOf(String().v64DnsRecordTypes().first()) }
+    var dnsPrefix by remember { mutableStateOf("") }
+    var dnsValue by remember { mutableStateOf("") }
     var errorDialogTitle by remember { mutableStateOf("") }
     var errorDialogText by remember { mutableStateOf("") }
     var errorDialogButtonText by remember { mutableIntStateOf(android.R.string.ok) }
+
+    val domainDetailRoute = Tabs.getRoute(Tab.domain_details)
+    val domainDetailBackStackEntry = remember(domainDetailRoute) {
+        navController.getBackStackEntry(domainDetailRoute)
+    }
+    val fqdn by domainDetailBackStackEntry.savedStateHandle.getStateFlow<String>("ADD_FQDN", "").collectAsState()
 
     var newDomainResult by remember { mutableStateOf(AddDomainResult.empty) }
 
     fun onSave() {
         keyboardController?.hide()
-        if (subDomain.isEmpty()) {
+        if (dnsPrefix.isEmpty()) {
             errorDialogTitle = "Empty field"
-            errorDialogText = "Please fill the subdomain field!"
+            errorDialogText = "Please fill the prefix field!"
             errorDialogButtonText = R.string.retry
             showDialog = true
             return
         }
-        val newDomain = "$subDomain.$domain"
+        if (dnsValue.isEmpty()) {
+            errorDialogTitle = "Empty field"
+            errorDialogText = "Please fill the DNS value field!"
+            errorDialogButtonText = R.string.retry
+            showDialog = true
+            return
+        }
+
         showLoadingDialog = true
         scope.launch(Dispatchers.IO) {
-            NetworkService(ctx).PostNewDomain(newDomain) { nwResult ->
+            NetworkService(ctx).AddDnsRecord(fqdn, dnsPrefix, dnsRecordType, dnsValue) { nwResult ->
                 showLoadingDialog = false
                 when (nwResult.status) {
                     200 -> {
@@ -101,7 +118,10 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
                         } else {
                             (nwResult.data as AddDomainResult).also { newDomainResult = it }
                             println(newDomainResult)
-                            navController.popBackStack()
+                            navController.popBackStack(
+                                route = Tabs.getRoute(Tab.domains), // die Parent-Route
+                                inclusive = false               // Parent im Stack behalten
+                            )
                         }
                     }
 
@@ -146,7 +166,7 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
                     }
                 },
                 title = {
-                    Text("New Domain")
+                    Text("New DNS Record")
                 }, modifier = Modifier.statusBarsPadding(),
                 actions = {
                     IconButton(onClick = { onSave() }) {
@@ -178,14 +198,14 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
             ) {
                 item {
                     OutlinedTextField(
-                        value = subDomain,
+                        value = dnsPrefix,
                         singleLine = true,
-                        label = { Text("eg.: homelab01") },
+                        label = { Text("eg. (dkim._domainkey)") },
                         textStyle = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 25.dp),
-                        onValueChange = { newText -> subDomain = newText },
+                        onValueChange = { newText -> dnsPrefix = newText },
                     )
                 }
                 item {
@@ -195,10 +215,10 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
                     ) {
                         // WICHTIG: menuAnchor() am TextField
                         OutlinedTextField(
-                            value = domain,
+                            value = dnsRecordType,
                             onValueChange = {},           // read-only Dropdown
                             readOnly = true,
-                            label = { Text("Select domain") },
+                            label = { Text("Select a Record Type") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
                             modifier = Modifier
                                 .menuAnchor( // 🟢 neuer Overload
@@ -213,19 +233,28 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
                             expanded = expanded,
                             onDismissRequest = { expanded = false }
                         ) {
-                            String().v64domains().forEach { option ->
-                                if (option != "Own Domain") {
-                                    DropdownMenuItem(
-                                        text = { Text(option) },
-                                        onClick = {
-                                            domain = option
-                                            expanded = false
-                                        }
-                                    )
-                                }
+                            String().v64DnsRecordTypes().forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option) },
+                                    onClick = {
+                                        dnsRecordType = option
+                                        expanded = false
+                                    }
+                                )
                             }
                         }
                     }
+                }
+                item {
+                    OutlinedTextField(
+                        value = dnsValue,
+                        singleLine = true,
+                        label = { Text("eg. IP, TXT record") },
+                        textStyle = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        onValueChange = { newText -> dnsValue = newText },
+                    )
                 }
             }
         }
@@ -233,7 +262,7 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
 
     if (showLoadingDialog) {
         SpinnerDialog(
-            spinnerText = "Saving domain..."
+            spinnerText = "Saving DNS Record..."
         )
     }
 

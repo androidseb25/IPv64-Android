@@ -59,3 +59,17 @@ fun String.v64domains(): List<String> {
         "Own Domain"
     )
 }
+
+fun String.v64DnsRecordTypes(): List<String> {
+    return listOf(
+        "A",
+        "AAAA",
+        "TXT",
+        "MX",
+        "NS",
+        "SRV",
+        "CNAME",
+        "TLSA",
+        "CAA"
+    )
+}

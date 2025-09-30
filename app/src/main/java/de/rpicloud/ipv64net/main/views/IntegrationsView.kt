@@ -56,8 +56,6 @@ fun IntegrationsView(navController: NavHostController, mainPadding: PaddingValue
 
     var integrationResult by remember { mutableStateOf(IntegrationResult.empty) }
 
-    rememberCoroutineScope()
-
     fun getIntegrations() {
         showLoadingDialog = true
         scope.launch(Dispatchers.IO) {

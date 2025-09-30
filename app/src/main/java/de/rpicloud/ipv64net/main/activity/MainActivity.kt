@@ -19,6 +19,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import de.rpicloud.ipv64net.main.views.DomainDetailView
+import de.rpicloud.ipv64net.main.views.DomainDnsNewView
 import de.rpicloud.ipv64net.main.views.DomainNewView
 import de.rpicloud.ipv64net.main.views.DomainView
 import de.rpicloud.ipv64net.main.views.HealthcheckView
@@ -59,6 +60,9 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Tabs.Companion.getRoute(Tab.domain_details)) {
                             DomainDetailView(navController, mainPadding = mainPadding)
+                        }
+                        composable(Tabs.Companion.getRoute(Tab.domain_new_dns)) {
+                            DomainDnsNewView(navController, mainPadding = mainPadding)
                         }
                     }
                 }

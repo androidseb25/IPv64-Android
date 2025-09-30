@@ -75,8 +75,6 @@ fun DomainView(navController: NavHostController, mainPadding: PaddingValues) {
     var myV4 by remember { mutableStateOf(IPResult.empty) }
     var myV6 by remember { mutableStateOf(IPResult.empty) }
 
-    rememberCoroutineScope()
-
     fun getDomains() {
         showLoadingDialog = true
         scope.launch(Dispatchers.IO) {
@@ -223,7 +221,7 @@ fun DomainView(navController: NavHostController, mainPadding: PaddingValues) {
                     navController.navigate(Tabs.getRoute(Tab.domain_new))
                 }) {
                     Icon(
-                        painter = painterResource(id = R.drawable.add_24px),
+                        painter = painterResource(id = R.drawable.domain_add_24px),
                         contentDescription = "icon"
                     )
                 }

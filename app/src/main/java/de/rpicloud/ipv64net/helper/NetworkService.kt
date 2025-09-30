@@ -7,6 +7,7 @@ import de.rpicloud.ipv64net.models.AccountInfo
 import de.rpicloud.ipv64net.models.AddDomainResult
 import de.rpicloud.ipv64net.models.DomainResult
 import de.rpicloud.ipv64net.models.IPResult
+import de.rpicloud.ipv64net.models.IPUpdateResult
 import de.rpicloud.ipv64net.models.IntegrationResult
 import de.rpicloud.ipv64net.models.NetworkResult
 import de.rpicloud.ipv64net.models.parseDomainResult
@@ -235,19 +236,19 @@ class NetworkService {
     suspend fun DeleteDomain(domain: String, callback: (result: NetworkResult) -> Unit) {
         val url = baseUrl
 
-        val formBody = FormBody.Builder()
-            .add("del_domain", domain)
-            .build()
-
         withContext(Dispatchers.IO) {
             try {
+
+                val formBody = FormBody.Builder()
+                    .add("del_domain", domain)
+                    .build()
+
                 val gson = Gson()
 
                 val request = Request.Builder()
                     .url(url)
-                    .addHeader("Content-Type", "application/json; charset=utf-8")
-                    .addHeader("Accept", "application/json; charset=utf-8")
-                    .addHeader("Authorization", "Bearer $_apiToken")
+                    .addHeader("Authorization", "Authorization: Bearer $_apiToken")
+                    .addHeader("Content-Type", "application/x-www-form-urlencoded")
                     .delete(formBody)
                     .build()
 
@@ -290,6 +291,83 @@ class NetworkService {
                     .addHeader("Accept", "application/json; charset=utf-8")
                     .addHeader("Authorization", "Bearer $_apiToken")
                     .delete(formBody)
+                    .build()
+
+                val response = OkHttpClientProvider.client.newCall(request).execute()
+                val responseText = response.body.string()
+                if (response.isSuccessful) {
+                    val result = gson.fromJson(responseText, AddDomainResult::class.java)
+                    withContext(Dispatchers.Main) {
+                        println("♻️ - ${result.add_domain}")
+                        callback(NetworkResult("Success", result, 200))
+                    }
+                } else {
+                    val result = gson.fromJson(responseText, AddDomainResult::class.java)
+                    withContext(Dispatchers.Main) {
+                        callback(NetworkResult("Fehler: ${response.code}", result, response.code))
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    callback(NetworkResult(e.localizedMessage, null, 500))
+                }
+            }
+        }
+    }
+
+    suspend fun UpdateDNSRecord(url: String, callback: (result: NetworkResult) -> Unit) {
+        withContext(Dispatchers.IO) {
+            try {
+                val gson = Gson()
+                val request = Request.Builder()
+                    .url(url)
+                    .addHeader("Content-Type", "application/json; charset=utf-8")
+                    .addHeader("Accept", "application/json; charset=utf-8")
+                    .addHeader("Authorization", "Bearer $_apiToken")
+                    .get()
+                    .build()
+
+                val response = OkHttpClientProvider.client.newCall(request).execute()
+                val responseText = response.body.string()
+                if (response.isSuccessful) {
+                    val result = gson.fromJson(responseText, IPUpdateResult::class.java)
+                    withContext(Dispatchers.Main) {
+                        println("♻️ - ${result.info}")
+                        callback(NetworkResult("Success", result, 200))
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        callback(NetworkResult("Fehler: ${response.code}", null, response.code))
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    callback(NetworkResult(e.localizedMessage, null, 500))
+                }
+            }
+        }
+    }
+
+    suspend fun AddDnsRecord(domain: String, prefix: String, type: String, content: String, callback: (result: NetworkResult) -> Unit) {
+        val url = baseUrl
+
+        val formBody = FormBody.Builder()
+            .add("add_record", domain)
+            .add("praefix", prefix)
+            .add("type", type)
+            .add("content", content)
+            .build()
+
+        withContext(Dispatchers.IO) {
+            try {
+                val gson = Gson()
+
+                val request = Request.Builder()
+                    .url(url)
+                    .addHeader("Content-Type", "application/json; charset=utf-8")
+                    .addHeader("Accept", "application/json; charset=utf-8")
+                    .addHeader("Authorization", "Bearer $_apiToken")
+                    .post(formBody)
                     .build()
 
                 val response = OkHttpClientProvider.client.newCall(request).execute()

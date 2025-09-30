@@ -10,7 +10,9 @@ data class Domain(
     var domain_update_hash: String? = "",
     var records: MutableList<RecordInfos>? = mutableListOf(),
     // kommt NICHT aus dem JSON – füllen wir aus dem Schlüssel (z. B. "vcbdfaga.ipv64.net")
-    var fqdn: String? = ""
+    var fqdn: String? = "",
+    var ipv4: String = "0.0.0.0",
+    var ipv6: String = "::1"
 ) {
     companion object {
         val empty = Domain(0, 0, "", mutableListOf(), "")
@@ -21,9 +23,6 @@ data class Domain(
             0 -> "no"
             else -> "yes"
         }
-
-    var ipv4: String = "0.0.0.0"
-    var ipv6: String = "::1"
 
     val isSameTypeAAddress: Boolean
         get() = records?.count { it.content == ipv4 && it.type == "A" }!! >= 1

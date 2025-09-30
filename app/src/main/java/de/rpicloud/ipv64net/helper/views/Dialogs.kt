@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -117,6 +118,7 @@ fun ErrorDialog(
     icon: Int = R.drawable.error_24px,
     showDismiss: Boolean = false
 ) {
+    val ctx = LocalContext.current
     AlertDialog(
         modifier = Modifier.zIndex(1f), // Stellt sicher, dass der Dialog über allem in der App ist
         icon = {
@@ -136,16 +138,17 @@ fun ErrorDialog(
             onDismissRequest()
         },
         confirmButton = {
+            val color = if (icon == R.drawable.delete_24px) { Color(ContextCompat.getColor(ctx, R.color.ipv64_red)) } else { colorScheme.primary }
             TextButton(onClick = {
                 onConfirmation()
             }) {
-                Text(text = stringResource(id = dialogConfirmText))
+                Text(text = stringResource(id = dialogConfirmText), color = color)
             }
         },
         dismissButton = {
             if (showDismiss) {
                 TextButton(onClick = {
-//                    onDismissRequest()
+                    onDismissRequest()
                 }) {
                     Text(stringResource(id = dialogDismissText))
                 }

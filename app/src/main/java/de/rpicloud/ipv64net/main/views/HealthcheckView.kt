@@ -44,8 +44,6 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
 
 //    var server64 by remember { mutableStateOf(Server64.empty) }
 
-    rememberCoroutineScope()
-
 //    fun getServers() {
 //        showLoadingDialog = true
 //        scope.launch(Dispatchers.IO) {
