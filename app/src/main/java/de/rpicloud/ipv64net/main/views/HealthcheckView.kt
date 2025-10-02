@@ -42,48 +42,6 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
     var errorDialogText by remember { mutableStateOf("") }
     var errorDialogButtonText by remember { mutableIntStateOf(android.R.string.ok) }
 
-//    var server64 by remember { mutableStateOf(Server64.empty) }
-
-//    fun getServers() {
-//        showLoadingDialog = true
-//        scope.launch(Dispatchers.IO) {
-//            NetworkService(ctx).GetServers { nwResult ->
-//                showLoadingDialog = false
-//                when (nwResult.status) {
-//                    200 -> {
-//                        if (nwResult.data == null) {
-//                            println(nwResult.message)
-//                            errorDialogTitle = "Data not found"
-//                            errorDialogText = "There are no data found!"
-//                            errorDialogButtonText = R.string.retry
-//                            showDialog = true
-//                        } else {
-//                            (nwResult.data as Server64).also { server64 = it }
-//                            println(server64)
-//                            createPoints()
-//                        }
-//                    }
-//
-//                    400 -> {
-//                        println(nwResult.message)
-//                        errorDialogTitle = "Loading error"
-//                        errorDialogText = nwResult.message.toString()
-//                        errorDialogButtonText = R.string.retry
-//                        showDialog = true
-//                    }
-//
-//                    else -> {
-//                        println(nwResult.message)
-//                        errorDialogTitle = "Loading error"
-//                        errorDialogText = nwResult.message.toString()
-//                        errorDialogButtonText = R.string.retry
-//                        showDialog = true
-//                    }
-//                }
-//            }
-//        }
-//    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -107,7 +65,6 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
     }
 
     LaunchedEffect(Unit) {
-//        getServers()
     }
 
     if (showLoadingDialog) {
@@ -119,9 +76,7 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
     if (showDialog) {
         ErrorDialog(
             onDismissRequest = { showDialog = false },
-            onConfirmation = { showDialog = false;
-//                getServers()
-            },
+            onConfirmation = { showDialog = false; },
             dialogTitle = errorDialogTitle,
             dialogText = errorDialogText,
             dialogConfirmText = errorDialogButtonText

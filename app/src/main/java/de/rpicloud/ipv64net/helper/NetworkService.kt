@@ -5,10 +5,9 @@ import android.util.Log
 import com.google.gson.Gson
 import de.rpicloud.ipv64net.models.AccountInfo
 import de.rpicloud.ipv64net.models.AddDomainResult
-import de.rpicloud.ipv64net.models.DomainResult
 import de.rpicloud.ipv64net.models.IPResult
 import de.rpicloud.ipv64net.models.IPUpdateResult
-import de.rpicloud.ipv64net.models.IntegrationResult
+import de.rpicloud.ipv64net.models.Logs
 import de.rpicloud.ipv64net.models.NetworkResult
 import de.rpicloud.ipv64net.models.parseDomainResult
 import de.rpicloud.ipv64net.models.parseIntegrations
@@ -21,14 +20,12 @@ import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Request
-import okhttp3.RequestBody
 import okhttp3.logging.HttpLoggingInterceptor
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Proxy
-import kotlin.jvm.java
 
 object OkHttpClientProvider {
     val eventListener = object : EventListener() {
@@ -39,7 +36,10 @@ object OkHttpClientProvider {
             protocol: Protocol?
         ) {
             val ip = inetSocketAddress.address.hostAddress
-            Log.d("NetDebug", "Verbindung zu: $ip (Version: ${if (inetSocketAddress.address is Inet6Address) "IPv6" else "IPv4"})")
+            Log.d(
+                "NetDebug",
+                "Verbindung zu: $ip (Version: ${if (inetSocketAddress.address is Inet6Address) "IPv6" else "IPv4"})"
+            )
         }
     }
 
@@ -60,7 +60,7 @@ object OkHttpClientProvider {
                 level = HttpLoggingInterceptor.Level.BODY
             })
             .eventListener(eventListener)
-            .dns(ipv4OnlyDns)
+//            .dns(ipv4OnlyDns)
             .build()
     }
 }
@@ -134,6 +134,41 @@ class NetworkService {
         }
     }
 
+    suspend fun GetLogs(callback: (result: NetworkResult) -> Unit) {
+        val url = "$baseUrl?get_logs"
+
+        withContext(Dispatchers.IO) {
+            try {
+                val gson = Gson()
+                val request = Request.Builder()
+                    .url(url)
+                    .addHeader("Content-Type", "application/json; charset=utf-8")
+                    .addHeader("Accept", "application/json; charset=utf-8")
+                    .addHeader("Authorization", "Bearer $_apiToken")
+                    .get()
+                    .build()
+
+                val response = OkHttpClientProvider.client.newCall(request).execute()
+                val responseText = response.body.string()
+                if (response.isSuccessful) {
+                    val result = gson.fromJson(responseText, Logs::class.java)
+                    println("♻️ - ${result.info}")
+                    withContext(Dispatchers.Main) {
+                        callback(NetworkResult("Success", result, 200))
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        callback(NetworkResult("Fehler: ${response.code}", null, response.code))
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    callback(NetworkResult(e.localizedMessage, null, 500))
+                }
+            }
+        }
+    }
+
     suspend fun GetDomains(callback: (result: NetworkResult) -> Unit) {
         val url = "$baseUrl?get_domains"
 
@@ -163,9 +198,10 @@ class NetworkService {
         }
     }
 
-    suspend fun GetMyIP(forV4: Boolean = true,  callback: (result: NetworkResult) -> Unit) {
+    suspend fun GetMyIP(forV4: Boolean = true, callback: (result: NetworkResult) -> Unit) {
 
-        val url = if (forV4) "https://ipv4.ipv64.net/update.php?howismyip" else "https://ipv6.ipv64.net/update.php?howismyip"
+        val url =
+            if (forV4) "https://ipv4.ipv64.net/update.php?howismyip" else "https://ipv6.ipv64.net/update.php?howismyip"
 
         withContext(Dispatchers.IO) {
             try {
@@ -182,12 +218,18 @@ class NetworkService {
                 if (response.isSuccessful) {
                     val result = gson.fromJson(responseText, IPResult::class.java)
                     println("♻️ - ${result.ip}")
-                    callback(NetworkResult("Success", result, 200))
+                    withContext(Dispatchers.Main) {
+                        callback(NetworkResult("Success", result, 200))
+                    }
                 } else {
-                    callback(NetworkResult("Fehler: ${response.code}", null, response.code))
+                    withContext(Dispatchers.Main) {
+                        callback(NetworkResult("Fehler: ${response.code}", null, response.code))
+                    }
                 }
             } catch (e: Exception) {
-                callback(NetworkResult(e.localizedMessage, null, 500))
+                withContext(Dispatchers.Main) {
+                    callback(NetworkResult(e.localizedMessage, null, 500))
+                }
             }
         }
     }
@@ -348,7 +390,13 @@ class NetworkService {
         }
     }
 
-    suspend fun AddDnsRecord(domain: String, prefix: String, type: String, content: String, callback: (result: NetworkResult) -> Unit) {
+    suspend fun AddDnsRecord(
+        domain: String,
+        prefix: String,
+        type: String,
+        content: String,
+        callback: (result: NetworkResult) -> Unit
+    ) {
         val url = baseUrl
 
         val formBody = FormBody.Builder()
@@ -388,6 +436,35 @@ class NetworkService {
                 withContext(Dispatchers.Main) {
                     callback(NetworkResult(e.localizedMessage, null, 500))
                 }
+            }
+        }
+    }
+
+    suspend fun GetHealthchecks(callback: (result: NetworkResult) -> Unit) {
+        val url = "$baseUrl?get_healthchecks&events"
+
+        withContext(Dispatchers.IO) {
+            try {
+                val gson = Gson()
+                val request = Request.Builder()
+                    .url(url)
+                    .addHeader("Content-Type", "application/json; charset=utf-8")
+                    .addHeader("Accept", "application/json; charset=utf-8")
+                    .addHeader("Authorization", "Bearer $_apiToken")
+                    .get()
+                    .build()
+
+                val response = OkHttpClientProvider.client.newCall(request).execute()
+                val responseText = response.body.string()
+                if (response.isSuccessful) {
+                    val result = parseDomainResult(responseText)
+                    println("♻️ - ${result.add_domain}")
+                    callback(NetworkResult("Success", result, 200))
+                } else {
+                    callback(NetworkResult("Fehler: ${response.code}", null, response.code))
+                }
+            } catch (e: Exception) {
+                callback(NetworkResult(e.localizedMessage, null, 500))
             }
         }
     }

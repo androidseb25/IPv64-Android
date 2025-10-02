@@ -1,7 +1,5 @@
 package de.rpicloud.ipv64net.main.views
 
-import android.annotation.SuppressLint
-import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,6 +13,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -28,23 +28,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.google.gson.Gson
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.NetworkService
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
-import de.rpicloud.ipv64net.models.Integration
+import de.rpicloud.ipv64net.models.IPResult
 import de.rpicloud.ipv64net.models.IntegrationResult
+import de.rpicloud.ipv64net.models.Logs
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
-@SuppressLint("ContextCastToActivity")
 @Composable
-fun IntegrationsView(navController: NavHostController, mainPadding: PaddingValues) {
+fun LogView(navController: NavHostController, mainPadding: PaddingValues) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -54,12 +56,12 @@ fun IntegrationsView(navController: NavHostController, mainPadding: PaddingValue
     var errorDialogText by remember { mutableStateOf("") }
     var errorDialogButtonText by remember { mutableIntStateOf(android.R.string.ok) }
 
-    var integrationResult by remember { mutableStateOf(IntegrationResult.empty) }
+    var logList by remember { mutableStateOf(Logs.empty) }
 
-    fun getIntegrations() {
+    fun getLogs() {
         showLoadingDialog = true
         scope.launch(Dispatchers.IO) {
-            NetworkService(ctx).GetIntegrations { nwResult ->
+            NetworkService(ctx).GetLogs { nwResult ->
                 showLoadingDialog = false
                 when (nwResult.status) {
                     200 -> {
@@ -70,8 +72,8 @@ fun IntegrationsView(navController: NavHostController, mainPadding: PaddingValue
                             errorDialogButtonText = R.string.retry
                             showDialog = true
                         } else {
-                            (nwResult.data as IntegrationResult).also { integrationResult = it }
-                            println(integrationResult)
+                            (nwResult.data as Logs).also { logList = it }
+                            println(logList)
                         }
                     }
 
@@ -99,8 +101,15 @@ fun IntegrationsView(navController: NavHostController, mainPadding: PaddingValue
         topBar = {
             TopAppBar(
                 title = {
-                    Text(Tabs.getLabel(Tab.integrations))
-                }, modifier = Modifier.statusBarsPadding()
+                    Text(Tabs.getLabel(Tab.logs))
+                }, modifier = Modifier.statusBarsPadding(), navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.arrow_back_24px),
+                            contentDescription = "Close"
+                        )
+                    }
+                }
             )
         },
         modifier = Modifier
@@ -121,20 +130,15 @@ fun IntegrationsView(navController: NavHostController, mainPadding: PaddingValue
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(
-                    items = integrationResult.integration,
-                    key = { ig -> ig.integration_id!! } // stabile Keys
-                ) { ig ->
-                    IntegrationItemView(ig) { selectedIntegration ->
-                        println(selectedIntegration)
-                    }
+                items(items = logList.logs, key = { l -> l.id }) { log ->
+                    LogItemView(log)
                 }
             }
         }
     }
 
     LaunchedEffect(Unit) {
-        getIntegrations()
+        getLogs()
     }
 
     if (showLoadingDialog) {
@@ -146,7 +150,7 @@ fun IntegrationsView(navController: NavHostController, mainPadding: PaddingValue
     if (showDialog) {
         ErrorDialog(
             onDismissRequest = { showDialog = false },
-            onConfirmation = { showDialog = false; getIntegrations() },
+            onConfirmation = { showDialog = false; getLogs() },
             dialogTitle = errorDialogTitle,
             dialogText = errorDialogText,
             dialogConfirmText = errorDialogButtonText

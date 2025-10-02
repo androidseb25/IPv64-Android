@@ -108,11 +108,6 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
     }
     val domain by domainBackStackEntry.savedStateHandle.getStateFlow<String>("SELECTED_DOMAIN", "").collectAsState()
 
-    fun GetAccountUpdateUrl(): String {
-        return ""
-//        return "https://ipv64.net/nic/update?key=" + selectedDomain.domain_update_hash + "&domain=" + selectedDomain.fqdn
-    }
-
     fun GetDomainUpdateUrl(): String {
         return "https://ipv64.net/nic/update?key=" + selectedDomain.domain_update_hash
     }
@@ -423,39 +418,12 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                                         val clipboard =
                                             ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                         val clip = ClipData.newPlainText(
-                                            "Account Update URL", GetAccountUpdateUrl()
-                                        )
-                                        clipboard.setPrimaryClip(clip)
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = Color(
-                                            ContextCompat.getColor(
-                                                ctx, R.color.ipv64_blue_trans15
-                                            )
-                                        ),
-                                        contentColor = Color(
-                                            ContextCompat.getColor(
-                                                ctx, R.color.ipv64_blue
-                                            )
-                                        ),
-                                    )
-                                ) {
-                                    Text("Copy Account Update URL")
-                                }
-                                Button(
-                                    onClick = {
-                                        haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                        val clipboard =
-                                            ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        val clip = ClipData.newPlainText(
                                             "Domain Update URL", GetDomainUpdateUrl()
                                         )
                                         clipboard.setPrimaryClip(clip)
                                     },
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 8.dp),
+                                        .fillMaxWidth(),
                                     colors = ButtonDefaults.outlinedButtonColors(
                                         containerColor = Color(
                                             ContextCompat.getColor(

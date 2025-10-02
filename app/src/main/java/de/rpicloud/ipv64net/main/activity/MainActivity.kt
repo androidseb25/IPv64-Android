@@ -18,12 +18,16 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import de.rpicloud.ipv64net.main.views.AboutView
+import de.rpicloud.ipv64net.main.views.AccountView
 import de.rpicloud.ipv64net.main.views.DomainDetailView
 import de.rpicloud.ipv64net.main.views.DomainDnsNewView
 import de.rpicloud.ipv64net.main.views.DomainNewView
 import de.rpicloud.ipv64net.main.views.DomainView
 import de.rpicloud.ipv64net.main.views.HealthcheckView
 import de.rpicloud.ipv64net.main.views.IntegrationsView
+import de.rpicloud.ipv64net.main.views.LogView
+import de.rpicloud.ipv64net.main.views.MyIpView
 import de.rpicloud.ipv64net.main.views.SettingsView
 import de.rpicloud.ipv64net.models.Integration
 import de.rpicloud.ipv64net.models.Tab
@@ -63,6 +67,18 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Tabs.Companion.getRoute(Tab.domain_new_dns)) {
                             DomainDnsNewView(navController, mainPadding = mainPadding)
+                        }
+                        composable(Tabs.Companion.getRoute(Tab.account)) {
+                            AccountView(navController, mainPadding = mainPadding)
+                        }
+                        composable(Tabs.Companion.getRoute(Tab.logs)) {
+                            LogView(navController, mainPadding = mainPadding)
+                        }
+                        composable(Tabs.Companion.getRoute(Tab.my_ip)) {
+                            MyIpView(navController, mainPadding = mainPadding)
+                        }
+                        composable(Tabs.Companion.getRoute(Tab.about)) {
+                            AboutView(navController, mainPadding = mainPadding)
                         }
                     }
                 }

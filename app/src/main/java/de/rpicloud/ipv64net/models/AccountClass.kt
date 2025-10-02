@@ -7,7 +7,7 @@ data class AccountClass(
     var healthcheck_limit: Int,
     var healthcheck_update_limit: Int,
     var dyndns_ttl: Int,
-    var api_limit: Int,
+    var api_limit: Int = 0,
     var sms_limit: Int,
     var vpn_traffic: Int,
     var vpn_queue: Int,

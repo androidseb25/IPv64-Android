@@ -1,11 +1,15 @@
 package de.rpicloud.ipv64net.helper
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
+import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.ln
+import kotlin.math.pow
 
 fun Context.findActivity(): ComponentActivity? = when (this) {
     is ComponentActivity -> this
@@ -35,6 +39,15 @@ fun String.parseDbDateTime(): String {
     return date?.formatGermanTime() ?: "01.01.0001 00:00:00"
 }
 
+@SuppressLint("DefaultLocale")
+fun Long.formatBytes(): String {
+    val unit = 1024
+    if (this < unit) return "$this B"
+    val exp = (ln(this.toDouble()) / ln(unit.toDouble())).toInt()
+    val pre = "KMGTPE"[exp - 1]
+    return String.format("%.1f %sB", this / unit.toDouble().pow(exp.toDouble()), pre)
+}
+
 fun String.v64domains(): List<String> {
     return listOf(
         "ipv64.net",
@@ -58,6 +71,13 @@ fun String.v64domains(): List<String> {
         "wan64.de",
         "Own Domain"
     )
+}
+
+fun Int.apiUsageText(usage: Int): String {
+    val nf = NumberFormat.getIntegerInstance(Locale.getDefault())
+    val usedStr = nf.format(usage)
+    val maxStr = if (this == 0) "∞" else nf.format(this)
+    return "$usedStr / $maxStr"
 }
 
 fun String.v64DnsRecordTypes(): List<String> {

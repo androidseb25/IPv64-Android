@@ -7,7 +7,7 @@ data class AccountInfo(
     var owndomains: Int,
     var healthchecks: Int,
     var healthchecks_updates: Int,
-    var api_updates: Int,
+    var api_updates: Int = 0,
     var sms_count: Int,
     var vpn_limit_reached: Int,
     var email: String,
