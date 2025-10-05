@@ -14,4 +14,9 @@
     <color name="ipv64_red_trans20">#34E44B3B</color>
     <color name="ipv64_orange">#f19a37</color>
     <color name="ipv64_orange_trans20">#34f19a37</color>
+    <color name="ipv64_green">#39bf52</color>
+    <color name="ipv64_gray">#8E8E93</color>
+    <color name="ipv64_teal">#32ADE6</color>
+    <color name="ipv64_teal_trans20">#3432ADE6</color>
+    <color name="transparent">#00FFFFFF</color>
 </resources>

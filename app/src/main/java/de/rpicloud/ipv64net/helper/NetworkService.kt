@@ -10,6 +10,7 @@ import de.rpicloud.ipv64net.models.IPUpdateResult
 import de.rpicloud.ipv64net.models.Logs
 import de.rpicloud.ipv64net.models.NetworkResult
 import de.rpicloud.ipv64net.models.parseDomainResult
+import de.rpicloud.ipv64net.models.parseHealthCheckResult
 import de.rpicloud.ipv64net.models.parseIntegrations
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -457,8 +458,8 @@ class NetworkService {
                 val response = OkHttpClientProvider.client.newCall(request).execute()
                 val responseText = response.body.string()
                 if (response.isSuccessful) {
-                    val result = parseDomainResult(responseText)
-                    println("♻️ - ${result.add_domain}")
+                    val result = parseHealthCheckResult(responseText)
+                    println("♻️ - ${result.get_account_info}")
                     callback(NetworkResult("Success", result, 200))
                 } else {
                     callback(NetworkResult("Fehler: ${response.code}", null, response.code))

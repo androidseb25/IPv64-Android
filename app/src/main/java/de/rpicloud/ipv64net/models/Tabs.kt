@@ -23,6 +23,7 @@ enum class Tab {
     domain_new,
     domain_new_dns,
     healthcheck,
+    healthcheck_details,
     integrations,
     settings,
     account,
@@ -87,6 +88,7 @@ sealed class Tabs {
                 Tab.logs -> "logs"
                 Tab.my_ip -> "my_ip"
                 Tab.about -> "about"
+                Tab.healthcheck_details -> "healthcheck_details"
             }
         }
 
