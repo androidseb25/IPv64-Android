@@ -25,6 +25,8 @@ import de.rpicloud.ipv64net.main.views.DomainDnsNewView
 import de.rpicloud.ipv64net.main.views.DomainNewView
 import de.rpicloud.ipv64net.main.views.DomainView
 import de.rpicloud.ipv64net.main.views.HealthcheckDetailView
+import de.rpicloud.ipv64net.main.views.HealthcheckEditView
+import de.rpicloud.ipv64net.main.views.HealthcheckNewView
 import de.rpicloud.ipv64net.main.views.HealthcheckView
 import de.rpicloud.ipv64net.main.views.IntegrationsView
 import de.rpicloud.ipv64net.main.views.LogView
@@ -56,6 +58,12 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Tabs.Companion.getRoute(Tab.healthcheck_details)) {
                             HealthcheckDetailView(navController, mainPadding = mainPadding)
+                        }
+                        composable(Tabs.Companion.getRoute(Tab.healthcheck_new)) {
+                            HealthcheckNewView(navController, mainPadding = mainPadding)
+                        }
+                        composable(Tabs.Companion.getRoute(Tab.healthcheck_edit)) {
+                            HealthcheckEditView(navController, mainPadding = mainPadding)
                         }
                         composable(Tabs.Companion.getRoute(Tab.integrations)) {
                             IntegrationsView(navController, mainPadding = mainPadding)

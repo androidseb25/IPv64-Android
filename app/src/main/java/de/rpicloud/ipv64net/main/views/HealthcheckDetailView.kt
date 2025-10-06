@@ -4,11 +4,7 @@ import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,9 +22,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -43,7 +39,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboard
@@ -55,6 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import androidx.navigation.NavHostController
 import com.google.gson.Gson
 import de.rpicloud.ipv64net.R
@@ -63,15 +59,11 @@ import de.rpicloud.ipv64net.helper.parseDbDateTime
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
 import de.rpicloud.ipv64net.models.AddDomainResult
-import de.rpicloud.ipv64net.models.Domain
 import de.rpicloud.ipv64net.models.HealthCheck
-import de.rpicloud.ipv64net.models.IPUpdateResult
+import de.rpicloud.ipv64net.models.StatusType
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 @SuppressLint("UnrememberedGetBackStackEntry")
@@ -97,63 +89,109 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
     var deleteDialogButtonText by remember { mutableIntStateOf(R.string.delete) }
     var selectedHc by remember { mutableStateOf(HealthCheck.empty) }
 
+    var healthcheckResult by remember { mutableStateOf(AddDomainResult.empty) }
+
     val hcRoute = Tabs.getRoute(Tab.healthcheck)
     val hcBackStackEntry = remember(hcRoute) {
         navController.getBackStackEntry(hcRoute)
     }
-    val hc by hcBackStackEntry.savedStateHandle.getStateFlow<String>("SELECTED_HEALTHCHECK", "").collectAsState()
+    val hc by hcBackStackEntry.savedStateHandle.getStateFlow<String>("SELECTED_HEALTHCHECK", "")
+        .collectAsState()
 
-//    fun DeleteDomain() {
-//        showLoadingDialog = true
-//        scope.launch(Dispatchers.IO) {
-//            val dom = selectedDomain.fqdn ?: ""
-//            if (dom.isEmpty()) {
-//                errorDialogTitle = "Data not found"
-//                errorDialogText = "FQDN not found!"
-//                errorDialogButtonText = R.string.retry
-//                showDialog = true
-//                return@launch
-//            }
-//
-//            NetworkService(ctx).DeleteDomain(dom) { nwResult ->
-//                showLoadingDialog = false
-//                when (nwResult.status) {
-//                    200 -> {
-//                        if (nwResult.data == null) {
-//                            println(nwResult.message)
-//                            errorDialogTitle = "Data not found"
-//                            errorDialogText = "There are no data found!"
-//                            errorDialogButtonText = R.string.retry
-//                            showDialog = true
-//                        } else {
-//                            (nwResult.data as AddDomainResult).also { addDomainResult = it }
-//                            println(addDomainResult)
-//                            navController.popBackStack()
-//                        }
-//                    }
-//
-//                    400 -> {
-//                        println(nwResult.message)
-//                        errorDialogTitle = "Loading error"
-//                        errorDialogText = nwResult.message.toString()
-//                        errorDialogButtonText = R.string.retry
-//                        showDialog = true
-//                    }
-//
-//                    else -> {
-//                        if (nwResult.data != null) {
-//                            (nwResult.data as AddDomainResult).also { addDomainResult = it }
-//                            println(nwResult.message)
-//                        }
-//                        errorDialogText = nwResult.message.toString()
-//                        errorDialogTitle = "Loading error"
-//                        errorDialogButtonText = R.string.retry
-//                        showDialog = true
-//                    }
-//                }
-//            }
-//        }
-//    }
+    fun StartPauseHealthcheck(startPause: String) {
+        showLoadingDialog = true
+        scope.launch(Dispatchers.IO) {
+            NetworkService(ctx).PostStartPauseHealthcheck(
+                startPause,
+                selectedHc.healthtoken
+            ) { nwResult ->
+                showLoadingDialog = false
+                when (nwResult.status) {
+                    200 -> {
+                        if (nwResult.data == null) {
+                            println(nwResult.message)
+                            errorDialogTitle = "Data not found"
+                            errorDialogText = "There are no data found!"
+                            errorDialogButtonText = R.string.retry
+                            showDialog = true
+                        } else {
+                            (nwResult.data as AddDomainResult).also { healthcheckResult = it }
+                            println(healthcheckResult)
+                            navController.popBackStack()
+                        }
+                    }
+
+                    400 -> {
+                        println(nwResult.message)
+                        errorDialogTitle = "Loading error"
+                        errorDialogText = nwResult.message.toString()
+                        errorDialogButtonText = R.string.retry
+                        showDialog = true
+                    }
+
+                    403 -> {
+                        (nwResult.data as AddDomainResult).also { healthcheckResult = it }
+                        println(nwResult.message)
+                        errorDialogTitle = "Loading error"
+                        errorDialogText = healthcheckResult.add_domain.toString()
+                        errorDialogButtonText = R.string.retry
+                        showDialog = true
+                    }
+
+                    else -> {
+                        println(nwResult.message)
+                        errorDialogTitle = "Loading error"
+                        errorDialogText = nwResult.message.toString()
+                        errorDialogButtonText = R.string.retry
+                        showDialog = true
+                    }
+                }
+            }
+        }
+    }
+
+    fun DeleteHealthcheck() {
+        showLoadingDialog = true
+        scope.launch(Dispatchers.IO) {
+            NetworkService(ctx).DeleteHealthcheck(selectedHc.healthtoken) { nwResult ->
+                showLoadingDialog = false
+                when (nwResult.status) {
+                    200 -> {
+                        if (nwResult.data == null) {
+                            println(nwResult.message)
+                            errorDialogTitle = "Data not found"
+                            errorDialogText = "There are no data found!"
+                            errorDialogButtonText = R.string.retry
+                            showDialog = true
+                        } else {
+                            (nwResult.data as AddDomainResult).also { healthcheckResult = it }
+                            println(healthcheckResult)
+                            navController.popBackStack()
+                        }
+                    }
+
+                    400 -> {
+                        println(nwResult.message)
+                        errorDialogTitle = "Loading error"
+                        errorDialogText = nwResult.message.toString()
+                        errorDialogButtonText = R.string.retry
+                        showDialog = true
+                    }
+
+                    else -> {
+                        if (nwResult.data != null) {
+                            (nwResult.data as AddDomainResult).also { healthcheckResult = it }
+                            println(nwResult.message)
+                        }
+                        errorDialogText = nwResult.message.toString()
+                        errorDialogTitle = "Loading error"
+                        errorDialogButtonText = R.string.retry
+                        showDialog = true
+                    }
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -167,9 +205,11 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
                     }
                 }, actions = {
                     IconButton(onClick = {
-                        deleteDialogText = "Do you really want to delete the Domain?"
-                        deleteDialogTitle = "Delete Domain"
-                        showDeleteDialog = true
+                        navController.currentBackStackEntry?.savedStateHandle?.set(
+                            "EDIT_HEALTHCHECK",
+                            hc
+                        )
+                        navController.navigate(Tabs.getRoute(Tab.healthcheck_edit))
                     }) {
                         Icon(
                             painter = painterResource(id = R.drawable.edit_24px),
@@ -239,7 +279,8 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
                                 Text(
                                     "Period:", fontWeight = FontWeight.Bold
                                 )
-                                Text("${selectedHc.alarm_count} ${selectedHc.AlarmUnit.Unit.name}",
+                                Text(
+                                    "${selectedHc.alarm_count} ${selectedHc.AlarmUnit.Unit.name}",
                                     style = MaterialTheme.typography.titleSmall,
                                     textAlign = TextAlign.End,
                                     modifier = Modifier.fillMaxWidth(),
@@ -250,7 +291,8 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
                                 Text(
                                     "Waiting period:", fontWeight = FontWeight.Bold
                                 )
-                                Text("${selectedHc.grace_count} ${selectedHc.GraceUnit.Unit.name}",
+                                Text(
+                                    "${selectedHc.grace_count} ${selectedHc.GraceUnit.Unit.name}",
                                     style = MaterialTheme.typography.titleSmall,
                                     textAlign = TextAlign.End,
                                     modifier = Modifier.fillMaxWidth(),
@@ -367,70 +409,138 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
                                     .fillMaxWidth()
                                     .padding(top = 32.dp)
                             ) {
-                                Button(
-                                    onClick = {
-                                        haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                        val clipboard =
-                                            ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        val clip = ClipData.newPlainText(
-                                            "Domain Update URL", "https://ipv64.net/health.php?token=${selectedHc.healthtoken}"
-                                        )
-                                        clipboard.setPrimaryClip(clip)
-                                    },
+                                Row(
                                     modifier = Modifier
-                                        .fillMaxWidth(),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = Color(
-                                            ContextCompat.getColor(
-                                                ctx, R.color.ipv64_blue_trans15
-                                            )
-                                        ),
-                                        contentColor = Color(
-                                            ContextCompat.getColor(
-                                                ctx, R.color.ipv64_blue
-                                            )
-                                        ),
-                                    )
+                                        .fillMaxWidth()
+                                        .padding(top = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
-                                    Text("Copy Healthcheck Update URL")
+                                    Button(
+                                        onClick = {
+                                            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                            val clipboard =
+                                                ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            val clip = ClipData.newPlainText(
+                                                "Domain Update URL",
+                                                "https://ipv64.net/health.php?token=${selectedHc.healthtoken}"
+                                            )
+                                            clipboard.setPrimaryClip(clip)
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(0.85f),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            containerColor = Color(
+                                                ContextCompat.getColor(
+                                                    ctx, R.color.ipv64_blue_trans15
+                                                )
+                                            ),
+                                            contentColor = Color(
+                                                ContextCompat.getColor(
+                                                    ctx, R.color.ipv64_blue
+                                                )
+                                            ),
+                                        )
+                                    ) {
+                                        Text("Copy Healthcheck Update URL")
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            val intent = Intent(
+                                                Intent.ACTION_VIEW,
+                                                "https://ipv64.net/health.php?token=${selectedHc.healthtoken}".toUri()
+                                            )
+                                            ctx.startActivity(intent)
+                                            navController.popBackStack()
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(0.15f),
+                                        colors = IconButtonDefaults.iconButtonColors(
+                                            containerColor = Color(
+                                                ContextCompat.getColor(
+                                                    ctx, R.color.ipv64_blue_trans15
+                                                )
+                                            ),
+                                            contentColor = Color(
+                                                ContextCompat.getColor(
+                                                    ctx, R.color.ipv64_blue
+                                                )
+                                            ),
+                                        )
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.open_in_new_24px),
+                                            contentDescription = "Open Browser"
+                                        )
+                                    }
                                 }
                             }
-                            Row (
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(top = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                Button(
-                                    onClick = {
-
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth().weight(1f),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = Color(
-                                            ContextCompat.getColor(
-                                                ctx, R.color.ipv64_teal_trans20
-                                            )
-                                        ),
-                                        contentColor = Color(
-                                            ContextCompat.getColor(
-                                                ctx, R.color.ipv64_teal
-                                            )
-                                        ),
-                                    )
-                                ) {
-                                    Text("Pause")
+                                if (selectedHc.HealthStatus == StatusType.Pause.type) {
+                                    Button(
+                                        onClick = {
+                                            StartPauseHealthcheck("start_healthcheck")
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            containerColor = Color(
+                                                ContextCompat.getColor(
+                                                    ctx, R.color.ipv64_green_trans20
+                                                )
+                                            ),
+                                            contentColor = Color(
+                                                ContextCompat.getColor(
+                                                    ctx, R.color.ipv64_green
+                                                )
+                                            ),
+                                        )
+                                    ) {
+                                        Text("Start")
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = {
+                                            StartPauseHealthcheck("pause_healthcheck")
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            containerColor = Color(
+                                                ContextCompat.getColor(
+                                                    ctx, R.color.ipv64_teal_trans20
+                                                )
+                                            ),
+                                            contentColor = Color(
+                                                ContextCompat.getColor(
+                                                    ctx, R.color.ipv64_teal
+                                                )
+                                            ),
+                                        )
+                                    ) {
+                                        Text("Pause")
+                                    }
                                 }
+
                                 Button(
                                     onClick = {
                                         deleteDialogTitle = "Delete Healthcheck"
-                                        deleteDialogText = "Do you really want to delete the current Healthcheck?"
+                                        deleteDialogText =
+                                            "Do you really want to delete the current Healthcheck?"
                                         deleteDialogButtonText = R.string.delete
                                         showDeleteDialog = true
                                     },
                                     modifier = Modifier
-                                        .fillMaxWidth().weight(1f),
+                                        .fillMaxWidth()
+                                        .weight(1f),
                                     colors = ButtonDefaults.outlinedButtonColors(
                                         containerColor = Color(
                                             ContextCompat.getColor(
@@ -497,7 +607,7 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
     if (showDeleteDialog) {
         ErrorDialog(
             onDismissRequest = { showDeleteDialog = false },
-            onConfirmation = { showDeleteDialog = false; },
+            onConfirmation = { showDeleteDialog = false; DeleteHealthcheck() },
             dialogTitle = deleteDialogTitle,
             dialogText = deleteDialogText,
             dialogConfirmText = deleteDialogButtonText,

@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
+import de.rpicloud.ipv64net.models.Unit
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -91,5 +92,13 @@ fun String.v64DnsRecordTypes(): List<String> {
         "CNAME",
         "TLSA",
         "CAA"
+    )
+}
+
+fun String.v64Units(): List<Unit> {
+    return listOf(
+        Unit.Minuten,
+        Unit.Stunden,
+        Unit.Tage
     )
 }

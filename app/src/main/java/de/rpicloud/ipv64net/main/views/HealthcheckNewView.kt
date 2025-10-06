@@ -1,6 +1,5 @@
 package de.rpicloud.ipv64net.main.views
 
-import android.annotation.SuppressLint
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,9 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -25,11 +22,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,22 +42,16 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.NetworkService
-import de.rpicloud.ipv64net.helper.v64domains
+import de.rpicloud.ipv64net.helper.v64Units
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
 import de.rpicloud.ipv64net.models.AddDomainResult
-import de.rpicloud.ipv64net.models.Domain
-import de.rpicloud.ipv64net.models.DomainResult
-import de.rpicloud.ipv64net.models.IPResult
-import de.rpicloud.ipv64net.models.Integration
-import de.rpicloud.ipv64net.models.Tab
-import de.rpicloud.ipv64net.models.Tabs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) {
+fun HealthcheckNewView(navController: NavHostController, mainPadding: PaddingValues) {
 
     val ctx = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -68,27 +61,32 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
     var showLoadingDialog by remember { mutableStateOf(false) }
     var showDialog by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
-    var domain by remember { mutableStateOf(String().v64domains().first()) }
-    var subDomain by remember { mutableStateOf("") }
+    var hcUnit by remember { mutableStateOf(String().v64Units().first()) }
+    var hcCount by remember { mutableFloatStateOf(30f) }
+    var hcName by remember { mutableStateOf("") }
     var errorDialogTitle by remember { mutableStateOf("") }
     var errorDialogText by remember { mutableStateOf("") }
     var errorDialogButtonText by remember { mutableIntStateOf(android.R.string.ok) }
 
-    var newDomainResult by remember { mutableStateOf(AddDomainResult.empty) }
+    var newHealthcheckResult by remember { mutableStateOf(AddDomainResult.empty) }
 
     fun onSave() {
         keyboardController?.hide()
-        if (subDomain.isEmpty()) {
+        if (hcName.isEmpty()) {
             errorDialogTitle = "Empty field"
-            errorDialogText = "Please fill the subdomain field!"
+            errorDialogText = "Please fill the Healthcheck field!"
             errorDialogButtonText = R.string.retry
             showDialog = true
             return
         }
-        val newDomain = "$subDomain.$domain"
+
         showLoadingDialog = true
         scope.launch(Dispatchers.IO) {
-            NetworkService(ctx).PostNewDomain(newDomain) { nwResult ->
+            NetworkService(ctx).PostNewHealthcheck(
+                hcName,
+                hcCount.toInt(),
+                hcUnit.Unit.unit ?: 1
+            ) { nwResult ->
                 showLoadingDialog = false
                 when (nwResult.status) {
                     200 -> {
@@ -99,8 +97,8 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
                             errorDialogButtonText = R.string.retry
                             showDialog = true
                         } else {
-                            (nwResult.data as AddDomainResult).also { newDomainResult = it }
-                            println(newDomainResult)
+                            (nwResult.data as AddDomainResult).also { newHealthcheckResult = it }
+                            println(newHealthcheckResult)
                             navController.popBackStack()
                         }
                     }
@@ -114,10 +112,10 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
                     }
 
                     403 -> {
-                        (nwResult.data as AddDomainResult).also { newDomainResult = it }
+                        (nwResult.data as AddDomainResult).also { newHealthcheckResult = it }
                         println(nwResult.message)
                         errorDialogTitle = "Loading error"
-                        errorDialogText = newDomainResult.add_domain.toString()
+                        errorDialogText = newHealthcheckResult.add_domain.toString()
                         errorDialogButtonText = R.string.retry
                         showDialog = true
                     }
@@ -146,7 +144,7 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
                     }
                 },
                 title = {
-                    Text("New Domain")
+                    Text("New Healthcheck")
                 }, modifier = Modifier.statusBarsPadding(),
                 actions = {
                     IconButton(onClick = { onSave() }) {
@@ -178,14 +176,28 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
             ) {
                 item {
                     OutlinedTextField(
-                        value = subDomain,
+                        value = hcName,
                         singleLine = true,
-                        label = { Text("eg.: homelab01") },
+                        label = { Text("Healthcheck #001") },
                         textStyle = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 25.dp),
-                        onValueChange = { newText -> subDomain = newText },
+                            .fillMaxWidth(),
+                        onValueChange = { newText -> hcName = newText },
+                    )
+                }
+                item {
+                    Slider(
+                        value = hcCount,
+                        onValueChange = { count ->
+                            hcCount = count
+                        },
+                        valueRange = 1f..60f,
+                        steps = 59,
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
                     )
                 }
                 item {
@@ -195,10 +207,10 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
                     ) {
                         // WICHTIG: menuAnchor() am TextField
                         OutlinedTextField(
-                            value = domain,
+                            value = "${hcCount.toInt()} ${hcUnit.Unit.name ?: ""}",
                             onValueChange = {},           // read-only Dropdown
                             readOnly = true,
-                            label = { Text("Select domain") },
+                            label = { Text("Select Unit") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
                             modifier = Modifier
                                 .menuAnchor( // 🟢 neuer Overload
@@ -213,16 +225,14 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
                             expanded = expanded,
                             onDismissRequest = { expanded = false }
                         ) {
-                            String().v64domains().forEach { option ->
-                                if (option != "Own Domain") {
-                                    DropdownMenuItem(
-                                        text = { Text(option) },
-                                        onClick = {
-                                            domain = option
-                                            expanded = false
-                                        }
-                                    )
-                                }
+                            String().v64Units().forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option.Unit.name ?: "") },
+                                    onClick = {
+                                        hcUnit = option
+                                        expanded = false
+                                    }
+                                )
                             }
                         }
                     }
@@ -233,7 +243,7 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
 
     if (showLoadingDialog) {
         SpinnerDialog(
-            spinnerText = "Saving Domain..."
+            spinnerText = "Saving Healthcheck..."
         )
     }
 

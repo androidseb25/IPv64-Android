@@ -2,6 +2,11 @@ package de.rpicloud.ipv64net.main.views
 
 import android.annotation.SuppressLint
 import androidx.activity.ComponentActivity
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,6 +25,8 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -33,8 +40,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.google.gson.Gson
@@ -49,6 +58,9 @@ import de.rpicloud.ipv64net.models.StatusType
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,6 +70,7 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
     val ctx = LocalContext.current
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    var fabVisible by remember { mutableStateOf(true) }
     var showLoadingDialog by remember { mutableStateOf(false) }
     var showDialog by remember { mutableStateOf(false) }
     var errorDialogTitle by remember { mutableStateOf("") }
@@ -123,6 +136,22 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
                 }, modifier = Modifier.statusBarsPadding()
             )
         },
+        floatingActionButton = {
+            AnimatedVisibility(
+                visible = fabVisible,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut()
+            ) {
+                FloatingActionButton(onClick = {
+                    navController.navigate(Tabs.getRoute(Tab.healthcheck_new))
+                }) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.heart_plus_24px),
+                        contentDescription = "icon"
+                    )
+                }
+            }
+        },
         modifier = Modifier
             .fillMaxSize()
             .padding(mainPadding)
@@ -184,6 +213,27 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
 
     LaunchedEffect(Unit) {
         getHealthchecks()
+    }
+
+    // Sichtbarkeit abhängig von Scrollrichtung steuern
+    LaunchedEffect(listState) {
+        var lastPos = 0
+        var lastOff = 0
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .map { (idx, off) ->
+                val scrollingDown = idx > lastPos || (idx == lastPos && off > lastOff)
+                lastPos = idx; lastOff = off
+                scrollingDown
+            }
+            .distinctUntilChanged()
+            .collectLatest { scrollingDown ->
+                fabVisible = !scrollingDown || !listState.isScrollInProgress
+            }
+    }
+
+    // Wenn kein Scrollen mehr stattfindet, wieder einblenden
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (!listState.isScrollInProgress) fabVisible = true
     }
 
     if (showLoadingDialog) {
