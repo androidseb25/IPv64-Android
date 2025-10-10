@@ -2,7 +2,7 @@ name: Android Release
 
 on:
   push:
-    branches: [ "dev" ]
+    branches: [ "main" ]
   workflow_dispatch: {}
 
 permissions:
@@ -57,7 +57,7 @@ jobs:
         run: ./gradlew :${{ env.APP_MODULE }}:bundleRelease
 
       # ---- Artefakte umbenennen ----
-      - name: Rename outputs to ipv64net_vX.Y.Z.*
+      - name: Rename outputs to the correct version
         id: rename
         run: |
           set -e
