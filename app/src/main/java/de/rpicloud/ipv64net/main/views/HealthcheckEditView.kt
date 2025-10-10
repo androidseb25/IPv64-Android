@@ -67,9 +67,7 @@ import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-
-class HealthcheckEditView {
-}
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @SuppressLint("UnrememberedGetBackStackEntry")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,6 +104,13 @@ fun HealthcheckEditView(navController: NavHostController, mainPadding: PaddingVa
     }
     val hc by hcBackStackEntry.savedStateHandle.getStateFlow<String>("EDIT_HEALTHCHECK", "")
         .collectAsState()
+
+    val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
+    // 🧠 StateFlow mit leerem Default-Wert
+    val resultFlow = savedStateHandle?.getStateFlow("INTEGRATION_IDS", "")
+
+    // 🩵 Compose-Integration (Lifecycle-aware)
+    val integrationIds by resultFlow?.collectAsStateWithLifecycle() ?: remember { mutableStateOf("") }
 
     fun onSave() {
         keyboardController?.hide()
@@ -439,6 +444,22 @@ fun HealthcheckEditView(navController: NavHostController, mainPadding: PaddingVa
                         }
                     }
                 }
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            navController.currentBackStackEntry?.savedStateHandle?.set(
+                                "INTEGRATION_STRING",
+                                editHc.integration_id
+                            )
+                            navController.navigate(Tabs.getRoute(Tab.healthcheck_edit_integrations))
+                        }
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Edit Notification methods")
+                        }
+                    }
+                }
             }
         }
     }
@@ -453,6 +474,14 @@ fun HealthcheckEditView(navController: NavHostController, mainPadding: PaddingVa
         hcGraceCount = editHc.grace_count.toFloat()
         hcNotiUp = editHc.alarm_up == 1
         hcNotiDown = editHc.alarm_down == 1
+    }
+
+    LaunchedEffect(integrationIds) {
+        if (integrationIds.isNotEmpty()) {
+            println("✅ Rückgabewert empfangen: $integrationIds")
+            savedStateHandle?.remove<String>("INTEGRATION_IDS") // optional
+            editHc.integration_id = integrationIds
+        }
     }
 
     if (showLoadingDialog) {

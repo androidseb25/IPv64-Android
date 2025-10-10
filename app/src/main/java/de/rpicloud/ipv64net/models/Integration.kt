@@ -1,5 +1,8 @@
 package de.rpicloud.ipv64net.models
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import de.rpicloud.ipv64net.R
 
 data class Integration(
@@ -27,4 +30,6 @@ data class Integration(
             "mobil" -> R.drawable.mobile_24px
             else -> R.drawable.indeterminate_question_box_24px
         }
+
+    var selectedState by mutableStateOf(false)
 }

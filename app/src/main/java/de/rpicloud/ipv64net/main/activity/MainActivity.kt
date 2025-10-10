@@ -26,6 +26,7 @@ import de.rpicloud.ipv64net.main.views.DomainNewView
 import de.rpicloud.ipv64net.main.views.DomainView
 import de.rpicloud.ipv64net.main.views.HealthcheckDetailView
 import de.rpicloud.ipv64net.main.views.HealthcheckEditView
+import de.rpicloud.ipv64net.main.views.HealthcheckIntegrationView
 import de.rpicloud.ipv64net.main.views.HealthcheckNewView
 import de.rpicloud.ipv64net.main.views.HealthcheckView
 import de.rpicloud.ipv64net.main.views.IntegrationsView
@@ -64,6 +65,9 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Tabs.Companion.getRoute(Tab.healthcheck_edit)) {
                             HealthcheckEditView(navController, mainPadding = mainPadding)
+                        }
+                        composable(Tabs.Companion.getRoute(Tab.healthcheck_edit_integrations)) {
+                            HealthcheckIntegrationView(navController, mainPadding = mainPadding)
                         }
                         composable(Tabs.Companion.getRoute(Tab.integrations)) {
                             IntegrationsView(navController, mainPadding = mainPadding)
