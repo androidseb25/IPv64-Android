@@ -45,8 +45,10 @@ import de.rpicloud.ipv64net.helper.NetworkService
 import de.rpicloud.ipv64net.helper.apiUsageText
 import de.rpicloud.ipv64net.helper.parseDbDate
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
+import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
 import de.rpicloud.ipv64net.models.AccountInfo
+import de.rpicloud.ipv64net.models.RequestTyp
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import kotlinx.coroutines.Dispatchers
@@ -70,6 +72,10 @@ fun AccountView(navController: NavHostController, mainPadding: PaddingValues) {
     var errorDialogTitle by remember { mutableStateOf("") }
     var errorDialogText by remember { mutableStateOf("") }
     var errorDialogButtonText by remember { mutableIntStateOf(R.string.retry) }
+
+    var showRequestDialog by remember { mutableStateOf(false) }
+    var requestType by remember { mutableStateOf(RequestTyp.UnAuthorized) }
+
 
     var accountInfos by remember { mutableStateOf(AccountInfo.empty) }
 
@@ -98,6 +104,36 @@ fun AccountView(navController: NavHostController, mainPadding: PaddingValues) {
                         errorDialogText = nwResult.message.toString()
                         errorDialogButtonText = R.string.retry
                         showDialog = true
+                    }
+
+                    401 -> {
+                        requestType = RequestTyp.UnAuthorized
+                        showRequestDialog = true
+                    }
+
+                    403 -> {
+                        requestType = if ((nwResult.data as String).contains("domain limit reached")) {
+                            RequestTyp.DomainLimitReached
+                        }
+                        else if ((nwResult.data as String).contains("domainname not available"))
+                            RequestTyp.DomainNotAvailable
+                        else
+                            RequestTyp.DomainRulesNotCreated
+
+                        showRequestDialog = true
+                    }
+
+                    429 -> {
+                        requestType = if ((nwResult.data as String).contains("Updateintervall overcommited")) {
+                            RequestTyp.UpdateCoolDown
+                        } else
+                            RequestTyp.TooManyRequests
+                        showRequestDialog = true
+                    }
+
+                    500 -> {
+                        requestType = RequestTyp.WebsiteRequestFailed
+                        showRequestDialog = true
                     }
 
                     else -> {
@@ -332,6 +368,15 @@ fun AccountView(navController: NavHostController, mainPadding: PaddingValues) {
                     dialogText = errorDialogText,
                     dialogConfirmText = errorDialogButtonText,
                     icon = 0
+                )
+            }
+
+            if (showRequestDialog) {
+                RequestDialogs(
+                    onDismissRequest = { showRequestDialog = false },
+                    onConfirmation = { showRequestDialog = false; getAccountInfos() },
+                    dialogConfirmText = errorDialogButtonText,
+                    request = requestType
                 )
             }
         }

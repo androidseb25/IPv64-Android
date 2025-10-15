@@ -61,11 +61,13 @@ import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.NetworkService
 import de.rpicloud.ipv64net.helper.parseDbDateTime
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
+import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
 import de.rpicloud.ipv64net.models.AddDomainResult
 import de.rpicloud.ipv64net.models.Domain
 import de.rpicloud.ipv64net.models.IPResult
 import de.rpicloud.ipv64net.models.IPUpdateResult
+import de.rpicloud.ipv64net.models.RequestTyp
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import kotlinx.coroutines.Dispatchers
@@ -99,6 +101,9 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
     var deleteDialogButtonText by remember { mutableIntStateOf(R.string.delete) }
     var selectedDomain by remember { mutableStateOf(Domain.empty) }
     var selectedRecordId by remember { mutableIntStateOf(0) }
+
+    var showRequestDialog by remember { mutableStateOf(false) }
+    var requestType by remember { mutableStateOf(RequestTyp.UnAuthorized) }
 
     var addDomainResult by remember { mutableStateOf(AddDomainResult.empty) }
     var ipResult by remember { mutableStateOf(IPUpdateResult.empty) }
@@ -149,6 +154,36 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                         showDialog = true
                     }
 
+                    401 -> {
+                        requestType = RequestTyp.UnAuthorized
+                        showRequestDialog = true
+                    }
+
+                    403 -> {
+                        requestType = if ((nwResult.data as String).contains("domain limit reached")) {
+                            RequestTyp.DomainLimitReached
+                        }
+                        else if ((nwResult.data as String).contains("domainname not available"))
+                            RequestTyp.DomainNotAvailable
+                        else
+                            RequestTyp.DomainRulesNotCreated
+
+                        showRequestDialog = true
+                    }
+
+                    429 -> {
+                        requestType = if ((nwResult.data as String).contains("Updateintervall overcommited")) {
+                            RequestTyp.TooManyRequests
+                        } else
+                            RequestTyp.UpdateCoolDown
+                        showRequestDialog = true
+                    }
+
+                    500 -> {
+                        requestType = RequestTyp.WebsiteRequestFailed
+                        showRequestDialog = true
+                    }
+
                     else -> {
                         if (nwResult.data != null) {
                             (nwResult.data as AddDomainResult).also { addDomainResult = it }
@@ -192,6 +227,36 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                         showDialog = true
                     }
 
+                    401 -> {
+                        requestType = RequestTyp.UnAuthorized
+                        showRequestDialog = true
+                    }
+
+                    403 -> {
+                        requestType = if ((nwResult.data as String).contains("domain limit reached")) {
+                            RequestTyp.DomainLimitReached
+                        }
+                        else if ((nwResult.data as String).contains("domainname not available"))
+                            RequestTyp.DomainNotAvailable
+                        else
+                            RequestTyp.DomainRulesNotCreated
+
+                        showRequestDialog = true
+                    }
+
+                    429 -> {
+                        requestType = if ((nwResult.data as String).contains("Updateintervall overcommited")) {
+                            RequestTyp.TooManyRequests
+                        } else
+                            RequestTyp.UpdateCoolDown
+                        showRequestDialog = true
+                    }
+
+                    500 -> {
+                        requestType = RequestTyp.WebsiteRequestFailed
+                        showRequestDialog = true
+                    }
+
                     else -> {
                         (nwResult.data as AddDomainResult).also { addDomainResult = it }
                         println(nwResult.message)
@@ -231,6 +296,36 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                         errorDialogText = nwResult.message.toString()
                         errorDialogButtonText = R.string.retry
                         showDialog = true
+                    }
+
+                    401 -> {
+                        requestType = RequestTyp.UnAuthorized
+                        showRequestDialog = true
+                    }
+
+                    403 -> {
+                        requestType = if ((nwResult.data as String).contains("domain limit reached")) {
+                            RequestTyp.DomainLimitReached
+                        }
+                        else if ((nwResult.data as String).contains("domainname not available"))
+                            RequestTyp.DomainNotAvailable
+                        else
+                            RequestTyp.DomainRulesNotCreated
+
+                        showRequestDialog = true
+                    }
+
+                    429 -> {
+                        requestType = if ((nwResult.data as String).contains("Updateintervall overcommited")) {
+                            RequestTyp.TooManyRequests
+                        } else
+                            RequestTyp.UpdateCoolDown
+                        showRequestDialog = true
+                    }
+
+                    500 -> {
+                        requestType = RequestTyp.WebsiteRequestFailed
+                        showRequestDialog = true
                     }
 
                     else -> {
@@ -629,6 +724,15 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
             dialogConfirmText = deleteDialogButtonText,
             icon = R.drawable.delete_24px,
             showDismiss = true
+        )
+    }
+
+    if (showRequestDialog) {
+        RequestDialogs(
+            onDismissRequest = { showRequestDialog = false },
+            onConfirmation = { showRequestDialog = false; },
+            dialogConfirmText = errorDialogButtonText,
+            request = requestType
         )
     }
 }

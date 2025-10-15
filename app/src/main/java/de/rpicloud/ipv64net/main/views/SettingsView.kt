@@ -239,6 +239,10 @@ fun SettingsView(navController: NavHostController, mainPadding: PaddingValues) {
                     }
                 }
             }
+
+            LaunchedEffect(lockScreenEnabled.value) {
+                PreferencesManager.saveBool(ctx, "LOCKSCREEN_ENABLED", lockScreenEnabled.value)
+            }
         }
     }
 }

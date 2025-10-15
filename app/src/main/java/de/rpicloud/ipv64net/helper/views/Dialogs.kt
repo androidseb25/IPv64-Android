@@ -52,6 +52,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionState
 import de.rpicloud.ipv64net.helper.QrCodeAnalyzer
+import de.rpicloud.ipv64net.models.RequestTyp
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -159,6 +160,48 @@ fun ErrorDialog(
         )
     )
 }
+
+@Composable
+fun RequestDialogs(
+    onDismissRequest: () -> Unit,
+    onConfirmation: () -> Unit,
+    dialogConfirmText: Int = android.R.string.ok,
+    request: RequestTyp
+) {
+    val ctx = LocalContext.current
+    AlertDialog(
+        modifier = Modifier.zIndex(1f), // Stellt sicher, dass der Dialog über allem in der App ist
+        icon = {
+            Icon(
+                painter = painterResource(id = request.type.icon ?: 0), contentDescription = "Header Icon"
+            )
+        },
+        title = {
+            Text(text = request.type.errorTitle ?: "")
+        },
+        text = {
+            StyledText(HtmlCompat.fromHtml(request.type.errorDescription ?: "", HtmlCompat.FROM_HTML_MODE_LEGACY))
+        },
+        onDismissRequest = {
+            onDismissRequest()
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onConfirmation()
+            }) {
+                Text(text = stringResource(id = dialogConfirmText), color = colorScheme.primary)
+            }
+        },
+        dismissButton = {
+
+        },
+        properties = DialogProperties(
+            dismissOnBackPress = false, dismissOnClickOutside = false
+        )
+    )
+}
+
+
 
 @SuppressLint("ResourceType")
 @Composable
