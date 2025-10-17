@@ -99,7 +99,7 @@ class NetworkService {
                     println("♻️ - ${result.email}")
                     callback(NetworkResult("Success", result, 200))
                 } else {
-                    callback(NetworkResult("Fehler: ${response.code}", null, response.code))
+                    callback(NetworkResult("Fehler: ${response.code}", responseText, response.code))
                 }
             } catch (e: Exception) {
                 callback(NetworkResult(e.localizedMessage, null, 500))
@@ -128,7 +128,7 @@ class NetworkService {
                     println("♻️ - ${result.get_account_info}")
                     callback(NetworkResult("Success", result, 200))
                 } else {
-                    callback(NetworkResult("Fehler: ${response.code}", null, response.code))
+                    callback(NetworkResult("Fehler: ${response.code}", responseText, response.code))
                 }
             } catch (e: Exception) {
                 callback(NetworkResult(e.localizedMessage, null, 500))
@@ -160,7 +160,7 @@ class NetworkService {
                     }
                 } else {
                     withContext(Dispatchers.Main) {
-                        callback(NetworkResult("Fehler: ${response.code}", null, response.code))
+                        callback(NetworkResult("Fehler: ${response.code}", responseText, response.code))
                     }
                 }
             } catch (e: Exception) {
@@ -192,7 +192,7 @@ class NetworkService {
                     println("♻️ - ${result.add_domain}")
                     callback(NetworkResult("Success", result, 200))
                 } else {
-                    callback(NetworkResult("Fehler: ${response.code}", null, response.code))
+                    callback(NetworkResult("Fehler: ${response.code}", responseText, response.code))
                 }
             } catch (e: Exception) {
                 callback(NetworkResult(e.localizedMessage, null, 500))
@@ -225,7 +225,7 @@ class NetworkService {
                     }
                 } else {
                     withContext(Dispatchers.Main) {
-                        callback(NetworkResult("Fehler: ${response.code}", null, response.code))
+                        callback(NetworkResult("Fehler: ${response.code}", responseText, response.code))
                     }
                 }
             } catch (e: Exception) {
@@ -381,7 +381,7 @@ class NetworkService {
                     }
                 } else {
                     withContext(Dispatchers.Main) {
-                        callback(NetworkResult("Fehler: ${response.code}", null, response.code))
+                        callback(NetworkResult("Fehler: ${response.code}", responseText, response.code))
                     }
                 }
             } catch (e: Exception) {
@@ -463,7 +463,7 @@ class NetworkService {
                     println("♻️ - ${result.get_account_info}")
                     callback(NetworkResult("Success", result, 200))
                 } else {
-                    callback(NetworkResult("Fehler: ${response.code}", null, response.code))
+                    callback(NetworkResult("Fehler: ${response.code}", responseText, response.code))
                 }
             } catch (e: Exception) {
                 callback(NetworkResult(e.localizedMessage, null, 500))

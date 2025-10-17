@@ -67,9 +67,9 @@ import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-
-class HealthcheckEditView {
-}
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.rpicloud.ipv64net.helper.views.RequestDialogs
+import de.rpicloud.ipv64net.models.RequestTyp
 
 @SuppressLint("UnrememberedGetBackStackEntry")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -96,6 +96,9 @@ fun HealthcheckEditView(navController: NavHostController, mainPadding: PaddingVa
     var errorDialogText by remember { mutableStateOf("") }
     var errorDialogButtonText by remember { mutableIntStateOf(android.R.string.ok) }
 
+    var showRequestDialog by remember { mutableStateOf(false) }
+    var requestType by remember { mutableStateOf(RequestTyp.UnAuthorized) }
+
     var editHc by remember { mutableStateOf(HealthCheck.empty) }
 
     var editHealthcheckResult by remember { mutableStateOf(AddDomainResult.empty) }
@@ -106,6 +109,13 @@ fun HealthcheckEditView(navController: NavHostController, mainPadding: PaddingVa
     }
     val hc by hcBackStackEntry.savedStateHandle.getStateFlow<String>("EDIT_HEALTHCHECK", "")
         .collectAsState()
+
+    val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
+    // 🧠 StateFlow mit leerem Default-Wert
+    val resultFlow = savedStateHandle?.getStateFlow("INTEGRATION_IDS", "")
+
+    // 🩵 Compose-Integration (Lifecycle-aware)
+    val integrationIds by resultFlow?.collectAsStateWithLifecycle() ?: remember { mutableStateOf("") }
 
     fun onSave() {
         keyboardController?.hide()
@@ -157,13 +167,34 @@ fun HealthcheckEditView(navController: NavHostController, mainPadding: PaddingVa
                         showDialog = true
                     }
 
+                    401 -> {
+                        requestType = RequestTyp.UnAuthorized
+                        showRequestDialog = true
+                    }
+
                     403 -> {
-                        (nwResult.data as AddDomainResult).also { editHealthcheckResult = it }
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = editHealthcheckResult.add_domain.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
+                        requestType = if ((nwResult.data as String).contains("domain limit reached")) {
+                            RequestTyp.DomainLimitReached
+                        }
+                        else if ((nwResult.data as String).contains("domainname not available"))
+                            RequestTyp.DomainNotAvailable
+                        else
+                            RequestTyp.DomainRulesNotCreated
+
+                        showRequestDialog = true
+                    }
+
+                    429 -> {
+                        requestType = if ((nwResult.data as String).contains("Updateintervall overcommited")) {
+                            RequestTyp.TooManyRequests
+                        } else
+                            RequestTyp.UpdateCoolDown
+                        showRequestDialog = true
+                    }
+
+                    500 -> {
+                        requestType = RequestTyp.WebsiteRequestFailed
+                        showRequestDialog = true
                     }
 
                     else -> {
@@ -439,6 +470,22 @@ fun HealthcheckEditView(navController: NavHostController, mainPadding: PaddingVa
                         }
                     }
                 }
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            navController.currentBackStackEntry?.savedStateHandle?.set(
+                                "INTEGRATION_STRING",
+                                editHc.integration_id
+                            )
+                            navController.navigate(Tabs.getRoute(Tab.healthcheck_edit_integrations))
+                        }
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Edit Notification methods")
+                        }
+                    }
+                }
             }
         }
     }
@@ -455,6 +502,14 @@ fun HealthcheckEditView(navController: NavHostController, mainPadding: PaddingVa
         hcNotiDown = editHc.alarm_down == 1
     }
 
+    LaunchedEffect(integrationIds) {
+        if (integrationIds.isNotEmpty()) {
+            println("✅ Rückgabewert empfangen: $integrationIds")
+            savedStateHandle?.remove<String>("INTEGRATION_IDS") // optional
+            editHc.integration_id = integrationIds
+        }
+    }
+
     if (showLoadingDialog) {
         SpinnerDialog(
             spinnerText = "Saving Healthcheck..."
@@ -468,6 +523,15 @@ fun HealthcheckEditView(navController: NavHostController, mainPadding: PaddingVa
             dialogTitle = errorDialogTitle,
             dialogText = errorDialogText,
             dialogConfirmText = errorDialogButtonText
+        )
+    }
+
+    if (showRequestDialog) {
+        RequestDialogs(
+            onDismissRequest = { showRequestDialog = false },
+            onConfirmation = { showRequestDialog = false; },
+            dialogConfirmText = errorDialogButtonText,
+            request = requestType
         )
     }
 }

@@ -4,8 +4,10 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import de.rpicloud.ipv64net.helper.PreferencesManager
 import de.rpicloud.ipv64net.main.activity.MainActivity
 import de.rpicloud.ipv64net.models.LaunchScreens
 
@@ -17,8 +19,7 @@ class LaunchActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val apiKey: String = applicationContext.getSharedPreferences("APIKEY", Context.MODE_PRIVATE)
-            .getString("APIKEY", "") ?: ""
+        val apiKey: String = PreferencesManager.loadString(applicationContext, "APIKEY")
 
         activeScreen = if (apiKey.isEmpty())
             LaunchScreens.LOGIN

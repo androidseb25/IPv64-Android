@@ -25,6 +25,7 @@ enum class Tab {
     healthcheck,
     healthcheck_new,
     healthcheck_edit,
+    healthcheck_edit_integrations,
     healthcheck_details,
     integrations,
     settings,
@@ -83,6 +84,7 @@ sealed class Tabs {
                 Tab.healthcheck -> "healthcheck"
                 Tab.healthcheck_new -> "healthcheck_new"
                 Tab.healthcheck_edit -> "healthcheck_edit"
+                Tab.healthcheck_edit_integrations -> "healthcheck_edit_integrations"
                 Tab.integrations -> "integrations"
                 Tab.settings -> "settings"
                 Tab.account -> "account"
@@ -100,7 +102,7 @@ sealed class Tabs {
             return when (tab) {
                 Tab.domains -> "Domains"
                 Tab.healthcheck -> "Healthchecks"
-                Tab.integrations -> "Integrations"
+                Tab.integrations -> "Notifications"
                 Tab.my_ip -> "My IP"
                 Tab.logs -> "Logs"
                 Tab.account -> "Account"
@@ -113,7 +115,7 @@ sealed class Tabs {
             return when (tab) {
                 Tab.domains -> R.drawable.domain_24px_fill
                 Tab.healthcheck -> R.drawable.ecg_heart_24px_fill
-                Tab.integrations -> R.drawable.extension_24px_fill
+                Tab.integrations -> R.drawable.notifications_unread_24px_fill
                 else -> R.drawable.settings_24px_fill
             }
         }
@@ -122,7 +124,7 @@ sealed class Tabs {
             return when (tab) {
                 Tab.domains -> R.drawable.domain_24px
                 Tab.healthcheck -> R.drawable.ecg_heart_24px
-                Tab.integrations -> R.drawable.extension_24px
+                Tab.integrations -> R.drawable.notifications_unread_24px
                 else -> R.drawable.settings_24px
             }
         }

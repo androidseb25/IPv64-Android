@@ -44,8 +44,10 @@ import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.NetworkService
 import de.rpicloud.ipv64net.helper.v64Units
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
+import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
 import de.rpicloud.ipv64net.models.AddDomainResult
+import de.rpicloud.ipv64net.models.RequestTyp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -67,6 +69,9 @@ fun HealthcheckNewView(navController: NavHostController, mainPadding: PaddingVal
     var errorDialogTitle by remember { mutableStateOf("") }
     var errorDialogText by remember { mutableStateOf("") }
     var errorDialogButtonText by remember { mutableIntStateOf(android.R.string.ok) }
+
+    var showRequestDialog by remember { mutableStateOf(false) }
+    var requestType by remember { mutableStateOf(RequestTyp.UnAuthorized) }
 
     var newHealthcheckResult by remember { mutableStateOf(AddDomainResult.empty) }
 
@@ -111,13 +116,34 @@ fun HealthcheckNewView(navController: NavHostController, mainPadding: PaddingVal
                         showDialog = true
                     }
 
+                    401 -> {
+                        requestType = RequestTyp.UnAuthorized
+                        showRequestDialog = true
+                    }
+
                     403 -> {
-                        (nwResult.data as AddDomainResult).also { newHealthcheckResult = it }
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = newHealthcheckResult.add_domain.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
+                        requestType = if ((nwResult.data as String).contains("domain limit reached")) {
+                            RequestTyp.DomainLimitReached
+                        }
+                        else if ((nwResult.data as String).contains("domainname not available"))
+                            RequestTyp.DomainNotAvailable
+                        else
+                            RequestTyp.DomainRulesNotCreated
+
+                        showRequestDialog = true
+                    }
+
+                    429 -> {
+                        requestType = if ((nwResult.data as String).contains("Updateintervall overcommited")) {
+                            RequestTyp.TooManyRequests
+                        } else
+                            RequestTyp.UpdateCoolDown
+                        showRequestDialog = true
+                    }
+
+                    500 -> {
+                        requestType = RequestTyp.WebsiteRequestFailed
+                        showRequestDialog = true
                     }
 
                     else -> {
@@ -254,6 +280,15 @@ fun HealthcheckNewView(navController: NavHostController, mainPadding: PaddingVal
             dialogTitle = errorDialogTitle,
             dialogText = errorDialogText,
             dialogConfirmText = errorDialogButtonText
+        )
+    }
+
+    if (showRequestDialog) {
+        RequestDialogs(
+            onDismissRequest = { showRequestDialog = false },
+            onConfirmation = { showRequestDialog = false; },
+            dialogConfirmText = errorDialogButtonText,
+            request = requestType
         )
     }
 }

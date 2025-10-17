@@ -46,9 +46,11 @@ import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.NetworkService
 import de.rpicloud.ipv64net.helper.v64domains
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
+import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
 import de.rpicloud.ipv64net.models.DomainResult
 import de.rpicloud.ipv64net.models.IPResult
+import de.rpicloud.ipv64net.models.RequestTyp
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import kotlinx.coroutines.Dispatchers
@@ -70,6 +72,9 @@ fun DomainView(navController: NavHostController, mainPadding: PaddingValues) {
     var errorDialogTitle by remember { mutableStateOf("") }
     var errorDialogText by remember { mutableStateOf("") }
     var errorDialogButtonText by remember { mutableIntStateOf(android.R.string.ok) }
+
+    var showRequestDialog by remember { mutableStateOf(false) }
+    var requestType by remember { mutableStateOf(RequestTyp.UnAuthorized) }
 
     var domainResult by remember { mutableStateOf(DomainResult.empty) }
     var myV4 by remember { mutableStateOf(IPResult.empty) }
@@ -105,6 +110,36 @@ fun DomainView(navController: NavHostController, mainPadding: PaddingValues) {
                         errorDialogText = nwResult.message.toString()
                         errorDialogButtonText = R.string.retry
                         showDialog = true
+                    }
+
+                    401 -> {
+                        requestType = RequestTyp.UnAuthorized
+                        showRequestDialog = true
+                    }
+
+                    403 -> {
+                        requestType = if ((nwResult.data as String).contains("domain limit reached")) {
+                            RequestTyp.DomainLimitReached
+                        }
+                        else if ((nwResult.data as String).contains("domainname not available"))
+                            RequestTyp.DomainNotAvailable
+                        else
+                            RequestTyp.DomainRulesNotCreated
+
+                        showRequestDialog = true
+                    }
+
+                    429 -> {
+                        requestType = if ((nwResult.data as String).contains("Updateintervall overcommited")) {
+                            RequestTyp.TooManyRequests
+                        } else
+                            RequestTyp.UpdateCoolDown
+                        showRequestDialog = true
+                    }
+
+                    500 -> {
+                        requestType = RequestTyp.WebsiteRequestFailed
+                        showRequestDialog = true
                     }
 
                     else -> {
@@ -321,6 +356,15 @@ fun DomainView(navController: NavHostController, mainPadding: PaddingValues) {
             dialogTitle = errorDialogTitle,
             dialogText = errorDialogText,
             dialogConfirmText = errorDialogButtonText
+        )
+    }
+
+    if (showRequestDialog) {
+        RequestDialogs(
+            onDismissRequest = { showRequestDialog = false },
+            onConfirmation = { showRequestDialog = false; getDomains() },
+            dialogConfirmText = errorDialogButtonText,
+            request = requestType
         )
     }
 }

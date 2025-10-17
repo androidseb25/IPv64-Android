@@ -15,3 +15,6 @@
 local.properties
 app/release/
 *.pepk
+*.jks
+*.b64
+*.pem
