@@ -45,6 +45,7 @@ import de.rpicloud.ipv64net.helper.findActivity
 import de.rpicloud.ipv64net.helper.views.QRCodeDialogView
 import de.rpicloud.ipv64net.helper.views.ShowPermissionDialog
 import de.rpicloud.ipv64net.main.activity.MainActivity
+import de.rpicloud.ipv64net.models.User
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -86,7 +87,7 @@ fun LoginView(navController: NavHostController) {
         } else {
             readExternalStoragePermissionState.launchPermissionRequest()
         }
-        apiKey = PreferencesManager.loadString(context, "APIKEY")
+        apiKey = ""
     }
 
     Scaffold(
@@ -182,6 +183,18 @@ fun LoginView(navController: NavHostController) {
                 Column(modifier = Modifier.padding(bottom = 32.dp)) {
                     Button(
                         onClick = {
+                            val isContains = User.list.find { it.ApiKey == apiKey } != null
+
+                            if (isContains) {
+                                return@Button
+                            }
+
+                            val user = User.empty
+                            user.ApiKey = apiKey
+                            user.Username = if (User.list.count() > 0) "Default User ${User.list.count()}" else "Default User"
+                            user.Information = ""
+                            user.save()
+
                             PreferencesManager.saveString(context, "APIKEY", apiKey)
                             val activity = context.findActivity()
                             val intent = Intent(activity, MainActivity::class.java)
@@ -219,7 +232,6 @@ fun LoginView(navController: NavHostController) {
                     hasHandledResult = true
                     showDialog = false
                     apiKey = it
-                    PreferencesManager.saveString(context, "APIKEY", it)
                 }
             }
         )

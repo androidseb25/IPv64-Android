@@ -49,12 +49,14 @@ import androidx.navigation.NavHostController
 import com.google.gson.Gson
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.NetworkService
+import de.rpicloud.ipv64net.helper.formatDbTime
 import de.rpicloud.ipv64net.helper.v64domains
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
 import de.rpicloud.ipv64net.models.DomainResult
 import de.rpicloud.ipv64net.models.HealthCheckResult
+import de.rpicloud.ipv64net.models.HealthEvents
 import de.rpicloud.ipv64net.models.RequestTyp
 import de.rpicloud.ipv64net.models.StatusType
 import de.rpicloud.ipv64net.models.Tab
@@ -64,6 +66,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("ContextCastToActivity")
@@ -104,6 +107,15 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
                         } else {
                             (nwResult.data as HealthCheckResult).also { healthCheckResult = it }
                             val sortedList = healthCheckResult.domain.sortedBy { it.name.lowercase() }
+
+                            val newEvent = HealthEvents(event_time = Date().formatDbTime(), status = StatusType.Pause.type.statusId!!, text = "Pause active")
+
+                            sortedList.forEach { hc ->
+                                if (hc.HealthStatus == StatusType.Pause.type) {
+                                    hc.events.add(0, newEvent)
+                                }
+                            }
+
                             healthCheckResult.domain = sortedList.toMutableList()
                             println(healthCheckResult)
                             activeCount = healthCheckResult.domain.filter { hc -> hc.HealthStatus == StatusType.Active.type }.size

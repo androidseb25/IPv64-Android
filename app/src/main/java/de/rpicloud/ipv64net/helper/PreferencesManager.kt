@@ -9,7 +9,7 @@ class PreferencesManager {
 
     companion object {
         @SuppressLint("UseKtx")
-        inline fun <reified T> saveList(ctx: Context, key: String, list: List<T>) {
+        inline fun <reified T> saveList(ctx: Context, key: String, list: MutableList<T>) {
             val gson = Gson()
             val jsonText = gson.toJson(list)
             with(ctx.getSharedPreferences(key, Context.MODE_PRIVATE).edit()) {
@@ -58,11 +58,11 @@ class PreferencesManager {
             }
         }
 
-        inline fun <reified T> loadList(ctx: Context, key: String): List<T> {
+        inline fun <reified T> loadList(ctx: Context, key: String): MutableList<T> {
             val gson = Gson()
             val preferences = ctx.getSharedPreferences(key, Context.MODE_PRIVATE)
             val jsonText = preferences.getString(key, "[]")
-            val type = object : TypeToken<List<T>>() {}.type
+            val type = object : TypeToken<MutableList<T>>() {}.type
             return gson.fromJson(jsonText, type)
         }
 

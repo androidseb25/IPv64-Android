@@ -56,6 +56,7 @@ import de.rpicloud.ipv64net.main.views.SettingsView
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.rpicloud.ipv64net.models.Tabs.Companion.AddItem
+import de.rpicloud.ipv64net.models.User
 import de.rpicloud.ipv64net.ui.theme.AppTheme
 
 class MainActivity : AppCompatActivity() {
@@ -66,6 +67,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        User.init(applicationContext)
         enableEdgeToEdge()
         setContent {
             val navController = rememberNavController()
