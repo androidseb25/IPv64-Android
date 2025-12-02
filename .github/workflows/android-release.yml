@@ -101,7 +101,9 @@ jobs:
       # Wenn du signingConfigs.release in Gradle mit releaseKey.jks verwendest,
       # ist das AAB bereits signiert und du kannst diesen Schritt weg lassen.
       - name: Sign AAB (optional)
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
             -keystore releaseKey.jks -storepass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
