@@ -61,7 +61,36 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ipv64net-${{ steps.rename.outputs.version }}
+          name: ipv64net-${{ steps.rename.outputs.version }}-debug
           path: |
             ${{ steps.rename.outputs.apk }}
             # ${{ steps.rename.outputs.aab }}
+
+      - name: Decode keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > releaseKey.jks
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease
+
+      - name: Sign APK
+        run: |
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore releaseKey.jks -storepass ${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
+            -keypass ${{ secrets.ANDROID_KEY_PASSWORD }} \
+            app/build/outputs/apk/release/app-release-unsigned.apk ${{ secrets.ANDROID_KEY_ALIAS }}
+
+      - name: Verify signature
+        run: jarsigner -verify -verbose -certs app/build/outputs/apk/release/app-release-unsigned.apk
+
+      - name: Align APK
+        run: |
+          $ANDROID_HOME/build-tools/34.0.0/zipalign -v 4 \
+            app/build/outputs/apk/release/app-release-unsigned.apk \
+            app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload Signed APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: ipv64net-${{ steps.rename.outputs.version }}-signed
+          path: app/build/outputs/apk/release/app-release.apk
