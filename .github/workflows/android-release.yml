@@ -42,19 +42,19 @@ jobs:
           VER="${{ steps.ver.outputs.version_name }}"
 
           APK_SRC="app/build/outputs/apk/debug"
-          AAB_SRC="app/build/outputs/bundle/debug"
+          # AAB_SRC="app/build/outputs/bundle/debug"
 
           APK_PATH=$(ls "$APK_SRC"/*.apk | head -n1)
-          AAB_PATH=$(ls "$AAB_SRC"/*.aab | head -n1)
+          # AAB_PATH=$(ls "$AAB_SRC"/*.aab | head -n1)
 
           APK_OUT="ipv64net_v${VER}-debug.apk"
-          AAB_OUT="ipv64net_v${VER}-debug.aab"
+          # AAB_OUT="ipv64net_v${VER}-debug.aab"
 
           cp "$APK_PATH" "$APK_OUT"
-          cp "$AAB_PATH" "$AAB_OUT"
+          # cp "$AAB_PATH" "$AAB_OUT"
 
           echo "apk=$APK_OUT" >> $GITHUB_OUTPUT
-          echo "aab=$AAB_OUT" >> $GITHUB_OUTPUT
+          # echo "aab=$AAB_OUT" >> $GITHUB_OUTPUT
           echo "version=$VER"  >> $GITHUB_OUTPUT
 
       # ---- Als Build-Artefakt hochladen (optional, nützlich für CI-Download) ----
@@ -64,4 +64,4 @@ jobs:
           name: ipv64net-${{ steps.rename.outputs.version }}
           path: |
             ${{ steps.rename.outputs.apk }}
-            ${{ steps.rename.outputs.aab }}
+            # ${{ steps.rename.outputs.aab }}
