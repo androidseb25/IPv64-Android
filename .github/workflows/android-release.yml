@@ -67,8 +67,10 @@ jobs:
             # ${{ steps.rename.outputs.aab }}
 
       - name: Decode keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > releaseKey.jks
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > releaseKey.jks
 
       - name: Build release APK
         run: ./gradlew assembleRelease
