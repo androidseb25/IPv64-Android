@@ -16,8 +16,9 @@ data class User(
         fun init(context: Context) {
             appContext = context.applicationContext
             val apiKey = PreferencesManager.loadString(appContext, "APIKEY")
-            if (apiKey.isNotEmpty()) {
+            if (apiKey.isNotEmpty() && list.isEmpty()) {
                 val user = User(Username = "Default User", ApiKey = apiKey, Information = "")
+                val list = mutableListOf<User>()
                 list.add(user)
                 saveList(list)
             }

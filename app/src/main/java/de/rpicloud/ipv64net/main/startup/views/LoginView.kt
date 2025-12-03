@@ -49,7 +49,7 @@ import de.rpicloud.ipv64net.models.User
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
-fun LoginView(navController: NavHostController) {
+fun LoginView(navController: NavHostController, isFromUser: Boolean = false) {
 
     val context = LocalContext.current
     var showDialog by remember { mutableStateOf(false) }
@@ -195,12 +195,16 @@ fun LoginView(navController: NavHostController) {
                             user.Information = ""
                             user.save()
 
-                            PreferencesManager.saveString(context, "APIKEY", apiKey)
-                            val activity = context.findActivity()
-                            val intent = Intent(activity, MainActivity::class.java)
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            activity?.startActivity(intent)
-                            activity?.finish()
+                            if (!isFromUser) {
+                                PreferencesManager.saveString(context, "APIKEY", apiKey)
+                                val activity = context.findActivity()
+                                val intent = Intent(activity, MainActivity::class.java)
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                activity?.startActivity(intent)
+                                activity?.finish()
+                            } else {
+                                navController.popBackStack()
+                            }
                         },
                         enabled = !apiKey.isEmpty(),
                         modifier = Modifier

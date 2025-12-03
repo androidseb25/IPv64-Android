@@ -38,7 +38,9 @@ import androidx.navigation.compose.rememberNavController
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.BiometricPromptManager
 import de.rpicloud.ipv64net.helper.PreferencesManager
+import de.rpicloud.ipv64net.main.startup.views.LoginView
 import de.rpicloud.ipv64net.main.views.AboutView
+import de.rpicloud.ipv64net.main.views.AccountDetailView
 import de.rpicloud.ipv64net.main.views.AccountView
 import de.rpicloud.ipv64net.main.views.DomainDetailView
 import de.rpicloud.ipv64net.main.views.DomainDnsNewView
@@ -119,6 +121,9 @@ class MainActivity : AppCompatActivity() {
                             composable(Tabs.Companion.getRoute(Tab.account)) {
                                 AccountView(navController, mainPadding = mainPadding)
                             }
+                            composable(Tabs.Companion.getRoute(Tab.account_details)) {
+                                AccountDetailView(navController, mainPadding = mainPadding)
+                            }
                             composable(Tabs.Companion.getRoute(Tab.logs)) {
                                 LogView(navController, mainPadding = mainPadding)
                             }
@@ -127,6 +132,9 @@ class MainActivity : AppCompatActivity() {
                             }
                             composable(Tabs.Companion.getRoute(Tab.about)) {
                                 AboutView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.Companion.getRoute(Tab.login)) {
+                                LoginView(navController, true)
                             }
                         }
                     }
