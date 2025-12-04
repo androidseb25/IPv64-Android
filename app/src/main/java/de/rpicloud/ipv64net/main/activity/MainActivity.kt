@@ -41,6 +41,7 @@ import de.rpicloud.ipv64net.helper.PreferencesManager
 import de.rpicloud.ipv64net.main.startup.views.LoginView
 import de.rpicloud.ipv64net.main.views.AboutView
 import de.rpicloud.ipv64net.main.views.AccountDetailView
+import de.rpicloud.ipv64net.main.views.AccountEditView
 import de.rpicloud.ipv64net.main.views.AccountView
 import de.rpicloud.ipv64net.main.views.DomainDetailView
 import de.rpicloud.ipv64net.main.views.DomainDnsNewView
@@ -73,6 +74,9 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
         setContent {
             val navController = rememberNavController()
+            val navBackStackEntry by navController.currentBackStackEntryAsState()
+            val currentRoute = navBackStackEntry?.destination?.route
+
             AppTheme {
 
                 val isBiometric: Boolean = PreferencesManager.loadBool(applicationContext, "LOCKSCREEN_ENABLED")
@@ -80,7 +84,10 @@ class MainActivity : AppCompatActivity() {
                 val enrollLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { println("Activity result $it") }
 
                 if (!isBiometric || biometricResult == BiometricPromptManager.BiometricResult.AuthenticationSuccess) {
-                    Scaffold(bottomBar = { TabView(Tabs.tabList, navController) }) { mainPadding ->
+                    Scaffold(bottomBar = {
+                        if (currentRoute != Tabs.Companion.getRoute(Tab.login))
+                            TabView(Tabs.tabList, navController)
+                    }) { mainPadding ->
                         NavHost(
                             navController = navController,
                             startDestination = Tabs.Companion.getRoute(Tab.domains)
@@ -123,6 +130,9 @@ class MainActivity : AppCompatActivity() {
                             }
                             composable(Tabs.Companion.getRoute(Tab.account_details)) {
                                 AccountDetailView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.Companion.getRoute(Tab.account_edit)) {
+                                AccountEditView(navController, mainPadding = mainPadding)
                             }
                             composable(Tabs.Companion.getRoute(Tab.logs)) {
                                 LogView(navController, mainPadding = mainPadding)

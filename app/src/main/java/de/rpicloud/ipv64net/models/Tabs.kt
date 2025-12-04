@@ -31,6 +31,7 @@ enum class Tab {
     settings,
     account,
     account_details,
+    account_edit,
     logs,
     my_ip,
     about
@@ -90,6 +91,7 @@ sealed class Tabs {
                 Tab.settings -> "settings"
                 Tab.account -> "account"
                 Tab.account_details -> "account_details"
+                Tab.account_edit -> "account_edit"
                 Tab.domain_details -> "domain_details"
                 Tab.domain_new -> "domain_new"
                 Tab.domain_new_dns -> "domain_new_dns"

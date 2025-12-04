@@ -35,6 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -185,13 +186,18 @@ fun AccountView(navController: NavHostController, mainPadding: PaddingValues) {
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     User.current?.let { user ->
+//                    val user = User.empty
+//                    user.Information = "No Informations"
+//                    user.Username = "Default Username"
                         item {
                             Button(onClick = {
                                 navController.navigate(Tabs.getRoute(Tab.account_details))
                             }) {
                                 Row(
                                     modifier = Modifier
-                                        .fillMaxWidth()
+                                        .fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Start
                                 ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.account_circle_24px),

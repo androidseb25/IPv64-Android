@@ -96,6 +96,16 @@ fun LoginView(navController: NavHostController, isFromUser: Boolean = false) {
                 title = {
                     Text("Login")
                 },
+                navigationIcon = {
+                    if (isFromUser) {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.arrow_back_24px),
+                                contentDescription = "Close"
+                            )
+                        }
+                    }
+                },
                 actions = {
                     IconButton(onClick = {
                         openCamera()
