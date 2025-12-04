@@ -28,6 +28,11 @@ fun Date.formatGermanTime(): String {
     return format.format(this)
 }
 
+fun Date.formatDbTime(): String {
+    val format = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.GERMANY)
+    return format.format(this)
+}
+
 fun String.parseDbDate(): String {
     val dbFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
     val date: Date? = runCatching { dbFormat.parse(this) }.getOrNull()
