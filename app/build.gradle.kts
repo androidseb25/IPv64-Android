@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "de.rpicloud.ipv64net"
-        minSdk = 28
+        minSdk = 31
         targetSdk = 36
         versionCode = 21
         versionName = "2.0.1"
@@ -70,6 +70,9 @@ dependencies {
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.lifecycle.process)
+    implementation(libs.secntfy.android)
+    implementation(libs.firebase.messaging)
+    implementation(libs.androidx.work.runtime.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
