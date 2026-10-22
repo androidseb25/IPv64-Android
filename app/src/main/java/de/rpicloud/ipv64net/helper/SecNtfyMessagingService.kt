@@ -41,8 +41,14 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
         // Save token to SharedPreferences for later use
         PreferencesManager.saveString(applicationContext, "FCM_TOKEN", token)
         try {
-            val secntfy = SecNtfy.getInstance()
-            secntfy.setFCMToken(token)
+            val apiUrl = PreferencesManager.loadString(applicationContext, "SECNTFY_API_URL")
+            val appKey = PreferencesManager.loadString(applicationContext, "SECNTFY_APP_KEY")
+            if (apiUrl.isNotEmpty() && appKey.isNotEmpty()) {
+                val secntfy = SecNtfy.getInstance()
+                secntfy.initialize(apiUrl = apiUrl, ctx = applicationContext)
+                secntfy.configure(appKey)
+                secntfy.setFCMToken(token)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
