@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
 import com.google.gson.Gson
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.NetworkService
 import de.rpicloud.ipv64net.helper.parseDbDateTime
@@ -111,7 +112,8 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
     val domainBackStackEntry = remember(domainRoute) {
         navController.getBackStackEntry(domainRoute)
     }
-    val domain by domainBackStackEntry.savedStateHandle.getStateFlow<String>("SELECTED_DOMAIN", "").collectAsState()
+    // Jetpack Compose Best Practice: collectAsStateWithLifecycle pauses flow collection when UI is stopped (e.g. backgrounded), saving battery and CPU.
+    val domain by domainBackStackEntry.savedStateHandle.getStateFlow<String>("SELECTED_DOMAIN", "").collectAsStateWithLifecycle()
 
     fun GetDomainUpdateUrl(): String {
         return "https://ipv64.net/nic/update?key=" + selectedDomain.domain_update_hash

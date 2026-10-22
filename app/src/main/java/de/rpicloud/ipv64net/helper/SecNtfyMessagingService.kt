@@ -15,14 +15,30 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
+/**
+ * [SecNtfyMessagingService] is a background message receiver extending [FirebaseMessagingService].
+ * 
+ * ## Android Best Practices & Background Execution:
+ * - **Background Reception**: Even when the app is completely closed or removed from the recent apps list ("app slider"), 
+ *   Firebase Cloud Messaging (FCM) wakes up this service to process incoming push payloads.
+ * - **Delivery Receipts**: Automatically calls `SecNtfy.getInstance().messageReceived(messageId)` in an IO coroutine 
+ *   to securely acknowledge receipt to the SecNtfy server.
+ * - **Notification Channels**: Creates high-priority notification channels so users receive alerts reliably.
+ */
 class SecNtfyMessagingService : FirebaseMessagingService() {
 
+    // SupervisorJob ensures child coroutine failures do not cancel the entire service scope.
     private val job = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + job)
 
+    /**
+     * Called when a new FCM registration token is generated or refreshed.
+     * Best Practice: Persist the token locally and register it with the SecNtfy client.
+     */
     @Suppress("OverridingDeprecatedMember", "DEPRECATION")
     override fun onNewToken(token: String) {
         super.onNewToken(token)
+        // Save token to SharedPreferences for later use
         PreferencesManager.saveString(applicationContext, "FCM_TOKEN", token)
         try {
             val secntfy = SecNtfy.getInstance()
@@ -32,6 +48,10 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
         }
     }
 
+    /**
+     * Called when an FCM message is received while the app is in the background or terminated.
+     * Best Practice: Extract payload identifiers, display system notification, and send delivery receipt.
+     */
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
 
@@ -40,10 +60,10 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
         val title = remoteMessage.notification?.title ?: data["title"] ?: "IPv64.net Notification"
         val body = remoteMessage.notification?.body ?: data["body"] ?: data["message"] ?: "New notification received"
 
-        // Show notification so user sees it even when app is closed / swiped away
+        // 1. Display system notification so the user sees it immediately
         showNotification(title, body)
 
-        // Process SecNtfy message received / delivery receipt if messageId is present
+        // 2. Acknowledge delivery receipt to SecNtfy backend if messageId is available
         if (messageId.isNotEmpty()) {
             scope.launch {
                 try {
@@ -62,10 +82,14 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
         }
     }
 
+    /**
+     * Builds and displays a high-priority system notification with a PendingIntent pointing to [MainActivity].
+     */
     private fun showNotification(title: String, message: String) {
         val channelId = "secntfy_channel"
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
+        // Create NotificationChannel (Required for Android 8.0 / API 26+)
         val channel = NotificationChannel(
             channelId,
             "SecNtfy Notifications",
@@ -97,6 +121,7 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Cancel coroutine scope to avoid memory leaks when service is destroyed
         job.cancel()
     }
 }

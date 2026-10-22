@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.NetworkService
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
@@ -75,10 +76,11 @@ fun HealthcheckIntegrationView(
     var hcBackStackEntry = remember(hcRoute) {
         navController.getBackStackEntry(hcRoute)
     }
+    // Jetpack Compose Best Practice: collectAsStateWithLifecycle pauses flow collection when UI is stopped (e.g. backgrounded), saving battery and CPU.
     val integrationString by hcBackStackEntry.savedStateHandle.getStateFlow<String>(
         "INTEGRATION_STRING",
         ""
-    ).collectAsState()
+    ).collectAsStateWithLifecycle()
 
     fun getIntegrations() {
         showLoadingDialog = true
