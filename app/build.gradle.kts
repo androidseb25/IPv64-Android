@@ -2,16 +2,17 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
 }
 
 android {
     namespace = "de.rpicloud.ipv64net"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "de.rpicloud.ipv64net"
         minSdk = 31
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 21
         versionName = "2.0.1"
 

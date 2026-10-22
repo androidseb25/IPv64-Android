@@ -20,6 +20,14 @@ class LaunchActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         val apiKey: String = PreferencesManager.loadString(applicationContext, "APIKEY")
+        val secntfyUrl = PreferencesManager.loadString(applicationContext, "SECNTFY_API_URL")
+        val secntfyAppKey = PreferencesManager.loadString(applicationContext, "SECNTFY_APP_KEY")
+
+        if (secntfyUrl.isEmpty() || secntfyAppKey.isEmpty()) {
+            PreferencesManager.saveString(applicationContext, "SECNTFY_API_URL", "https://api.secntfy.app")
+            PreferencesManager.saveString(applicationContext, "SECNTFY_APP_KEY", "NTFY-APP-Mx0Ggr0DsWozTxVwGFfUj9uaAdkC7eVGR4u8wSYLDNw")
+        }
+
 
         activeScreen = if (apiKey.isEmpty())
             LaunchScreens.LOGIN
