@@ -1,13 +1,12 @@
 package de.rpicloud.ipv64net.main.startup.activity
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.content.Intent
 import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import de.rpicloud.ipv64net.helper.PreferencesManager
+import de.rpicloud.ipv64net.helper.SecNtfyHelper
 import de.rpicloud.ipv64net.main.activity.MainActivity
 import de.rpicloud.ipv64net.models.LaunchScreens
 
@@ -28,6 +27,8 @@ class LaunchActivity : AppCompatActivity() {
             PreferencesManager.saveString(applicationContext, "SECNTFY_APP_KEY", "NTFY-APP-Mx0Ggr0DsWozTxVwGFfUj9uaAdkC7eVGR4u8wSYLDNw")
         }
 
+        // Register FCM token with SecNtfy on app launch
+        SecNtfyHelper.registerDeviceToken(applicationContext)
 
         activeScreen = if (apiKey.isEmpty())
             LaunchScreens.LOGIN
