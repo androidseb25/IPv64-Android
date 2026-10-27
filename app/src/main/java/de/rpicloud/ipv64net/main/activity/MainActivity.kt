@@ -27,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -78,6 +79,24 @@ class MainActivity : AppCompatActivity() {
             val currentRoute = navBackStackEntry?.destination?.route
 
             AppTheme {
+                // Request POST_NOTIFICATIONS runtime permission on Android 13+ (API 33+)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    val context = LocalContext.current
+                    val permissionLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.RequestPermission()
+                    ) { isGranted ->
+                        println("🔔 Notification permission granted: $isGranted")
+                    }
+                    LaunchedEffect(Unit) {
+                        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                                context,
+                                android.Manifest.permission.POST_NOTIFICATIONS
+                            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                        ) {
+                            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+                }
 
                 val isBiometric: Boolean = PreferencesManager.loadBool(applicationContext, "LOCKSCREEN_ENABLED")
                 val biometricResult by promptManager.promptResults.collectAsState(initial = null)

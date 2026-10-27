@@ -20,41 +20,32 @@ import java.net.URL
 
 /**
  * [SecNtfyMessagingService] is a background message receiver extending [FirebaseMessagingService].
- * 
- * ## Android Best Practices & Background Execution:
- * - **Background Reception**: Even when the app is completely closed or removed from the recent apps list ("app slider"), 
- *   Firebase Cloud Messaging (FCM) wakes up this service to process incoming push payloads.
- * - **Delivery Receipts**: Automatically calls `SecNtfy.getInstance().messageReceived(messageId)` in an IO coroutine 
- *   to securely acknowledge receipt to the SecNtfy server.
- * - **Notification Channels**: Creates high-priority notification channels so users receive alerts reliably.
  */
 class SecNtfyMessagingService : FirebaseMessagingService() {
 
-    // SupervisorJob ensures child coroutine failures do not cancel the entire service scope.
     private val job = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + job)
 
-    /**
-     * Called when a new FCM registration token is generated or refreshed.
-     * Best Practice: Persist the token locally and register it with the SecNtfy client.
-     */
     @Suppress("OverridingDeprecatedMember", "DEPRECATION")
     override fun onNewToken(token: String) {
         super.onNewToken(token)
+        println("🔔 SecNtfyMessagingService onNewToken: $token")
         PreferencesManager.saveString(applicationContext, "FCM_TOKEN", token)
         SecNtfyHelper.registerDeviceToken(applicationContext)
     }
 
-    /**
-     * Called when an FCM message is received while the app is in the background or terminated.
-     * Best Practice: Initialize SecNtfy, decrypt payload, display system notification, and send delivery receipt.
-     */
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
+        println("🔔 ========================================")
+        println("🔔 SecNtfyMessagingService: onMessageReceived triggered!")
+        println("🔔 RemoteMessage data: ${remoteMessage.data}")
+        println("🔔 RemoteMessage notification: ${remoteMessage.notification?.title} / ${remoteMessage.notification?.body}")
+        println("🔔 ========================================")
 
         try {
             val apiUrl = PreferencesManager.loadString(applicationContext, "SECNTFY_API_URL")
             val appKey = PreferencesManager.loadString(applicationContext, "SECNTFY_APP_KEY")
+            println("🔔 SecNtfy Config -> URL: $apiUrl, AppKey length: ${appKey.length}")
 
             val secntfy = SecNtfy.getInstance()
             if (apiUrl.isNotEmpty() && appKey.isNotEmpty()) {
@@ -68,64 +59,67 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
             val rawBody = data["body"] ?: "New notification received"
             val rawImage = data["image"] ?: ""
 
-            // Decrypt message title, body, and image if encrypted by SecNtfy, with fallback to raw text
+            println("🔔 Raw Title: $rawTitle, Raw Body: $rawBody, Image: $rawImage")
+
             val clearTitle = try {
-                secntfy.decryptMessage(rawTitle)
-            } catch (_: Exception) {
+                secntfy.decryptMessage(rawTitle).also { println("🔔 Decrypted Title: $it") }
+            } catch (e: Exception) {
+                println("⚠️ Failed to decrypt title, using raw: ${e.message}")
                 rawTitle
             }
 
             val clearBody = try {
-                secntfy.decryptMessage(rawBody)
-            } catch (_: Exception) {
+                secntfy.decryptMessage(rawBody).also { println("🔔 Decrypted Body: $it") }
+            } catch (e: Exception) {
+                println("⚠️ Failed to decrypt body, using raw: ${e.message}")
                 rawBody
             }
 
             val clearImage = try {
-                if (rawImage.isNotEmpty()) secntfy.decryptMessage(rawImage) else ""
-            } catch (_: Exception) {
+                if (rawImage.isNotEmpty()) secntfy.decryptMessage(rawImage).also { println("🔔 Decrypted Image: $it") } else ""
+            } catch (e: Exception) {
+                println("⚠️ Failed to decrypt image, using raw: ${e.message}")
                 rawImage
             }
 
-            // 1. Display system notification so the user sees it immediately (with decrypted image support)
+            // 1. Display system notification
             showNotification(clearTitle, clearBody, clearImage)
 
-            // 2. Acknowledge delivery receipt to SecNtfy backend if messageId is available
+            // 2. Acknowledge delivery receipt
             if (messageId.isNotEmpty()) {
                 scope.launch {
                     try {
                         if (apiUrl.isNotEmpty() && appKey.isNotEmpty()) {
-                            secntfy.messageReceived(messageId)
+                            val receipt = secntfy.messageReceived(messageId)
+                            println("✅ SecNtfy delivery receipt sent successfully: $receipt")
                         }
                     } catch (e: Exception) {
+                        println("❌ Failed to send delivery receipt: ${e.message}")
                         e.printStackTrace()
                     }
                 }
             }
         } catch (e: Exception) {
+            println("❌ Error in onMessageReceived: ${e.message}")
             e.printStackTrace()
-            // Fallback notification in case initialization or decryption fails entirely
             val fallbackTitle = remoteMessage.notification?.title ?: remoteMessage.data["title"] ?: "IPv64.net Notification"
             val fallbackBody = remoteMessage.notification?.body ?: remoteMessage.data["body"] ?: "New notification received"
             showNotification(fallbackTitle, fallbackBody, "")
         }
     }
 
-    /**
-     * Builds and displays a high-priority system notification with a PendingIntent pointing to [MainActivity].
-     * Supports BigPictureStyle if a valid decrypted image URL is provided.
-     */
     private fun showNotification(title: String, message: String, imageUrl: String) {
         val channelId = "secntfy_channel"
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
-        // Create NotificationChannel (Required for Android 8.0 / API 26+)
         val channel = NotificationChannel(
             channelId,
             "SecNtfy Notifications",
             NotificationManager.IMPORTANCE_HIGH,
         ).apply {
             description = "Notifications received via SecNtfy"
+            enableLights(true)
+            enableVibration(true)
         }
         notificationManager.createNotificationChannel(channel)
 
@@ -144,8 +138,8 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
 
-        // If imageUrl is present and starts with http, download and attach as BigPictureStyle
         if (imageUrl.startsWith("http")) {
             try {
                 val url = URL(imageUrl)
@@ -162,16 +156,17 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
                     builder.setLargeIcon(bitmap)
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                println("⚠️ Failed to load notification image from URL: ${e.message}")
             }
         }
 
-        notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
+        val notificationId = System.currentTimeMillis().toInt()
+        notificationManager.notify(notificationId, builder.build())
+        println("✅ Notification displayed successfully with ID: $notificationId")
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        // Cancel coroutine scope to avoid memory leaks when service is destroyed
         job.cancel()
     }
 }
