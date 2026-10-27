@@ -44,35 +44,60 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
 
     /**
      * Called when an FCM message is received while the app is in the background or terminated.
-     * Best Practice: Extract payload identifiers, display system notification, and send delivery receipt.
+     * Best Practice: Initialize SecNtfy, decrypt payload, display system notification, and send delivery receipt.
      */
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
 
-        val data = remoteMessage.data
-        val messageId = data["message_id"] ?: data["id"] ?: remoteMessage.messageId ?: ""
-        val title = remoteMessage.notification?.title ?: data["title"] ?: "IPv64.net Notification"
-        val body = remoteMessage.notification?.body ?: data["body"] ?: data["message"] ?: "New notification received"
+        try {
+            val apiUrl = PreferencesManager.loadString(applicationContext, "SECNTFY_API_URL")
+            val appKey = PreferencesManager.loadString(applicationContext, "SECNTFY_APP_KEY")
 
-        // 1. Display system notification so the user sees it immediately
-        showNotification(title, body)
+            val secntfy = SecNtfy.getInstance()
+            if (apiUrl.isNotEmpty() && appKey.isNotEmpty()) {
+                secntfy.initialize(apiUrl = apiUrl, ctx = applicationContext)
+                secntfy.configure(appKey)
+            }
 
-        // 2. Acknowledge delivery receipt to SecNtfy backend if messageId is available
-        if (messageId.isNotEmpty()) {
-            scope.launch {
-                try {
-                    val apiUrl = PreferencesManager.loadString(applicationContext, "SECNTFY_API_URL")
-                    val appKey = PreferencesManager.loadString(applicationContext, "SECNTFY_APP_KEY")
-                    if (apiUrl.isNotEmpty() && appKey.isNotEmpty()) {
-                        val secntfy = SecNtfy.getInstance()
-                        secntfy.initialize(apiUrl = apiUrl, ctx = applicationContext)
-                        secntfy.configure(appKey)
-                        secntfy.messageReceived(messageId)
+            val data = remoteMessage.data
+            val messageId = data["messageId"] ?: data["id"] ?: remoteMessage.messageId ?: ""
+            val rawTitle = data["title"] ?: remoteMessage.notification?.title ?: "IPv64.net Notification"
+            val rawBody = data["body"] ?: data["message"] ?: remoteMessage.notification?.body ?: "New notification received"
+
+            // Decrypt message title and body if encrypted by SecNtfy, with fallback to raw text
+            val clearTitle = try {
+                secntfy.decryptMessage(rawTitle)
+            } catch (_: Exception) {
+                rawTitle
+            }
+
+            val clearBody = try {
+                secntfy.decryptMessage(rawBody)
+            } catch (_: Exception) {
+                rawBody
+            }
+
+            // 1. Display system notification so the user sees it immediately
+            showNotification(clearTitle, clearBody)
+
+            // 2. Acknowledge delivery receipt to SecNtfy backend if messageId is available
+            if (messageId.isNotEmpty()) {
+                scope.launch {
+                    try {
+                        if (apiUrl.isNotEmpty() && appKey.isNotEmpty()) {
+                            secntfy.messageReceived(messageId)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
                 }
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // Fallback notification in case initialization or decryption fails entirely
+            val fallbackTitle = remoteMessage.notification?.title ?: remoteMessage.data["title"] ?: "IPv64.net Notification"
+            val fallbackBody = remoteMessage.notification?.body ?: remoteMessage.data["body"] ?: "New notification received"
+            showNotification(fallbackTitle, fallbackBody)
         }
     }
 
