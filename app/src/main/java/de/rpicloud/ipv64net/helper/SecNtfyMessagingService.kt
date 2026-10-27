@@ -1,11 +1,14 @@
 package de.rpicloud.ipv64net.helper
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.secntfy.android.SecNtfy
@@ -20,6 +23,7 @@ import java.net.URL
 
 /**
  * [SecNtfyMessagingService] is a background message receiver extending [FirebaseMessagingService].
+ * Overrides [handleIntent] to intercept background notification payloads before FCM auto-displays ciphertext.
  */
 class SecNtfyMessagingService : FirebaseMessagingService() {
 
@@ -29,86 +33,101 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
     @Suppress("OverridingDeprecatedMember", "DEPRECATION")
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        println("🔔 SecNtfyMessagingService onNewToken: $token")
         PreferencesManager.saveString(applicationContext, "FCM_TOKEN", token)
         SecNtfyHelper.registerDeviceToken(applicationContext)
     }
 
+    /**
+     * Intercepts notification intents so FCM never displays the encrypted ciphertext itself in the background.
+     */
+    override fun handleIntent(intent: Intent) {
+        val extras = intent.extras
+        val title = extras?.getString("gcm.notification.title")
+            ?: extras?.getString("gcm.n.title")
+            ?: extras?.getString("title")
+
+        if (intent.action == "com.google.android.c2dm.intent.RECEIVE" && extras != null && title != null) {
+            val body = extras.getString("gcm.notification.body")
+                ?: extras.getString("gcm.n.body")
+                ?: extras.getString("body")
+                ?: ""
+            val image = extras.getString("gcm.notification.image")
+                ?: extras.getString("gcm.n.image")
+                ?: extras.getString("image")
+                ?: ""
+            val messageId = extras.getString("messageId")
+                ?: extras.getString("id")
+                ?: ""
+
+            processNotification(title, body, image, messageId)
+        } else {
+            super.handleIntent(intent)
+        }
+    }
+
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
-        super.onMessageReceived(remoteMessage)
-        println("🔔 ========================================")
-        println("🔔 SecNtfyMessagingService: onMessageReceived triggered!")
-        println("🔔 RemoteMessage data: ${remoteMessage.data}")
-        println("🔔 RemoteMessage notification: ${remoteMessage.notification?.title} / ${remoteMessage.notification?.body}")
-        println("🔔 ========================================")
+        processNotification(
+            title = remoteMessage.data["title"].orEmpty(),
+            body = remoteMessage.data["body"].orEmpty(),
+            image = remoteMessage.data["image"].orEmpty(),
+            messageId = remoteMessage.data["messageId"] ?: remoteMessage.data["id"] ?: remoteMessage.messageId.orEmpty(),
+        )
+    }
 
-        try {
-            val apiUrl = PreferencesManager.loadString(applicationContext, "SECNTFY_API_URL")
-            val appKey = PreferencesManager.loadString(applicationContext, "SECNTFY_APP_KEY")
-            println("🔔 SecNtfy Config -> URL: $apiUrl, AppKey length: ${appKey.length}")
+    private fun processNotification(title: String, body: String, image: String, messageId: String) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val apiUrl = PreferencesManager.loadString(applicationContext, "SECNTFY_API_URL")
+                val appKey = PreferencesManager.loadString(applicationContext, "SECNTFY_APP_KEY")
 
-            val secntfy = SecNtfy.getInstance()
-            if (apiUrl.isNotEmpty() && appKey.isNotEmpty()) {
-                secntfy.initialize(apiUrl = apiUrl, ctx = applicationContext)
-                secntfy.configure(appKey)
-            }
+                val secntfy = SecNtfy.getInstance()
+                if (apiUrl.isNotEmpty() && appKey.isNotEmpty()) {
+                    secntfy.initialize(apiUrl = apiUrl, ctx = applicationContext)
+                    secntfy.configure(appKey)
+                }
 
-            val data = remoteMessage.data
-            val messageId = data["messageId"] ?: ""
-            val rawTitle = data["title"] ?: "IPv64.net Notification"
-            val rawBody = data["body"] ?: "New notification received"
-            val rawImage = data["image"] ?: ""
+                val decryptedTitle = try {
+                    if (title.isNotEmpty()) secntfy.decryptMessage(title) else "IPv64.net Notification"
+                } catch (_: Exception) {
+                    title
+                }
 
-            println("🔔 Raw Title: $rawTitle, Raw Body: $rawBody, Image: $rawImage")
+                val decryptedBody = try {
+                    if (body.isNotEmpty()) secntfy.decryptMessage(body) else "New notification received"
+                } catch (_: Exception) {
+                    body
+                }
 
-            val clearTitle = try {
-                secntfy.decryptMessage(rawTitle).also { println("🔔 Decrypted Title: $it") }
-            } catch (e: Exception) {
-                println("⚠️ Failed to decrypt title, using raw: ${e.message}")
-                rawTitle
-            }
+                val decryptedImage = try {
+                    if (image.isNotEmpty()) secntfy.decryptMessage(image) else ""
+                } catch (_: Exception) {
+                    image
+                }
 
-            val clearBody = try {
-                secntfy.decryptMessage(rawBody).also { println("🔔 Decrypted Body: $it") }
-            } catch (e: Exception) {
-                println("⚠️ Failed to decrypt body, using raw: ${e.message}")
-                rawBody
-            }
+                showNotification(decryptedTitle, decryptedBody, decryptedImage)
 
-            val clearImage = try {
-                if (rawImage.isNotEmpty()) secntfy.decryptMessage(rawImage).also { println("🔔 Decrypted Image: $it") } else ""
-            } catch (e: Exception) {
-                println("⚠️ Failed to decrypt image, using raw: ${e.message}")
-                rawImage
-            }
-
-            // 1. Display system notification
-            showNotification(clearTitle, clearBody, clearImage)
-
-            // 2. Acknowledge delivery receipt
-            if (messageId.isNotEmpty()) {
-                scope.launch {
+                if (messageId.isNotEmpty()) {
                     try {
                         if (apiUrl.isNotEmpty() && appKey.isNotEmpty()) {
-                            val receipt = secntfy.messageReceived(messageId)
-                            println("✅ SecNtfy delivery receipt sent successfully: $receipt")
+                            secntfy.messageReceived(messageId)
                         }
-                    } catch (e: Exception) {
-                        println("❌ Failed to send delivery receipt: ${e.message}")
-                        e.printStackTrace()
+                    } catch (error: Exception) {
+                        error.printStackTrace()
                     }
                 }
+            } catch (error: Exception) {
+                error.printStackTrace()
             }
-        } catch (e: Exception) {
-            println("❌ Error in onMessageReceived: ${e.message}")
-            e.printStackTrace()
-            val fallbackTitle = remoteMessage.notification?.title ?: remoteMessage.data["title"] ?: "IPv64.net Notification"
-            val fallbackBody = remoteMessage.notification?.body ?: remoteMessage.data["body"] ?: "New notification received"
-            showNotification(fallbackTitle, fallbackBody, "")
         }
     }
 
     private fun showNotification(title: String, message: String, imageUrl: String) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+
         val channelId = "secntfy_channel"
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
@@ -156,13 +175,11 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
                     builder.setLargeIcon(bitmap)
                 }
             } catch (e: Exception) {
-                println("⚠️ Failed to load notification image from URL: ${e.message}")
+                e.printStackTrace()
             }
         }
 
-        val notificationId = System.currentTimeMillis().toInt()
-        notificationManager.notify(notificationId, builder.build())
-        println("✅ Notification displayed successfully with ID: $notificationId")
+        notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
     }
 
     override fun onDestroy() {
