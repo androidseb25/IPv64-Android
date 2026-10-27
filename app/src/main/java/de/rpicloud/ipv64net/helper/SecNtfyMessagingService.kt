@@ -60,9 +60,10 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
             }
 
             val data = remoteMessage.data
-            val messageId = data["messageId"] ?: data["id"] ?: remoteMessage.messageId ?: ""
-            val rawTitle = data["title"] ?: remoteMessage.notification?.title ?: "IPv64.net Notification"
-            val rawBody = data["body"] ?: data["message"] ?: remoteMessage.notification?.body ?: "New notification received"
+            val messageId = data["messageId"] ?: ""
+            val rawTitle = data["title"] ?: "IPv64.net Notification"
+            val rawBody = data["body"] ?: "New notification received"
+            val image = data["image"]
 
             // Decrypt message title and body if encrypted by SecNtfy, with fallback to raw text
             val clearTitle = try {
