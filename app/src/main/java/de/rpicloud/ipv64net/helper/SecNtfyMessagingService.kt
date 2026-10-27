@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.graphics.BitmapFactory
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -14,6 +15,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * [SecNtfyMessagingService] is a background message receiver extending [FirebaseMessagingService].
@@ -84,8 +87,8 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
                 rawImage
             }
 
-            // 1. Display system notification so the user sees it immediately
-            showNotification(clearTitle, clearBody)
+            // 1. Display system notification so the user sees it immediately (with decrypted image support)
+            showNotification(clearTitle, clearBody, clearImage)
 
             // 2. Acknowledge delivery receipt to SecNtfy backend if messageId is available
             if (messageId.isNotEmpty()) {
@@ -104,14 +107,15 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
             // Fallback notification in case initialization or decryption fails entirely
             val fallbackTitle = remoteMessage.notification?.title ?: remoteMessage.data["title"] ?: "IPv64.net Notification"
             val fallbackBody = remoteMessage.notification?.body ?: remoteMessage.data["body"] ?: "New notification received"
-            showNotification(fallbackTitle, fallbackBody)
+            showNotification(fallbackTitle, fallbackBody, "")
         }
     }
 
     /**
      * Builds and displays a high-priority system notification with a PendingIntent pointing to [MainActivity].
+     * Supports BigPictureStyle if a valid decrypted image URL is provided.
      */
-    private fun showNotification(title: String, message: String) {
+    private fun showNotification(title: String, message: String, imageUrl: String) {
         val channelId = "secntfy_channel"
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
@@ -133,16 +137,36 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val notification = NotificationCompat.Builder(this, channelId)
+        val builder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.notifications_unread_24px)
             .setContentTitle(title)
             .setContentText(message)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .build()
 
-        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+        // If imageUrl is present and starts with http, download and attach as BigPictureStyle
+        if (imageUrl.startsWith("http")) {
+            try {
+                val url = URL(imageUrl)
+                val connection = url.openConnection() as HttpURLConnection
+                connection.doInput = true
+                connection.connect()
+                val bitmap = BitmapFactory.decodeStream(connection.inputStream)
+                if (bitmap != null) {
+                    builder.setStyle(
+                        NotificationCompat.BigPictureStyle()
+                            .bigPicture(bitmap)
+                            .bigLargeIcon(null as android.graphics.Bitmap?)
+                    )
+                    builder.setLargeIcon(bitmap)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
     }
 
     override fun onDestroy() {
