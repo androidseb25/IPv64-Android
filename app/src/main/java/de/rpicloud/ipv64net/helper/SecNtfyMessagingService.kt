@@ -63,9 +63,9 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
             val messageId = data["messageId"] ?: ""
             val rawTitle = data["title"] ?: "IPv64.net Notification"
             val rawBody = data["body"] ?: "New notification received"
-            val image = data["image"]
+            val rawImage = data["image"] ?: ""
 
-            // Decrypt message title and body if encrypted by SecNtfy, with fallback to raw text
+            // Decrypt message title, body, and image if encrypted by SecNtfy, with fallback to raw text
             val clearTitle = try {
                 secntfy.decryptMessage(rawTitle)
             } catch (_: Exception) {
@@ -76,6 +76,12 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
                 secntfy.decryptMessage(rawBody)
             } catch (_: Exception) {
                 rawBody
+            }
+
+            val clearImage = try {
+                if (rawImage.isNotEmpty()) secntfy.decryptMessage(rawImage) else ""
+            } catch (_: Exception) {
+                rawImage
             }
 
             // 1. Display system notification so the user sees it immediately
