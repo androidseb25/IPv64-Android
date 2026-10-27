@@ -154,6 +154,7 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
             .setSmallIcon(R.drawable.notifications_unread_24px)
             .setContentTitle(title)
             .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -170,6 +171,7 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
                     builder.setStyle(
                         NotificationCompat.BigPictureStyle()
                             .bigPicture(bitmap)
+                            .setSummaryText(message)
                             .bigLargeIcon(null as android.graphics.Bitmap?)
                     )
                     builder.setLargeIcon(bitmap)
