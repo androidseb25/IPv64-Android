@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
-import de.rpicloud.ipv64net.models.Unit
 import de.sr.ipv64.model.UsageCounter
 import de.sr.ipv64.model.VpnTrafficUsage
 import java.text.NumberFormat
@@ -32,17 +31,6 @@ fun Date.formatGermanTime(): String {
 }
 
 fun Instant.formatGermanTime(): String = Date(toEpochMilliseconds()).formatGermanTime()
-
-fun Date.formatDbTime(): String {
-    val format = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.GERMANY)
-    return format.format(this)
-}
-
-fun String.parseDbDateTime(): String {
-    val dbFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-    val date: Date? = runCatching { dbFormat.parse(this) }.getOrNull()
-    return date?.formatGermanTime() ?: "01.01.0001 00:00:00"
-}
 
 @SuppressLint("DefaultLocale")
 fun Long.formatBytes(): String {
@@ -116,10 +104,50 @@ fun String.v64DnsRecordTypes(): List<String> {
     )
 }
 
-fun String.v64Units(): List<Unit> {
-    return listOf(
-        Unit.Minuten,
-        Unit.Stunden,
-        Unit.Tage
-    )
+// Relative Zeit ("just now", "5 min ago", "2 h ago", "3 d ago"), ab 30 Tagen das Datum
+fun Instant.formatRelative(): String {
+    val diffSeconds = (System.currentTimeMillis() - toEpochMilliseconds()) / 1000
+    return when {
+        diffSeconds < 0 -> formatGermanTime()
+        diffSeconds < 60 -> "just now"
+        diffSeconds < 3_600 -> "${diffSeconds / 60} min ago"
+        diffSeconds < 86_400 -> "${diffSeconds / 3_600} h ago"
+        diffSeconds < 30 * 86_400L -> "${diffSeconds / 86_400} d ago"
+        else -> Date(toEpochMilliseconds()).formatGerman()
+    }
 }
+
+// Dauer in Sekunden lesbar (höchstens zwei Einheiten), z. B. "1 h 30 min"
+fun Long.formatDuration(): String {
+    if (this <= 0) return "0 s"
+    val units = listOf(86_400L to "d", 3_600L to "h", 60L to "min", 1L to "s")
+    var rest = this
+    val parts = mutableListOf<String>()
+    for ((size, unit) in units) {
+        val value = rest / size
+        if (value > 0) {
+            parts += "$value $unit"
+            rest -= value * size
+        }
+    }
+    return parts.take(2).joinToString(" ")
+}
+
+// Prozentwert mit höchstens zwei Nachkommastellen; null → "–"
+fun Double?.formatPercent(): String {
+    if (this == null) return "–"
+    val nf = NumberFormat.getNumberInstance(Locale.getDefault())
+    nf.maximumFractionDigits = 2
+    return "${nf.format(this)} %"
+}
+
+// Latenz in ms; null → "–"
+fun Double?.formatLatency(): String {
+    if (this == null) return "–"
+    val nf = NumberFormat.getNumberInstance(Locale.getDefault())
+    nf.maximumFractionDigits = if (this < 10) 1 else 0
+    return "${nf.format(this)} ms"
+}
+
+// Dynamischen Text für ErrorDialog (rendert HTML) maskieren; Zeilenumbrüche als <br>
+fun htmlText(s: String): String = android.text.TextUtils.htmlEncode(s).replace("\n", "<br>")

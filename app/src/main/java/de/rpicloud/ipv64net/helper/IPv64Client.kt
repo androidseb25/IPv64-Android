@@ -10,6 +10,7 @@ import de.sr.ipv64.IPv64NetworkException
 import de.sr.ipv64.model.DomainDetail
 import de.sr.ipv64.model.IpFamily
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
 object IPv64Client {
@@ -22,6 +23,9 @@ object IPv64Client {
         val apiKey = PreferencesManager.loadString(ctx, "APIKEY").trim().ifEmpty { null }
         cachedClient?.let { if (cachedKey == apiKey) return it }
         DomainCache.clear()
+        Hc2ChannelCache.clear()
+        Hc2ChannelTypeCache.clear()
+        Hc2CheckListCache.clear()
         return IPv64(apiKey = apiKey).also {
             cachedKey = apiKey
             cachedClient = it
@@ -90,6 +94,21 @@ suspend fun <T> ipv64Request(block: suspend () -> T): T {
     }
 }
 
+// Wie ipv64Request, aber bei 429 mit kurzer Wartezeit (Retry-After, sonst 3 s, höchstens 5 s) genau ein zweiter Versuch.
+// Abbruch (CancellationException) während des Wartens wird weitergereicht.
+suspend fun <T> ipv64Retrying(block: suspend () -> T): T {
+    try {
+        return ipv64Request(block)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: IPv64ApiException) {
+        val waitSeconds = e.retryAfterSeconds ?: 3
+        if (!e.isRateLimited || waitSeconds > 5) throw e
+        delay(waitSeconds.coerceAtLeast(1) * 1000L)
+    }
+    return ipv64Request(block)
+}
+
 enum class IPv64Context { Create, Update, Other }
 
 // Entweder requestType (RequestDialogs) oder title/text (ErrorDialog) wird angezeigt
@@ -121,6 +140,10 @@ fun IPv64Exception.toError(context: IPv64Context = IPv64Context.Other): IPv64Err
         )
 
         status >= 500 -> IPv64Error(RequestTyp.WebsiteRequestFailed)
-        else -> IPv64Error(text = detail ?: problem?.title ?: message.orEmpty())
+        else -> {
+            val text = detail ?: problem?.title ?: message.orEmpty()
+            // Betroffenes Eingabefeld anhängen, damit Validierungsfehler zuordenbar sind
+            IPv64Error(text = field?.let { "$text (field: $it)" } ?: text)
+        }
     }
 }

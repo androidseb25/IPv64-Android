@@ -9,10 +9,12 @@
         <exclude domain="sharedpref" path="SECNTFY_DEVICE_TOKEN.xml" />
         <exclude domain="sharedpref" path="FCM_TOKEN.xml" />
         <exclude domain="sharedpref" path="de.sr.SecNtfy.xml" />
+        <exclude domain="sharedpref" path="HC2_PUSH_SETUP.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="SECNTFY_DEVICE_TOKEN.xml" />
         <exclude domain="sharedpref" path="FCM_TOKEN.xml" />
         <exclude domain="sharedpref" path="de.sr.SecNtfy.xml" />
+        <exclude domain="sharedpref" path="HC2_PUSH_SETUP.xml" />
     </device-transfer>
 </data-extraction-rules>

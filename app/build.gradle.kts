@@ -72,8 +72,6 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.library)
     implementation(libs.core)
-    implementation(libs.logging.interceptor)
-    implementation(libs.okhttp)
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.core)
     implementation(libs.androidx.camera.lifecycle)

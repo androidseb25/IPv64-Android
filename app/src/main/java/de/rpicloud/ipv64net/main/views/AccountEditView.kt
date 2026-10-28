@@ -40,12 +40,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
-import de.rpicloud.ipv64net.helper.NetworkService
 import de.rpicloud.ipv64net.helper.v64domains
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
-import de.rpicloud.ipv64net.models.AddDomainResult
 import de.rpicloud.ipv64net.models.RequestTyp
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs

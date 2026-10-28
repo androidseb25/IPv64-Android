@@ -25,6 +25,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,8 +42,11 @@ import androidx.navigation.compose.rememberNavController
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.BiometricPromptManager
 import de.rpicloud.ipv64net.helper.PreferencesManager
+import de.rpicloud.ipv64net.helper.PushChannelRegistrar
+import de.rpicloud.ipv64net.helper.PushSetupStore
 import de.rpicloud.ipv64net.main.startup.views.LoginView
 import de.rpicloud.ipv64net.main.views.AboutView
+import de.rpicloud.ipv64net.main.views.ChannelSetupView
 import de.rpicloud.ipv64net.main.views.AccountDetailView
 import de.rpicloud.ipv64net.main.views.AccountEditView
 import de.rpicloud.ipv64net.main.views.AccountView
@@ -50,10 +56,10 @@ import de.rpicloud.ipv64net.main.views.DomainNewView
 import de.rpicloud.ipv64net.main.views.DomainView
 import de.rpicloud.ipv64net.main.views.HealthcheckDetailView
 import de.rpicloud.ipv64net.main.views.HealthcheckEditView
-import de.rpicloud.ipv64net.main.views.HealthcheckIntegrationView
 import de.rpicloud.ipv64net.main.views.HealthcheckNewView
 import de.rpicloud.ipv64net.main.views.HealthcheckView
-import de.rpicloud.ipv64net.main.views.IntegrationsView
+import de.rpicloud.ipv64net.main.views.ChannelsView
+import de.rpicloud.ipv64net.main.views.PushSetupView
 import de.rpicloud.ipv64net.main.views.LogView
 import de.rpicloud.ipv64net.main.views.MyIpView
 import de.rpicloud.ipv64net.main.views.SettingsView
@@ -62,6 +68,9 @@ import de.rpicloud.ipv64net.models.Tabs
 import de.rpicloud.ipv64net.models.Tabs.Companion.AddItem
 import de.rpicloud.ipv64net.models.User
 import de.rpicloud.ipv64net.ui.theme.AppTheme
+
+// Routen der unteren Tab-Leiste; nur dort darf die Push-Einrichtung automatisch starten
+private val bottomTabRoutes: Set<String> = Tabs.tabList.map { Tabs.getRoute(it) }.toSet()
 
 class MainActivity : AppCompatActivity() {
 
@@ -79,32 +88,36 @@ class MainActivity : AppCompatActivity() {
             val currentRoute = navBackStackEntry?.destination?.route
 
             AppTheme {
-                // Request POST_NOTIFICATIONS runtime permission on Android 13+ (API 33+)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    val context = LocalContext.current
-                    val permissionLauncher = rememberLauncherForActivityResult(
-                        contract = ActivityResultContracts.RequestPermission()
-                    ) { isGranted ->
-                        println("🔔 Notification permission granted: $isGranted")
-                    }
-                    LaunchedEffect(Unit) {
-                        if (androidx.core.content.ContextCompat.checkSelfPermission(
-                                context,
-                                android.Manifest.permission.POST_NOTIFICATIONS
-                            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-                        ) {
-                            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                        }
-                    }
-                }
-
                 val isBiometric: Boolean = PreferencesManager.loadBool(applicationContext, "LOCKSCREEN_ENABLED")
                 val biometricResult by promptManager.promptResults.collectAsState(initial = null)
                 val enrollLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { println("Activity result $it") }
 
                 if (!isBiometric || biometricResult == BiometricPromptManager.BiometricResult.AuthenticationSuccess) {
+                    // Erstes Einrichten der Push-Benachrichtigungen (einmal pro Account und Gerät), nur auf Tab-Routen.
+                    // PushSetupView ruft markDone() vor popBackStack() auf; zusätzlich höchstens einmal pro Account
+                    // und Activity-Sitzung, damit es keine Navigationsschleife geben kann.
+                    val ctx = LocalContext.current
+                    var pushSetupTriggeredFor by rememberSaveable { mutableStateOf<String?>(null) }
+                    LaunchedEffect(currentRoute) {
+                        val route = currentRoute ?: return@LaunchedEffect
+                        if (route !in bottomTabRoutes) return@LaunchedEffect
+                        if (!PushSetupStore.shouldShow(ctx)) return@LaunchedEffect
+                        // Account-ID zum (evtl. neuen) API-Key ermitteln, damit ein bereits eingerichteter Account
+                        // nicht erneut gefragt wird; einmal pro Key, Fehler werden ignoriert
+                        PushChannelRegistrar.ensureAccountId(ctx)
+                        if (!PushSetupStore.shouldShow(ctx)) return@LaunchedEffect
+                        val account = PushSetupStore.accountHash(ctx) ?: return@LaunchedEffect
+                        if (pushSetupTriggeredFor == account) return@LaunchedEffect
+                        pushSetupTriggeredFor = account
+                        navController.navigate(Tabs.getRoute(Tab.push_setup)) {
+                            launchSingleTop = true
+                        }
+                    }
+
                     Scaffold(bottomBar = {
-                        if (currentRoute != Tabs.Companion.getRoute(Tab.login))
+                        if (currentRoute != Tabs.Companion.getRoute(Tab.login) &&
+                            currentRoute != Tabs.Companion.getRoute(Tab.push_setup)
+                        )
                             TabView(Tabs.tabList, navController)
                     }) { mainPadding ->
                         NavHost(
@@ -126,11 +139,17 @@ class MainActivity : AppCompatActivity() {
                             composable(Tabs.Companion.getRoute(Tab.healthcheck_edit)) {
                                 HealthcheckEditView(navController, mainPadding = mainPadding)
                             }
-                            composable(Tabs.Companion.getRoute(Tab.healthcheck_edit_integrations)) {
-                                HealthcheckIntegrationView(navController, mainPadding = mainPadding)
+                            composable(Tabs.Companion.getRoute(Tab.channels)) {
+                                ChannelsView(navController, mainPadding = mainPadding)
                             }
-                            composable(Tabs.Companion.getRoute(Tab.integrations)) {
-                                IntegrationsView(navController, mainPadding = mainPadding)
+                            composable(Tabs.Companion.getRoute(Tab.channel_new)) {
+                                ChannelSetupView(navController, mainPadding = mainPadding, editMode = false)
+                            }
+                            composable(Tabs.Companion.getRoute(Tab.channel_edit)) {
+                                ChannelSetupView(navController, mainPadding = mainPadding, editMode = true)
+                            }
+                            composable(Tabs.Companion.getRoute(Tab.push_setup)) {
+                                PushSetupView(navController, mainPadding = mainPadding)
                             }
                             composable(Tabs.Companion.getRoute(Tab.settings)) {
                                 SettingsView(navController, mainPadding = mainPadding)

@@ -11,4 +11,6 @@
     <exclude domain="sharedpref" path="FCM_TOKEN.xml" />
     <!-- SecNtfy-Bibliothek: Ntfy-Token und RSA-Schlüsselpaar -->
     <exclude domain="sharedpref" path="de.sr.SecNtfy.xml" />
+    <!-- Push-Einrichtung und Gerätekanal (hc2) dieses Geräts -->
+    <exclude domain="sharedpref" path="HC2_PUSH_SETUP.xml" />
 </full-backup-content>

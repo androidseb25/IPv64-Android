@@ -25,9 +25,11 @@ enum class Tab {
     healthcheck,
     healthcheck_new,
     healthcheck_edit,
-    healthcheck_edit_integrations,
     healthcheck_details,
-    integrations,
+    channels,
+    channel_new,
+    channel_edit,
+    push_setup,
     settings,
     account,
     account_details,
@@ -39,7 +41,7 @@ enum class Tab {
 
 sealed class Tabs {
     companion object {
-        val tabList: List<Tab> = listOf(Tab.domains, Tab.healthcheck, Tab.integrations, Tab.settings)
+        val tabList: List<Tab> = listOf(Tab.domains, Tab.healthcheck, Tab.channels, Tab.settings)
 
         @Composable
         fun RowScope.AddItem(
@@ -86,8 +88,10 @@ sealed class Tabs {
                 Tab.healthcheck -> "healthcheck"
                 Tab.healthcheck_new -> "healthcheck_new"
                 Tab.healthcheck_edit -> "healthcheck_edit"
-                Tab.healthcheck_edit_integrations -> "healthcheck_edit_integrations"
-                Tab.integrations -> "integrations"
+                Tab.channels -> "channels"
+                Tab.channel_new -> "channel_new"
+                Tab.channel_edit -> "channel_edit"
+                Tab.push_setup -> "push_setup"
                 Tab.settings -> "settings"
                 Tab.account -> "account"
                 Tab.account_details -> "account_details"
@@ -106,7 +110,10 @@ sealed class Tabs {
             return when (tab) {
                 Tab.domains -> "Domains"
                 Tab.healthcheck -> "Healthchecks"
-                Tab.integrations -> "Notifications"
+                Tab.channels -> "Channels"
+                Tab.channel_new -> "New channel"
+                Tab.channel_edit -> "Edit channel"
+                Tab.push_setup -> "Push notifications"
                 Tab.my_ip -> "My IP"
                 Tab.logs -> "Logs"
                 Tab.account -> "Account"
@@ -119,7 +126,7 @@ sealed class Tabs {
             return when (tab) {
                 Tab.domains -> R.drawable.domain_24px_fill
                 Tab.healthcheck -> R.drawable.ecg_heart_24px_fill
-                Tab.integrations -> R.drawable.notifications_unread_24px_fill
+                Tab.channels -> R.drawable.notifications_unread_24px_fill
                 else -> R.drawable.settings_24px_fill
             }
         }
@@ -128,7 +135,7 @@ sealed class Tabs {
             return when (tab) {
                 Tab.domains -> R.drawable.domain_24px
                 Tab.healthcheck -> R.drawable.ecg_heart_24px
-                Tab.integrations -> R.drawable.notifications_unread_24px
+                Tab.channels -> R.drawable.notifications_unread_24px
                 else -> R.drawable.settings_24px
             }
         }
