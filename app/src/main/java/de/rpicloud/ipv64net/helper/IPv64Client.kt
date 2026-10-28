@@ -7,6 +7,7 @@ import de.sr.ipv64.IPv64
 import de.sr.ipv64.IPv64ApiException
 import de.sr.ipv64.IPv64Exception
 import de.sr.ipv64.IPv64NetworkException
+import de.sr.ipv64.IPv64SerializationException
 import de.sr.ipv64.model.DomainDetail
 import de.sr.ipv64.model.IpFamily
 import kotlinx.coroutines.CancellationException
@@ -120,8 +121,11 @@ data class IPv64Error(
 
 fun IPv64Exception.toError(context: IPv64Context = IPv64Context.Other): IPv64Error {
     if (this !is IPv64ApiException) {
-        // Netzwerk- oder Serialisierungsfehler wie bisher als Verbindungsfehler behandeln
-        return IPv64Error(requestType = RequestTyp.WebsiteRequestFailed)
+        // Nicht lesbare Antwort mit Ursache anzeigen; echte Netzwerkfehler wie bisher als Verbindungsfehler
+        return if (this is IPv64SerializationException) IPv64Error(
+            title = "Unexpected server response",
+            text = "The app could not read the server response. " + message.orEmpty().take(300)
+        ) else IPv64Error(requestType = RequestTyp.WebsiteRequestFailed)
     }
     val info = "${code.orEmpty()} ${detail.orEmpty()}".lowercase()
     return when {
@@ -139,7 +143,12 @@ fun IPv64Exception.toError(context: IPv64Context = IPv64Context.Other): IPv64Err
             }
         )
 
-        status >= 500 -> IPv64Error(RequestTyp.WebsiteRequestFailed)
+        // Serverfehler mit Text und Status anzeigen statt als Verbindungsfehler
+        status >= 500 -> IPv64Error(
+            title = "Server error",
+            text = (detail ?: problem?.title ?: "The server could not process the request.") +
+                    " (HTTP $status" + (code?.let { ", $it" } ?: "") + ")"
+        )
         else -> {
             val text = detail ?: problem?.title ?: message.orEmpty()
             // Betroffenes Eingabefeld anhängen, damit Validierungsfehler zuordenbar sind
