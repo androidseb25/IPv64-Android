@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -41,19 +42,31 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
-import com.google.gson.Gson
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.helper.DomainCache
+import de.rpicloud.ipv64net.helper.IPv64Client
 import de.rpicloud.ipv64net.helper.NetworkService
+import de.rpicloud.ipv64net.helper.ipv64Request
+import de.rpicloud.ipv64net.helper.toError
 import de.rpicloud.ipv64net.helper.v64domains
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
-import de.rpicloud.ipv64net.models.DomainResult
 import de.rpicloud.ipv64net.models.IPResult
+import de.rpicloud.ipv64net.models.NO_IPV4
+import de.rpicloud.ipv64net.models.NO_IPV6
 import de.rpicloud.ipv64net.models.RequestTyp
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
+import de.rpicloud.ipv64net.models.baseDomain
+import de.rpicloud.ipv64net.models.tintColor
+import de.sr.ipv64.IPv64
+import de.sr.ipv64.IPv64ApiException
+import de.sr.ipv64.IPv64Exception
+import de.sr.ipv64.model.Domain
+import de.sr.ipv64.model.DomainDetail
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -76,79 +89,58 @@ fun DomainView(navController: NavHostController, mainPadding: PaddingValues) {
     var showRequestDialog by remember { mutableStateOf(false) }
     var requestType by remember { mutableStateOf(RequestTyp.UnAuthorized) }
 
-    var domainResult by remember { mutableStateOf(DomainResult.empty) }
+    var domains by remember { mutableStateOf<List<Domain>>(emptyList()) }
+    // Details (Records) pro Domain, werden nach der Liste nachgeladen und färben den Indikator ein
+    val domainDetails = remember { mutableStateMapOf<String, DomainDetail>() }
     var myV4 by remember { mutableStateOf(IPResult.empty) }
     var myV6 by remember { mutableStateOf(IPResult.empty) }
 
+    suspend fun loadDomainDetail(ipv64: IPv64, name: String) {
+        repeat(2) { attempt ->
+            try {
+                val detail = ipv64Request { ipv64.domains.get(name) }
+                DomainCache.put(name, detail)
+                domainDetails[name] = detail
+                return
+            } catch (e: IPv64ApiException) {
+                // Rate-Limit: einmal nach der Wartezeit erneut versuchen, sonst bleibt der Indikator grau
+                if (!e.isRateLimited || attempt == 1) return
+                delay((e.retryAfterSeconds ?: 5) * 1000L)
+            } catch (e: IPv64Exception) {
+                return
+            }
+        }
+    }
+
     fun getDomains() {
         showLoadingDialog = true
-        scope.launch(Dispatchers.IO) {
-            NetworkService(ctx).GetDomains { nwResult ->
+        scope.launch {
+            val ipv64 = IPv64Client.get(ctx)
+            try {
+                val result = ipv64Request { ipv64.domains.list() }.filter { !it.name.isNullOrBlank() }
                 showLoadingDialog = false
-                when (nwResult.status) {
-                    200 -> {
-                        if (nwResult.data == null) {
-                            println(nwResult.message)
-                            errorDialogTitle = "Data not found"
-                            errorDialogText = "There are no data found!"
-                            errorDialogButtonText = R.string.retry
-                            showDialog = true
-                        } else {
-                            (nwResult.data as DomainResult).also { domainResult = it }
-                            println(domainResult)
-                            domainResult.subdomains.forEach { it ->
-                                it.ipv4 = myV4.ip ?: "0.0.0.0"
-                                it.ipv6 = myV6.ip ?: "::"
-                            }
-                            println(domainResult)
-                        }
-                    }
-
-                    400 -> {
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
-
-                    401 -> {
-                        requestType = RequestTyp.UnAuthorized
-                        showRequestDialog = true
-                    }
-
-                    403 -> {
-                        requestType = if ((nwResult.data as String).contains("domain limit reached")) {
-                            RequestTyp.DomainLimitReached
-                        }
-                        else if ((nwResult.data as String).contains("domainname not available"))
-                            RequestTyp.DomainNotAvailable
-                        else
-                            RequestTyp.DomainRulesNotCreated
-
-                        showRequestDialog = true
-                    }
-
-                    429 -> {
-                        requestType = if ((nwResult.data as String).contains("Updateintervall overcommited")) {
-                            RequestTyp.TooManyRequests
-                        } else
-                            RequestTyp.UpdateCoolDown
-                        showRequestDialog = true
-                    }
-
-                    500 -> {
-                        requestType = RequestTyp.WebsiteRequestFailed
-                        showRequestDialog = true
-                    }
-
-                    else -> {
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
+                domainDetails.clear()
+                result.forEach { d ->
+                    DomainCache.get(d.name!!)?.let { domainDetails[d.name!!] = it }
+                }
+                domains = result
+                // Nur fehlende Details nachladen, sequentiell und höchstens eines pro Sekunde (Rate-Limit)
+                result.mapNotNull { it.name }.filter { it !in domainDetails }.forEach { name ->
+                    delay(1000)
+                    loadDomainDetail(ipv64, name)
+                }
+            } catch (e: IPv64Exception) {
+                showLoadingDialog = false
+                println(e.message)
+                val error = e.toError()
+                if (error.requestType != null) {
+                    requestType = error.requestType
+                    showRequestDialog = true
+                } else {
+                    errorDialogTitle = error.title
+                    errorDialogText = error.text
+                    errorDialogButtonText = R.string.retry
+                    showDialog = true
                 }
             }
         }
@@ -281,7 +273,7 @@ fun DomainView(navController: NavHostController, mainPadding: PaddingValues) {
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 String().v64domains().forEach { dom ->
-                    val filtered = domainResult.subdomains.filter { it -> it.baseDomain == dom }
+                    val filtered = domains.filter { it -> it.baseDomain == dom }
                     if (filtered.isNotEmpty()) {
                         stickyHeader {
                             Surface( // nimmt Theme-Hintergrund, hebt Text hervor
@@ -299,15 +291,15 @@ fun DomainView(navController: NavHostController, mainPadding: PaddingValues) {
                         }
                         items(
                             items = filtered,
-                            key = { d -> d.domain_update_hash!! } // stabile Keys
+                            key = { d -> d.name.orEmpty() } // stabile Keys
                         ) { d ->
-                            DomainItemView(d) { selectedDomain ->
-                                println(selectedDomain)
-                                val gson = Gson()
-                                val selectedDAsString = gson.toJson(selectedDomain).toString()
+                            DomainItemView(
+                                d,
+                                domainDetails[d.name].tintColor(myV4.ip ?: NO_IPV4, myV6.ip ?: NO_IPV6)
+                            ) { selectedDomain ->
                                 navController.currentBackStackEntry?.savedStateHandle?.set(
                                     "SELECTED_DOMAIN",
-                                    selectedDAsString
+                                    selectedDomain.name
                                 )
                                 navController.navigate(Tabs.getRoute(Tab.domain_details))
                             }

@@ -20,6 +20,7 @@ dependencyResolutionManagement {
             url = uri("https://jitpack.io")
             content {
                 includeGroup("com.github.SecNtfy")
+                includeGroup("com.github.androidseb25")
             }
         }
     }

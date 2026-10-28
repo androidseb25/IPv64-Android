@@ -83,6 +83,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.secntfy.android)
+    implementation(libs.ipv64)
     implementation(libs.firebase.messaging)
     implementation(libs.androidx.work.runtime.ktx)
     testImplementation(libs.junit)

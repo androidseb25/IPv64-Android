@@ -20,12 +20,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import de.rpicloud.ipv64net.R
-import de.rpicloud.ipv64net.models.Domain
+import de.rpicloud.ipv64net.models.IsWildcard
 import de.rpicloud.ipv64net.ui.theme.AppTheme
+import de.sr.ipv64.model.Domain
 
 @Composable
 fun DomainItemView(
     domain: Domain,
+    tintColor: Color,
     onClick: (selectedDomain: Domain) -> Unit
 ) {
     Card(
@@ -42,7 +44,7 @@ fun DomainItemView(
                 Icon(
                     painter = painterResource(id = R.drawable.circle_24px),
                     contentDescription = "icon",
-                    tint = domain.tintColor,
+                    tint = tintColor,
                     modifier = Modifier.height(14.dp)
                 )
             }
@@ -53,7 +55,7 @@ fun DomainItemView(
                 horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.Center
             ) {
-                domain.fqdn?.let {
+                domain.name?.let {
                     Text(
                         it,
                         style = MaterialTheme.typography.titleLarge,
@@ -62,7 +64,7 @@ fun DomainItemView(
                     )
                 }
                 Text(
-                    "Updates: ${domain.updates}",
+                    "Updates: ${domain.updateCount ?: 0}",
                     style = MaterialTheme.typography.titleSmall
                 )
                 Text(
@@ -78,11 +80,8 @@ fun DomainItemView(
 @Composable
 fun DomainItemViewPreview() {
     AppTheme {
-        val domain = Domain.empty
-        domain.fqdn = "seb.home64.de"
-        domain.updates = 5
-        domain.wildcard = 1
-        DomainItemView(domain) {
+        val domain = Domain(name = "seb.home64.de", updateCount = 5, wildcard = true)
+        DomainItemView(domain, Color.Green) {
             println(it)
         }
     }

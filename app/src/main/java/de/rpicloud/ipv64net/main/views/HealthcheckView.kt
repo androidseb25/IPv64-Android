@@ -54,7 +54,6 @@ import de.rpicloud.ipv64net.helper.v64domains
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
-import de.rpicloud.ipv64net.models.DomainResult
 import de.rpicloud.ipv64net.models.HealthCheckResult
 import de.rpicloud.ipv64net.models.HealthEvents
 import de.rpicloud.ipv64net.models.RequestTyp

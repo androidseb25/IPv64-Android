@@ -11,6 +11,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.ln
 import kotlin.math.pow
+import kotlin.time.Instant
 
 fun Context.findActivity(): ComponentActivity? = when (this) {
     is ComponentActivity -> this
@@ -27,6 +28,8 @@ fun Date.formatGermanTime(): String {
     val format = SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.GERMANY)
     return format.format(this)
 }
+
+fun Instant.formatGermanTime(): String = Date(toEpochMilliseconds()).formatGermanTime()
 
 fun Date.formatDbTime(): String {
     val format = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.GERMANY)

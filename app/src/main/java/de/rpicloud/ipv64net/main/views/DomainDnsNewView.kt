@@ -43,21 +43,21 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
-import de.rpicloud.ipv64net.helper.NetworkService
+import de.rpicloud.ipv64net.helper.DomainCache
+import de.rpicloud.ipv64net.helper.IPv64Client
+import de.rpicloud.ipv64net.helper.ipv64Request
+import de.rpicloud.ipv64net.helper.toError
 import de.rpicloud.ipv64net.helper.v64DnsRecordTypes
 import de.rpicloud.ipv64net.helper.v64domains
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
-import de.rpicloud.ipv64net.models.AddDomainResult
-import de.rpicloud.ipv64net.models.Domain
-import de.rpicloud.ipv64net.models.DomainResult
-import de.rpicloud.ipv64net.models.IPResult
 import de.rpicloud.ipv64net.models.Integration
 import de.rpicloud.ipv64net.models.RequestTyp
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
-import kotlinx.coroutines.Dispatchers
+import de.sr.ipv64.IPv64Exception
+import de.sr.ipv64.model.RecordType
 import kotlinx.coroutines.launch
 
 @SuppressLint("UnrememberedGetBackStackEntry")
@@ -89,8 +89,6 @@ fun DomainDnsNewView(navController: NavHostController, mainPadding: PaddingValue
     }
     val fqdn by domainDetailBackStackEntry.savedStateHandle.getStateFlow<String>("ADD_FQDN", "").collectAsState()
 
-    var newDomainResult by remember { mutableStateOf(AddDomainResult.empty) }
-
     fun onSave() {
         keyboardController?.hide()
         if (dnsPrefix.isEmpty()) {
@@ -109,72 +107,31 @@ fun DomainDnsNewView(navController: NavHostController, mainPadding: PaddingValue
         }
 
         showLoadingDialog = true
-        scope.launch(Dispatchers.IO) {
-            NetworkService(ctx).AddDnsRecord(fqdn, dnsPrefix, dnsRecordType, dnsValue) { nwResult ->
+        scope.launch {
+            try {
+                ipv64Request {
+                    IPv64Client.get(ctx).records.create(
+                        domain = fqdn,
+                        type = RecordType.valueOf(dnsRecordType),
+                        content = dnsValue,
+                        prefix = dnsPrefix
+                    )
+                }
+                DomainCache.invalidate(fqdn)
                 showLoadingDialog = false
-                when (nwResult.status) {
-                    200 -> {
-                        if (nwResult.data == null) {
-                            println(nwResult.message)
-                            errorDialogTitle = "Data not found"
-                            errorDialogText = "There are no data found!"
-                            errorDialogButtonText = R.string.retry
-                            showDialog = true
-                        } else {
-                            (nwResult.data as AddDomainResult).also { newDomainResult = it }
-                            println(newDomainResult)
-                            navController.popBackStack(
-                                route = Tabs.getRoute(Tab.domains), // die Parent-Route
-                                inclusive = false               // Parent im Stack behalten
-                            )
-                        }
-                    }
-
-                    400 -> {
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
-
-                    401 -> {
-                        requestType = RequestTyp.UnAuthorized
-                        showRequestDialog = true
-                    }
-
-                    403 -> {
-                        requestType = if ((nwResult.data as String).contains("domain limit reached")) {
-                            RequestTyp.DomainLimitReached
-                        }
-                        else if ((nwResult.data as String).contains("domainname not available"))
-                            RequestTyp.DomainNotAvailable
-                        else
-                            RequestTyp.DomainRulesNotCreated
-
-                        showRequestDialog = true
-                    }
-
-                    429 -> {
-                        requestType = if ((nwResult.data as String).contains("Updateintervall overcommited")) {
-                            RequestTyp.TooManyRequests
-                        } else
-                            RequestTyp.UpdateCoolDown
-                        showRequestDialog = true
-                    }
-
-                    500 -> {
-                        requestType = RequestTyp.WebsiteRequestFailed
-                        showRequestDialog = true
-                    }
-
-                    else -> {
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
+                navController.popBackStack() // zurück zur Domain-Detailansicht, die neu lädt
+            } catch (e: IPv64Exception) {
+                showLoadingDialog = false
+                println(e.message)
+                val error = e.toError()
+                if (error.requestType != null) {
+                    requestType = error.requestType
+                    showRequestDialog = true
+                } else {
+                    errorDialogTitle = error.title
+                    errorDialogText = error.text
+                    errorDialogButtonText = R.string.retry
+                    showDialog = true
                 }
             }
         }

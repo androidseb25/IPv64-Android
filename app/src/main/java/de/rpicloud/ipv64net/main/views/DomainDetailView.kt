@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -56,22 +57,36 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
-import com.google.gson.Gson
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.helper.DomainCache
+import de.rpicloud.ipv64net.helper.IPv64Client
+import de.rpicloud.ipv64net.helper.IPv64Context
+import de.rpicloud.ipv64net.helper.ipv64Request
 import de.rpicloud.ipv64net.helper.NetworkService
-import de.rpicloud.ipv64net.helper.parseDbDateTime
+import de.rpicloud.ipv64net.helper.formatGermanTime
+import de.rpicloud.ipv64net.helper.toError
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
-import de.rpicloud.ipv64net.models.AddDomainResult
-import de.rpicloud.ipv64net.models.Domain
+import de.rpicloud.ipv64net.models.NO_IPV4
+import de.rpicloud.ipv64net.models.NO_IPV6
 import de.rpicloud.ipv64net.models.IPResult
-import de.rpicloud.ipv64net.models.IPUpdateResult
 import de.rpicloud.ipv64net.models.RequestTyp
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
+import de.rpicloud.ipv64net.models.IsWildcard
+import de.rpicloud.ipv64net.models.isSameTypeAAAAAddress
+import de.rpicloud.ipv64net.models.knownIp
+import de.rpicloud.ipv64net.models.isSameTypeAAddress
+import de.sr.ipv64.IPv64ApiException
+import de.sr.ipv64.IPv64Exception
+import de.sr.ipv64.model.DomainDetail
+import de.sr.ipv64.model.DynDnsOutcome
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -100,14 +115,14 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
     var deleteDialogTitle by remember { mutableStateOf("") }
     var deleteDialogText by remember { mutableStateOf("") }
     var deleteDialogButtonText by remember { mutableIntStateOf(R.string.delete) }
-    var selectedDomain by remember { mutableStateOf(Domain.empty) }
-    var selectedRecordId by remember { mutableIntStateOf(0) }
+    var selectedDomain by remember { mutableStateOf(DomainDetail()) }
+    var selectedRecordId by remember { mutableLongStateOf(0L) }
 
     var showRequestDialog by remember { mutableStateOf(false) }
     var requestType by remember { mutableStateOf(RequestTyp.UnAuthorized) }
 
-    var addDomainResult by remember { mutableStateOf(AddDomainResult.empty) }
-    var ipResult by remember { mutableStateOf(IPUpdateResult.empty) }
+    var myV4 by remember { mutableStateOf(IPResult.empty) }
+    var myV6 by remember { mutableStateOf(IPResult.empty) }
     val domainRoute = Tabs.getRoute(Tab.domains)
     val domainBackStackEntry = remember(domainRoute) {
         navController.getBackStackEntry(domainRoute)
@@ -116,157 +131,114 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
     val domain by domainBackStackEntry.savedStateHandle.getStateFlow<String>("SELECTED_DOMAIN", "").collectAsStateWithLifecycle()
 
     fun GetDomainUpdateUrl(): String {
-        return "https://ipv64.net/nic/update?key=" + selectedDomain.domain_update_hash
+        return "https://ipv64.net/nic/update?key=" + selectedDomain.updateToken
     }
 
-    fun DeleteDomain() {
-        showLoadingDialog = true
-        scope.launch(Dispatchers.IO) {
-            val dom = selectedDomain.fqdn ?: ""
-            if (dom.isEmpty()) {
-                errorDialogTitle = "Data not found"
-                errorDialogText = "FQDN not found!"
-                errorDialogButtonText = R.string.retry
-                showDialog = true
-                return@launch
+    var domainJob by remember { mutableStateOf<Job?>(null) }
+
+    fun GetDomain() {
+        // Eine neue Anfrage ersetzt eine noch laufende
+        domainJob?.cancel()
+        // Mit Cache-Treffer wird ohne Spinner im Hintergrund aktualisiert
+        showLoadingDialog = DomainCache.get(domain) == null
+        domainJob = scope.launch {
+            try {
+                val ipv64 = IPv64Client.get(ctx)
+                val result = try {
+                    ipv64Request { ipv64.domains.get(domain) }
+                } catch (e: IPv64ApiException) {
+                    // Rate-Limit: einmal nach der Wartezeit erneut versuchen
+                    if (!e.isRateLimited) throw e
+                    delay((e.retryAfterSeconds ?: 5) * 1000L)
+                    ipv64Request { ipv64.domains.get(domain) }
+                }
+                DomainCache.put(domain, result)
+                selectedDomain = result
+            } catch (e: IPv64Exception) {
+                if (!isActive) return@launch
+                println(e.message)
+                val error = e.toError()
+                if (error.requestType != null) {
+                    requestType = error.requestType
+                    showRequestDialog = true
+                } else {
+                    errorDialogTitle = error.title
+                    errorDialogText = error.text
+                    errorDialogButtonText = R.string.retry
+                    showDialog = true
+                }
+            } finally {
+                if (isActive) showLoadingDialog = false
             }
+        }
+    }
 
-            NetworkService(ctx).DeleteDomain(dom) { nwResult ->
-                showLoadingDialog = false
-                when (nwResult.status) {
-                    200 -> {
-                        if (nwResult.data == null) {
-                            println(nwResult.message)
-                            errorDialogTitle = "Data not found"
-                            errorDialogText = "There are no data found!"
-                            errorDialogButtonText = R.string.retry
-                            showDialog = true
-                        } else {
-                            (nwResult.data as AddDomainResult).also { addDomainResult = it }
-                            println(addDomainResult)
-                            navController.popBackStack()
-                        }
-                    }
-
-                    400 -> {
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
-
-                    401 -> {
-                        requestType = RequestTyp.UnAuthorized
-                        showRequestDialog = true
-                    }
-
-                    403 -> {
-                        requestType = if ((nwResult.data as String).contains("domain limit reached")) {
-                            RequestTyp.DomainLimitReached
-                        }
-                        else if ((nwResult.data as String).contains("domainname not available"))
-                            RequestTyp.DomainNotAvailable
-                        else
-                            RequestTyp.DomainRulesNotCreated
-
-                        showRequestDialog = true
-                    }
-
-                    429 -> {
-                        requestType = if ((nwResult.data as String).contains("Updateintervall overcommited")) {
-                            RequestTyp.TooManyRequests
-                        } else
-                            RequestTyp.UpdateCoolDown
-                        showRequestDialog = true
-                    }
-
-                    500 -> {
-                        requestType = RequestTyp.WebsiteRequestFailed
-                        showRequestDialog = true
-                    }
-
-                    else -> {
-                        if (nwResult.data != null) {
-                            (nwResult.data as AddDomainResult).also { addDomainResult = it }
-                            println(nwResult.message)
-                        }
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogTitle = "Loading error"
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
+    fun GetMyIPs() {
+        // Die aktuellen IPs werden nur für den Vergleich mit den Records benötigt, Fehler sind daher unkritisch
+        scope.launch(Dispatchers.IO) {
+            NetworkService(ctx).GetMyIP(forV4 = true) { v4Result ->
+                myV4 = (v4Result.data as? IPResult) ?: IPResult(ip = NO_IPV4)
+                scope.launch(Dispatchers.IO) {
+                    NetworkService(ctx).GetMyIP(forV4 = false) { v6Result ->
+                        myV6 = (v6Result.data as? IPResult) ?: IPResult(ip = NO_IPV6)
                     }
                 }
             }
         }
     }
 
-    fun DeleteDNSRecord(recordId: Int) {
+    fun DeleteDomain() {
+        if (domain.isEmpty()) {
+            errorDialogTitle = "Data not found"
+            errorDialogText = "FQDN not found!"
+            errorDialogButtonText = R.string.retry
+            showDialog = true
+            return
+        }
         showLoadingDialog = true
-        scope.launch(Dispatchers.IO) {
-            NetworkService(ctx).DeleteDNSRecord(recordId) { nwResult ->
+        scope.launch {
+            try {
+                ipv64Request { IPv64Client.get(ctx).domains.delete(domain) }
+                DomainCache.invalidate(domain)
                 showLoadingDialog = false
-                when (nwResult.status) {
-                    200 -> {
-                        if (nwResult.data == null) {
-                            println(nwResult.message)
-                            errorDialogTitle = "Data not found"
-                            errorDialogText = "There are no data found!"
-                            errorDialogButtonText = R.string.retry
-                            showDialog = true
-                        } else {
-                            (nwResult.data as AddDomainResult).also { addDomainResult = it }
-                            println(addDomainResult)
-                            navController.popBackStack()
-                        }
-                    }
+                navController.popBackStack()
+            } catch (e: IPv64Exception) {
+                showLoadingDialog = false
+                println(e.message)
+                val error = e.toError()
+                if (error.requestType != null) {
+                    requestType = error.requestType
+                    showRequestDialog = true
+                } else {
+                    errorDialogTitle = error.title
+                    errorDialogText = error.text
+                    errorDialogButtonText = R.string.retry
+                    showDialog = true
+                }
+            }
+        }
+    }
 
-                    400 -> {
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
-
-                    401 -> {
-                        requestType = RequestTyp.UnAuthorized
-                        showRequestDialog = true
-                    }
-
-                    403 -> {
-                        requestType = if ((nwResult.data as String).contains("domain limit reached")) {
-                            RequestTyp.DomainLimitReached
-                        }
-                        else if ((nwResult.data as String).contains("domainname not available"))
-                            RequestTyp.DomainNotAvailable
-                        else
-                            RequestTyp.DomainRulesNotCreated
-
-                        showRequestDialog = true
-                    }
-
-                    429 -> {
-                        requestType = if ((nwResult.data as String).contains("Updateintervall overcommited")) {
-                            RequestTyp.TooManyRequests
-                        } else
-                            RequestTyp.UpdateCoolDown
-                        showRequestDialog = true
-                    }
-
-                    500 -> {
-                        requestType = RequestTyp.WebsiteRequestFailed
-                        showRequestDialog = true
-                    }
-
-                    else -> {
-                        (nwResult.data as AddDomainResult).also { addDomainResult = it }
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
+    fun DeleteDNSRecord(recordId: Long) {
+        showLoadingDialog = true
+        scope.launch {
+            try {
+                ipv64Request { IPv64Client.get(ctx).records.delete(recordId.toString()) }
+                DomainCache.invalidate(domain)
+                showLoadingDialog = false
+                GetDomain()
+            } catch (e: IPv64Exception) {
+                showLoadingDialog = false
+                println(e.message)
+                val error = e.toError()
+                if (error.requestType != null) {
+                    requestType = error.requestType
+                    showRequestDialog = true
+                } else {
+                    errorDialogTitle = error.title
+                    errorDialogText = error.text
+                    errorDialogButtonText = R.string.retry
+                    showDialog = true
                 }
             }
         }
@@ -274,70 +246,42 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
 
     fun UpdateDNSRecord() {
         showLoadingDialog = true
-        scope.launch(Dispatchers.IO) {
-            NetworkService(ctx).UpdateDNSRecord(GetDomainUpdateUrl()) { nwResult ->
+        scope.launch {
+            try {
+                // Nur bekannte IPs explizit senden, sonst verwendet die API die Absenderadresse
+                val result = ipv64Request {
+                    IPv64Client.get(ctx).dynDns.update(
+                        domain,
+                        ipv4 = knownIp(myV4.ip),
+                        ipv6 = knownIp(myV6.ip)
+                    )
+                }
+                DomainCache.invalidate(domain)
                 showLoadingDialog = false
-                when (nwResult.status) {
-                    200 -> {
-                        if (nwResult.data == null) {
-                            println(nwResult.message)
-                            errorDialogTitle = "Data not found"
-                            errorDialogText = "There are no data found!"
-                            errorDialogButtonText = R.string.retry
-                            showDialog = true
-                        } else {
-                            (nwResult.data as IPUpdateResult).also { ipResult = it }
-                            println(ipResult)
-                            navController.popBackStack()
-                        }
-                    }
-
-                    400 -> {
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
-
-                    401 -> {
-                        requestType = RequestTyp.UnAuthorized
-                        showRequestDialog = true
-                    }
-
-                    403 -> {
-                        requestType = if ((nwResult.data as String).contains("domain limit reached")) {
-                            RequestTyp.DomainLimitReached
-                        }
-                        else if ((nwResult.data as String).contains("domainname not available"))
-                            RequestTyp.DomainNotAvailable
-                        else
-                            RequestTyp.DomainRulesNotCreated
-
-                        showRequestDialog = true
-                    }
-
-                    429 -> {
-                        requestType = if ((nwResult.data as String).contains("Updateintervall overcommited")) {
-                            RequestTyp.TooManyRequests
-                        } else
-                            RequestTyp.UpdateCoolDown
-                        showRequestDialog = true
-                    }
-
-                    500 -> {
-                        requestType = RequestTyp.WebsiteRequestFailed
-                        showRequestDialog = true
-                    }
-
-                    else -> {
-                        (nwResult.data as IPUpdateResult).also { ipResult = it }
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
+                val failed = result.results.filter {
+                    it.result == DynDnsOutcome.INVALID_IP || it.result == DynDnsOutcome.CNAME_CONFLICT ||
+                            it.result == DynDnsOutcome.CDN_MANAGED
+                }
+                if (failed.isEmpty()) {
+                    navController.popBackStack()
+                } else {
+                    errorDialogTitle = "Update error"
+                    errorDialogText = failed.joinToString("\n") { "${it.type ?: ""} ${it.ip ?: ""}: ${it.result?.value}" }
+                    errorDialogButtonText = R.string.retry
+                    showDialog = true
+                }
+            } catch (e: IPv64Exception) {
+                showLoadingDialog = false
+                println(e.message)
+                val error = e.toError(IPv64Context.Update)
+                if (error.requestType != null) {
+                    requestType = error.requestType
+                    showRequestDialog = true
+                } else {
+                    errorDialogTitle = error.title
+                    errorDialogText = error.text
+                    errorDialogButtonText = R.string.retry
+                    showDialog = true
                 }
             }
         }
@@ -365,7 +309,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                     )
                 }
             }, title = {
-                selectedDomain.fqdn?.let { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                Text(domain, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }, modifier = Modifier.statusBarsPadding()
             )
         },
@@ -376,7 +320,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                 exit = fadeOut() + scaleOut()
             ) {
                 FloatingActionButton(onClick = {
-                    navController.currentBackStackEntry?.savedStateHandle?.set("ADD_FQDN", selectedDomain.fqdn)
+                    navController.currentBackStackEntry?.savedStateHandle?.set("ADD_FQDN", domain)
                     navController.navigate(Tabs.getRoute(Tab.domain_new_dns))
                 }) {
                     Icon(
@@ -404,7 +348,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                if ((!selectedDomain.isSameTypeAAddress && selectedDomain.ipv4 != "0.0.0.0") || (!selectedDomain.isSameTypeAAAAAddress && selectedDomain.ipv6 != "::")) {
+                if (selectedDomain.name != null && ((!selectedDomain.isSameTypeAAddress(myV4.ip ?: NO_IPV4) && myV4.ip != NO_IPV4) || (!selectedDomain.isSameTypeAAAAAddress(myV6.ip ?: NO_IPV6) && myV6.ip != NO_IPV6))) {
                     stickyHeader {
                         Surface( // nimmt Theme-Hintergrund, hebt Text hervor
                             tonalElevation = 2.dp
@@ -450,7 +394,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                                             ),
                                         )
                                     ) {
-                                        if (!selectedDomain.isSameTypeAAddress && selectedDomain.ipv4 != "0.0.0.0") {
+                                        if (!selectedDomain.isSameTypeAAddress(myV4.ip ?: NO_IPV4) && myV4.ip != NO_IPV4) {
                                             Text("Set A-Record to current IP?")
                                         } else {
                                             Text("Set AAAA-Record to current IP?")
@@ -497,7 +441,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                                     "Updates:", fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    "${selectedDomain.updates}",
+                                    "${selectedDomain.updateCount ?: 0}",
                                     style = MaterialTheme.typography.titleSmall,
                                     textAlign = TextAlign.End,
                                     modifier = Modifier.fillMaxWidth(),
@@ -510,6 +454,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                                     .padding(top = 32.dp)
                             ) {
                                 Button(
+                                    enabled = selectedDomain.updateToken != null,
                                     onClick = {
                                         haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                                         val clipboard =
@@ -540,12 +485,12 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                         }
                     }
                 }
-                selectedDomain.records?.forEach { recordInfos ->
+                selectedDomain.records.forEach { recordInfos ->
                     stickyHeader {
                         Surface( // nimmt Theme-Hintergrund, hebt Text hervor
                             tonalElevation = 2.dp
                         ) {
-                            recordInfos.type?.let { text ->
+                            recordInfos.type?.value?.let { text ->
                                 Text(
                                     text = text,
                                     style = MaterialTheme.typography.titleMedium,
@@ -566,7 +511,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                                     Text(
                                         "Präfix:", fontWeight = FontWeight.Bold
                                     )
-                                    recordInfos.praefix?.let { text ->
+                                    recordInfos.prefix?.let { text ->
                                         Text(
                                             text,
                                             style = MaterialTheme.typography.titleSmall,
@@ -593,7 +538,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                                         "Typ:", fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        "${recordInfos.type}",
+                                        "${recordInfos.type?.value}",
                                         style = MaterialTheme.typography.titleSmall,
                                         textAlign = TextAlign.End,
                                         modifier = Modifier.fillMaxWidth(),
@@ -617,7 +562,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                                         "last update:", fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        recordInfos.last_update?.parseDbDateTime()
+                                        recordInfos.updatedAt?.formatGermanTime()
                                             ?: "01.01.0001 00:00:00",
                                         style = MaterialTheme.typography.titleSmall,
                                         textAlign = TextAlign.End,
@@ -632,7 +577,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                                 ) {
                                     Button(
                                         onClick = {
-                                            selectedRecordId = recordInfos.record_id ?: 0
+                                            selectedRecordId = recordInfos.id ?: 0L
                                             deleteDialogText =
                                                 "Do you really want to delete the DNS Record?"
                                             deleteDialogTitle = "Delete DNS Record"
@@ -664,8 +609,9 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
     }
 
     LaunchedEffect(Unit) {
-        val gson = Gson()
-        selectedDomain = gson.fromJson(domain, Domain::class.java)
+        DomainCache.get(domain)?.let { selectedDomain = it }
+        GetDomain()
+        GetMyIPs()
     }
 
     // Sichtbarkeit abhängig von Scrollrichtung steuern
@@ -717,7 +663,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
         )
     }
 
-    if (showDeleteDNSDialog && selectedRecordId != 0) {
+    if (showDeleteDNSDialog && selectedRecordId != 0L) {
         ErrorDialog(
             onDismissRequest = { showDeleteDNSDialog = false },
             onConfirmation = { showDeleteDNSDialog = false; DeleteDNSRecord(selectedRecordId) },
