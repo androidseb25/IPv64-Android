@@ -8,6 +8,9 @@ import de.sr.ipv64.IPv64ApiException
 import de.sr.ipv64.IPv64Exception
 import de.sr.ipv64.IPv64NetworkException
 import de.sr.ipv64.model.DomainDetail
+import de.sr.ipv64.model.IpFamily
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 
 object IPv64Client {
     private var cachedKey: String? = null
@@ -23,6 +26,25 @@ object IPv64Client {
             cachedKey = apiKey
             cachedClient = it
         }
+    }
+}
+
+// Öffentliche Clients ohne API-Key, jeweils nur über IPv4 bzw. IPv6 erreichbar (A- bzw. AAAA-Record)
+private val ipv4Client by lazy { IPv64(baseUrl = "https://ipv4.ipv64.net/api/v2") }
+private val ipv6Client by lazy { IPv64(baseUrl = "https://ipv6.ipv64.net/api/v2") }
+
+// Eigene öffentliche IP der gewünschten Familie; null, wenn sie nicht ermittelt werden kann (z. B. kein IPv6)
+// Das Timeout verhindert lange Wartezeiten, wenn die Familie nicht erreichbar ist (DNS-/Verbindungs-Timeouts)
+suspend fun myIp(family: IpFamily): String? {
+    val client = if (family == IpFamily.IPV6) ipv6Client else ipv4Client
+    return try {
+        withTimeoutOrNull(5_000) { ipv64Request { client.meta.ip() } }
+            ?.takeIf { it.family == null || it.family == family }
+            ?.ip?.trim()?.takeIf { it.isNotEmpty() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: IPv64Exception) {
+        null
     }
 }
 

@@ -17,18 +17,42 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import de.rpicloud.ipv64net.helper.parseDbDate
-import de.rpicloud.ipv64net.models.Integration
+import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.helper.formatGermanTime
 import de.rpicloud.ipv64net.ui.theme.AppTheme
+import de.sr.ipv64.model.Integration
+import de.sr.ipv64.model.IntegrationType
+
+// Icon je Integrationstyp; "mobil" aus API v1 heißt in API v2 "app"
+val IntegrationType?.icon: Int
+    get() = when (this) {
+        IntegrationType.WEBHOOK -> R.drawable.webhook_24px
+        IntegrationType.DISCORD -> R.drawable.discord_24px
+        IntegrationType.NTFY -> R.drawable.ntfy_24px
+        IntegrationType.PUSHOVER -> R.drawable.pushover_24px
+        IntegrationType.TELEGRAM -> R.drawable.telegram_24px
+        IntegrationType.GOTIFY -> R.drawable.gotify_24px
+        IntegrationType.EMAIL, IntegrationType.ACCOUNT_EMAIL -> R.drawable.alternate_email_24px
+        IntegrationType.SMS -> R.drawable.sms_24px
+        IntegrationType.APP -> R.drawable.mobile_24px
+        null -> R.drawable.indeterminate_question_box_24px
+    }
+
+// Anzeigename; die Account-E-Mail (ID 0) hat ggf. keinen eigenen Namen
+val Integration.displayName: String
+    get() = name?.takeIf { it.isNotBlank() } ?: when (type) {
+        IntegrationType.ACCOUNT_EMAIL -> "Account e-mail"
+        IntegrationType.APP -> "IPv64 App"
+        else -> type?.value.orEmpty()
+    }
 
 @Composable
 fun IntegrationItemView(
     integration: Integration,
-    onClick: (selectedIntegation: Integration) -> Unit
+    isThisDevice: Boolean = false
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = { onClick(integration) }
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row {
             Column(
@@ -38,8 +62,8 @@ fun IntegrationItemView(
                 verticalArrangement = Arrangement.Center
             ) {
                 Icon(
-                    painter = painterResource(id = integration.icon),
-                    contentDescription = "icon",
+                    painter = painterResource(id = integration.type.icon),
+                    contentDescription = integration.type?.value ?: "icon",
                     modifier = Modifier.height(28.dp)
                 )
             }
@@ -50,19 +74,24 @@ fun IntegrationItemView(
                 horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.Center
             ) {
-                integration.integration_name?.let {
+                Text(
+                    integration.displayName,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                if (isThisDevice) {
                     Text(
-                        it,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        "This device",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
                 Text(
-                    "added: ${integration.add_time?.parseDbDate()}",
+                    "added: ${integration.createdAt?.formatGermanTime() ?: "–"}",
                     style = MaterialTheme.typography.titleSmall
                 )
                 Text(
-                    "last use: ${integration.last_used?.parseDbDate()}",
+                    "last use: ${integration.lastUsedAt?.formatGermanTime() ?: "never"}",
                     style = MaterialTheme.typography.titleSmall
                 )
             }
@@ -74,11 +103,8 @@ fun IntegrationItemView(
 @Composable
 fun IntegrationItemViewPreview() {
     AppTheme {
-        val integr = Integration.empty
-        integr.integration = "webhook"
-        integr.integration_name = "Webhook"
-        IntegrationItemView(integr) {
-            println(it)
-        }
+        IntegrationItemView(
+            Integration(id = 1, type = IntegrationType.WEBHOOK, name = "Webhook")
+        )
     }
 }

@@ -46,7 +46,6 @@ import de.rpicloud.ipv64net.helper.NetworkService
 import de.rpicloud.ipv64net.helper.parseDbDateTime
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
-import de.rpicloud.ipv64net.models.Logs
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import kotlinx.coroutines.Dispatchers

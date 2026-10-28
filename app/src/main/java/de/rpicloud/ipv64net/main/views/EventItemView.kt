@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import de.rpicloud.ipv64net.helper.parseDbDateTime
 import de.rpicloud.ipv64net.models.HealthEvents
-import de.rpicloud.ipv64net.models.MyLogs
 import de.rpicloud.ipv64net.ui.theme.AppTheme
 
 @Composable

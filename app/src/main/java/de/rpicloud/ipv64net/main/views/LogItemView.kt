@@ -14,13 +14,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import de.rpicloud.ipv64net.helper.parseDbDateTime
-import de.rpicloud.ipv64net.models.MyLogs
+import de.rpicloud.ipv64net.helper.formatGermanTime
 import de.rpicloud.ipv64net.ui.theme.AppTheme
+import de.sr.ipv64.model.LogEntry
+import kotlin.time.Instant
 
 @Composable
 fun LogItemView(
-    log: MyLogs
+    log: LogEntry
 ) {
     Card(
         modifier = Modifier.fillMaxWidth()
@@ -33,17 +34,17 @@ fun LogItemView(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                log.header ?: "",
+                log.title ?: "",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                log.content ?: "",
+                log.message ?: "",
                 style = MaterialTheme.typography.titleSmall
             )
             log.time?.let {
                 Text(
-                    it.parseDbDateTime(),
+                    it.formatGermanTime(),
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(top = 5.dp),
                     color = Color.Gray
@@ -58,11 +59,12 @@ fun LogItemView(
 @Composable
 fun LogItemViewPreview() {
     AppTheme {
-        val log = MyLogs.empty
-        log.content = "Get all domains from this account."
-        log.header = "API: Get Domains"
-        log.time = "2025-10-02 10:44:05"
-        log.subdomain = ""
+        val log = LogEntry(
+            id = 1,
+            title = "API: Get Domains",
+            message = "Get all domains from this account.",
+            time = Instant.parse("2025-10-02T10:44:05Z")
+        )
         LogItemView(log)
     }
 }

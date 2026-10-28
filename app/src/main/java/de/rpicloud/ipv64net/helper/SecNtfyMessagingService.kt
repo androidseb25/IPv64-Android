@@ -82,8 +82,8 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
 
                 val secntfy = SecNtfy.getInstance()
                 if (apiUrl.isNotEmpty() && appKey.isNotEmpty()) {
-                    secntfy.initialize(apiUrl = apiUrl, ctx = applicationContext)
-                    secntfy.configure(appKey)
+                    // Gemeinsam mit der Registrierung serialisiert und nur einmal pro Prozess initialisiert
+                    SecNtfyHelper.ensureConfigured(applicationContext)
                 }
 
                 val decryptedTitle = try {

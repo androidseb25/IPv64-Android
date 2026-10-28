@@ -18,13 +18,12 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import de.rpicloud.ipv64net.models.IPResult
 
 @Composable
 fun MyIpItemView(
     ctx: Context,
     haptics: HapticFeedback,
-    ip: IPResult
+    ip: String
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -33,7 +32,7 @@ fun MyIpItemView(
             val clipboard =
                 ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip =
-                ClipData.newPlainText("IP", ip.ip)
+                ClipData.newPlainText("IP", ip)
             clipboard.setPrimaryClip(clip)
         }
     ) {
@@ -44,26 +43,22 @@ fun MyIpItemView(
             horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.Center
         ) {
-            ip.ip?.let {
-                if (it.contains(other = ":")) {
-                    Text(
-                        "IPv6:",
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                } else {
-                    Text(
-                        "IPv4:",
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                }
-            }
-            ip.ip?.let {
+            if (ip.contains(other = ":")) {
                 Text(
-                    it,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                    "IPv6:",
+                    style = MaterialTheme.typography.titleSmall
+                )
+            } else {
+                Text(
+                    "IPv4:",
+                    style = MaterialTheme.typography.titleSmall
                 )
             }
+            Text(
+                ip,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

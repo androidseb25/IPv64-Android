@@ -63,7 +63,7 @@ import de.rpicloud.ipv64net.helper.DomainCache
 import de.rpicloud.ipv64net.helper.IPv64Client
 import de.rpicloud.ipv64net.helper.IPv64Context
 import de.rpicloud.ipv64net.helper.ipv64Request
-import de.rpicloud.ipv64net.helper.NetworkService
+import de.rpicloud.ipv64net.helper.myIp
 import de.rpicloud.ipv64net.helper.formatGermanTime
 import de.rpicloud.ipv64net.helper.toError
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
@@ -71,19 +71,18 @@ import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
 import de.rpicloud.ipv64net.models.NO_IPV4
 import de.rpicloud.ipv64net.models.NO_IPV6
-import de.rpicloud.ipv64net.models.IPResult
 import de.rpicloud.ipv64net.models.RequestTyp
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.rpicloud.ipv64net.models.IsWildcard
 import de.rpicloud.ipv64net.models.isSameTypeAAAAAddress
 import de.rpicloud.ipv64net.models.knownIp
+import de.sr.ipv64.model.IpFamily
 import de.rpicloud.ipv64net.models.isSameTypeAAddress
 import de.sr.ipv64.IPv64ApiException
 import de.sr.ipv64.IPv64Exception
 import de.sr.ipv64.model.DomainDetail
 import de.sr.ipv64.model.DynDnsOutcome
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -121,8 +120,8 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
     var showRequestDialog by remember { mutableStateOf(false) }
     var requestType by remember { mutableStateOf(RequestTyp.UnAuthorized) }
 
-    var myV4 by remember { mutableStateOf(IPResult.empty) }
-    var myV6 by remember { mutableStateOf(IPResult.empty) }
+    var myV4 by remember { mutableStateOf(NO_IPV4) }
+    var myV6 by remember { mutableStateOf(NO_IPV6) }
     val domainRoute = Tabs.getRoute(Tab.domains)
     val domainBackStackEntry = remember(domainRoute) {
         navController.getBackStackEntry(domainRoute)
@@ -175,16 +174,8 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
 
     fun GetMyIPs() {
         // Die aktuellen IPs werden nur für den Vergleich mit den Records benötigt, Fehler sind daher unkritisch
-        scope.launch(Dispatchers.IO) {
-            NetworkService(ctx).GetMyIP(forV4 = true) { v4Result ->
-                myV4 = (v4Result.data as? IPResult) ?: IPResult(ip = NO_IPV4)
-                scope.launch(Dispatchers.IO) {
-                    NetworkService(ctx).GetMyIP(forV4 = false) { v6Result ->
-                        myV6 = (v6Result.data as? IPResult) ?: IPResult(ip = NO_IPV6)
-                    }
-                }
-            }
-        }
+        scope.launch { myV4 = myIp(IpFamily.IPV4) ?: NO_IPV4 }
+        scope.launch { myV6 = myIp(IpFamily.IPV6) ?: NO_IPV6 }
     }
 
     fun DeleteDomain() {
@@ -252,8 +243,8 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                 val result = ipv64Request {
                     IPv64Client.get(ctx).dynDns.update(
                         domain,
-                        ipv4 = knownIp(myV4.ip),
-                        ipv6 = knownIp(myV6.ip)
+                        ipv4 = knownIp(myV4),
+                        ipv6 = knownIp(myV6)
                     )
                 }
                 DomainCache.invalidate(domain)
@@ -348,7 +339,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                if (selectedDomain.name != null && ((!selectedDomain.isSameTypeAAddress(myV4.ip ?: NO_IPV4) && myV4.ip != NO_IPV4) || (!selectedDomain.isSameTypeAAAAAddress(myV6.ip ?: NO_IPV6) && myV6.ip != NO_IPV6))) {
+                if (selectedDomain.name != null && ((!selectedDomain.isSameTypeAAddress(myV4) && myV4 != NO_IPV4) || (!selectedDomain.isSameTypeAAAAAddress(myV6) && myV6 != NO_IPV6))) {
                     stickyHeader {
                         Surface( // nimmt Theme-Hintergrund, hebt Text hervor
                             tonalElevation = 2.dp
@@ -394,7 +385,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                                             ),
                                         )
                                     ) {
-                                        if (!selectedDomain.isSameTypeAAddress(myV4.ip ?: NO_IPV4) && myV4.ip != NO_IPV4) {
+                                        if (!selectedDomain.isSameTypeAAddress(myV4) && myV4 != NO_IPV4) {
                                             Text("Set A-Record to current IP?")
                                         } else {
                                             Text("Set AAAA-Record to current IP?")

@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
+   Backup rules for Android 11 and lower (full-backup-content).
    See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+   Alles wird wie bisher gesichert, außer gerätegebundenen Push-Schlüsseln:
+   Ein Restore auf ein anderes Gerät würde sonst die Pushs des alten Geräts übernehmen.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- Ntfy-Token dieses Geräts (PreferencesManager: Dateiname = Key) -->
+    <exclude domain="sharedpref" path="SECNTFY_DEVICE_TOKEN.xml" />
+    <!-- FCM-Token dieses Geräts -->
+    <exclude domain="sharedpref" path="FCM_TOKEN.xml" />
+    <!-- SecNtfy-Bibliothek: Ntfy-Token und RSA-Schlüsselpaar -->
+    <exclude domain="sharedpref" path="de.sr.SecNtfy.xml" />
 </full-backup-content>

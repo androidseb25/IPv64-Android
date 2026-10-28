@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
 import de.rpicloud.ipv64net.models.Unit
+import de.sr.ipv64.model.UsageCounter
+import de.sr.ipv64.model.VpnTrafficUsage
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -34,12 +36,6 @@ fun Instant.formatGermanTime(): String = Date(toEpochMilliseconds()).formatGerma
 fun Date.formatDbTime(): String {
     val format = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.GERMANY)
     return format.format(this)
-}
-
-fun String.parseDbDate(): String {
-    val dbFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-    val date: Date? = runCatching { dbFormat.parse(this) }.getOrNull()
-    return date?.formatGerman() ?: "01.01.0001"
 }
 
 fun String.parseDbDateTime(): String {
@@ -82,11 +78,28 @@ fun String.v64domains(): List<String> {
     )
 }
 
-fun Int.apiUsageText(usage: Int): String {
-    val nf = NumberFormat.getIntegerInstance(Locale.getDefault())
-    val usedStr = nf.format(usage)
-    val maxStr = if (this == 0) "∞" else nf.format(this)
+// Ganzzahlen ohne Nachkommastellen, sonst höchstens 2 (z. B. Traffic in GB)
+fun Double.formatUsage(): String {
+    val nf = NumberFormat.getNumberInstance(Locale.getDefault())
+    nf.maximumFractionDigits = 2
+    return nf.format(this)
+}
+
+// Limit null bedeutet unbegrenzt; fehlt der Zähler (noch nicht geladen), wird "–" angezeigt
+fun UsageCounter?.usageText(): String {
+    if (this == null) return "–"
+    val usedStr = (used ?: 0.0).formatUsage()
+    val maxStr = limit?.let { it.toDouble().formatUsage() } ?: "∞"
     return "$usedStr / $maxStr"
+}
+
+// Für VPN-Traffic ist "null = unbegrenzt" nicht dokumentiert, daher "–" bei fehlendem Limit
+fun VpnTrafficUsage?.usageText(): String {
+    if (this == null) return "–"
+    val usedStr = (used ?: 0.0).formatUsage()
+    val maxStr = limit?.let { it.toDouble().formatUsage() } ?: "–"
+    val text = "$usedStr / $maxStr"
+    return if (limited == true) "$text (limit reached)" else text
 }
 
 fun String.v64DnsRecordTypes(): List<String> {

@@ -40,15 +40,17 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.rpicloud.ipv64net.R
-import de.rpicloud.ipv64net.helper.NetworkService
+import de.rpicloud.ipv64net.helper.IPv64Client
+import de.rpicloud.ipv64net.helper.ipv64Request
+import de.rpicloud.ipv64net.helper.toError
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
-import de.rpicloud.ipv64net.models.IntegrationResult
 import de.rpicloud.ipv64net.models.RequestTyp
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
-import kotlinx.coroutines.Dispatchers
+import de.sr.ipv64.IPv64Exception
+import de.sr.ipv64.model.Integration
 import kotlinx.coroutines.launch
 
 @SuppressLint("UnrememberedGetBackStackEntry")
@@ -67,7 +69,9 @@ fun HealthcheckIntegrationView(
     var errorDialogText by remember { mutableStateOf("") }
     var errorDialogButtonText by remember { mutableIntStateOf(android.R.string.ok) }
 
-    var integrationResult by remember { mutableStateOf(IntegrationResult.empty) }
+    // Integrationen aus API v2; die IDs entsprechen den integration_id-Werten aus API v1 (0 = Account-E-Mail)
+    val integrations = remember { mutableStateListOf<Integration>() }
+    var selectedIds by remember { mutableStateOf(setOf<Long>()) }
 
     var showRequestDialog by remember { mutableStateOf(false) }
     var requestType by remember { mutableStateOf(RequestTyp.UnAuthorized) }
@@ -84,74 +88,31 @@ fun HealthcheckIntegrationView(
 
     fun getIntegrations() {
         showLoadingDialog = true
-        scope.launch(Dispatchers.IO) {
-            NetworkService(ctx).GetIntegrations { nwResult ->
-                showLoadingDialog = false
-                when (nwResult.status) {
-                    200 -> {
-                        if (nwResult.data == null) {
-                            println(nwResult.message)
-                            errorDialogTitle = "Data not found"
-                            errorDialogText = "There are no data found!"
-                            errorDialogButtonText = R.string.retry
-                            showDialog = true
-                        } else {
-                            (nwResult.data as IntegrationResult).also { integrationResult = it }
-                            println(integrationResult)
-                            integrationResult.integration.forEach { integration ->
-                                if (integrationString.contains("${integration.integration_id}")) {
-                                    integration.selectedState = true
-                                }
-                            }
-                        }
-                    }
-
-                    400 -> {
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
-
-                    401 -> {
-                        requestType = RequestTyp.UnAuthorized
-                        showRequestDialog = true
-                    }
-
-                    403 -> {
-                        requestType = if ((nwResult.data as String).contains("domain limit reached")) {
-                            RequestTyp.DomainLimitReached
-                        }
-                        else if ((nwResult.data as String).contains("domainname not available"))
-                            RequestTyp.DomainNotAvailable
-                        else
-                            RequestTyp.DomainRulesNotCreated
-
-                        showRequestDialog = true
-                    }
-
-                    429 -> {
-                        requestType = if ((nwResult.data as String).contains("Updateintervall overcommited")) {
-                            RequestTyp.TooManyRequests
-                        } else
-                            RequestTyp.UpdateCoolDown
-                        showRequestDialog = true
-                    }
-
-                    500 -> {
-                        requestType = RequestTyp.WebsiteRequestFailed
-                        showRequestDialog = true
-                    }
-
-                    else -> {
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
+        scope.launch {
+            try {
+                val list = ipv64Request { IPv64Client.get(ctx).integrations.list() }
+                integrations.clear()
+                // Ohne ID kann eine Integration nicht für den Healthcheck ausgewählt werden
+                integrations.addAll(list.filter { it.id != null })
+                // INTEGRATION_STRING enthält die bisher gewählten IDs, getrennt mit "_"
+                val preselected = integrationString.split(Regex("[^0-9]+"))
+                    .mapNotNull { it.toLongOrNull() }
+                    .toSet()
+                selectedIds = integrations.mapNotNull { it.id }.filter { it in preselected }.toSet()
+            } catch (e: IPv64Exception) {
+                println(e.message)
+                val error = e.toError()
+                if (error.requestType != null) {
+                    requestType = error.requestType
+                    showRequestDialog = true
+                } else {
+                    errorDialogTitle = error.title
+                    errorDialogText = error.text
+                    errorDialogButtonText = R.string.retry
+                    showDialog = true
                 }
+            } finally {
+                showLoadingDialog = false
             }
         }
     }
@@ -174,15 +135,11 @@ fun HealthcheckIntegrationView(
                 }, modifier = Modifier.statusBarsPadding(),
                 actions = {
                     IconButton(onClick = {
-                        val selectedList = integrationResult.integration.filter { it.selectedState }
-                        var selectedListString = "";
-                        selectedList.forEach { integration ->
-                            selectedListString += if (selectedListString.isEmpty()) {
-                                "${integration.integration_id}"
-                            } else {
-                                "_${integration.integration_id}"
-                            }
-                        }
+                        // Gleiches Format wie bisher: IDs in Listenreihenfolge, getrennt mit "_"
+                        val selectedListString = integrations
+                            .mapNotNull { it.id }
+                            .filter { it in selectedIds }
+                            .joinToString("_")
                         navController.previousBackStackEntry?.savedStateHandle?.set(
                             "INTEGRATION_IDS",
                             selectedListString
@@ -216,15 +173,18 @@ fun HealthcheckIntegrationView(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 items(
-                    items = integrationResult.integration,
-                    key = { integr -> integr.integration_id ?: 0 } // stabile Keys
+                    items = integrations,
+                    key = { integr -> integr.id ?: 0L } // stabile Keys
                 ) { integr ->
+                    val id = integr.id ?: 0L
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(integr.integration_name ?: "")
+                        Text(integr.displayName)
                         Spacer(Modifier.weight(1f))
                         Switch(
-                            checked = integr.selectedState,
-                            onCheckedChange = { selected -> integr.selectedState = selected; println(integr) }
+                            checked = id in selectedIds,
+                            onCheckedChange = { selected ->
+                                selectedIds = if (selected) selectedIds + id else selectedIds - id
+                            }
                         )
                     }
                 }
