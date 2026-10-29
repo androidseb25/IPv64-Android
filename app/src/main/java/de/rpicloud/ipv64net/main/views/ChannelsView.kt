@@ -1,5 +1,6 @@
 package de.rpicloud.ipv64net.main.views
 
+import de.rpicloud.ipv64net.main.views.common.rememberCanGoBack
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -76,6 +77,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChannelsView(navController: NavHostController, mainPadding: PaddingValues) {
+    val canGoBack = rememberCanGoBack(navController)
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -167,6 +169,14 @@ fun ChannelsView(navController: NavHostController, mainPadding: PaddingValues) {
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    // Kein Tab mehr: Zurück-Pfeil nur, wenn es einen vorherigen Screen gibt (z. B. Monitoring-Hub)
+                    if (canGoBack) {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(painter = painterResource(id = R.drawable.arrow_back_24px), contentDescription = "Back")
+                        }
+                    }
+                },
                 title = { Text(Tabs.getLabel(Tab.channels)) },
                 actions = {
                     IconButton(onClick = { load(force = true) }) {

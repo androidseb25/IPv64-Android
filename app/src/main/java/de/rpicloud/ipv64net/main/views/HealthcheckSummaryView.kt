@@ -1,5 +1,6 @@
 package de.rpicloud.ipv64net.main.views
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -85,15 +86,23 @@ fun HealthcheckGridItemView(count: Int, state: Hc2StateUi, label: String, modifi
 
 // 2x2-Übersicht: Up / Degraded / Down / Paused
 @Composable
-fun HealthcheckSummaryView(counts: HealthcheckCounts, modifier: Modifier = Modifier) {
+fun HealthcheckSummaryView(
+    counts: HealthcheckCounts,
+    modifier: Modifier = Modifier,
+    onTileClick: ((Hc2StateUi) -> Unit)? = null
+) {
+    // Kachel optional anklickbar (z. B. Hub: öffnet die Liste mit passendem Filter)
+    fun tile(state: Hc2StateUi) = Modifier.then(
+        if (onTileClick != null) Modifier.clickable { onTileClick(state) } else Modifier
+    )
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HealthcheckGridItemView(counts.up, Hc2StateUi.UP, "Up", Modifier.weight(1f))
-            HealthcheckGridItemView(counts.degraded, Hc2StateUi.DEGRADED, "Degraded", Modifier.weight(1f))
+            HealthcheckGridItemView(counts.up, Hc2StateUi.UP, "Up", Modifier.weight(1f).then(tile(Hc2StateUi.UP)))
+            HealthcheckGridItemView(counts.degraded, Hc2StateUi.DEGRADED, "Degraded", Modifier.weight(1f).then(tile(Hc2StateUi.DEGRADED)))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HealthcheckGridItemView(counts.down, Hc2StateUi.DOWN, "Down", Modifier.weight(1f))
-            HealthcheckGridItemView(counts.paused, Hc2StateUi.PAUSED, "Paused", Modifier.weight(1f))
+            HealthcheckGridItemView(counts.down, Hc2StateUi.DOWN, "Down", Modifier.weight(1f).then(tile(Hc2StateUi.DOWN)))
+            HealthcheckGridItemView(counts.paused, Hc2StateUi.PAUSED, "Paused", Modifier.weight(1f).then(tile(Hc2StateUi.PAUSED)))
         }
     }
 }

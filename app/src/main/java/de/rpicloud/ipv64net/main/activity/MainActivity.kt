@@ -63,6 +63,36 @@ import de.rpicloud.ipv64net.main.views.PushSetupView
 import de.rpicloud.ipv64net.main.views.LogView
 import de.rpicloud.ipv64net.main.views.MyIpView
 import de.rpicloud.ipv64net.main.views.SettingsView
+import de.rpicloud.ipv64net.main.views.DomainRecordEditView
+import de.rpicloud.ipv64net.main.views.DomainSettingsView
+import de.rpicloud.ipv64net.main.views.account.AccountLinksView
+import de.rpicloud.ipv64net.main.views.account.ApiKeysView
+import de.rpicloud.ipv64net.main.views.monitoring.FailoverDetailView
+import de.rpicloud.ipv64net.main.views.monitoring.FailoverEditView
+import de.rpicloud.ipv64net.main.views.monitoring.FailoverView
+import de.rpicloud.ipv64net.main.views.monitoring.Hc2ActivityView
+import de.rpicloud.ipv64net.main.views.monitoring.Hc2SettingsView
+import de.rpicloud.ipv64net.main.views.monitoring.MaintenanceEditView
+import de.rpicloud.ipv64net.main.views.monitoring.MaintenanceView
+import de.rpicloud.ipv64net.main.views.monitoring.MonitoringView
+import de.rpicloud.ipv64net.main.views.monitoring.OfflinePageEditView
+import de.rpicloud.ipv64net.main.views.monitoring.OfflinePagesView
+import de.rpicloud.ipv64net.main.views.monitoring.StatusPageEditView
+import de.rpicloud.ipv64net.main.views.monitoring.StatusPagesView
+import de.rpicloud.ipv64net.main.views.network.CdnDetailView
+import de.rpicloud.ipv64net.main.views.network.CdnSettingsView
+import de.rpicloud.ipv64net.main.views.network.CdnView
+import de.rpicloud.ipv64net.main.views.network.Dns64DetailView
+import de.rpicloud.ipv64net.main.views.network.Dns64View
+import de.rpicloud.ipv64net.main.views.network.NetworkView
+import de.rpicloud.ipv64net.main.views.network.NodeDetailView
+import de.rpicloud.ipv64net.main.views.network.NodesView
+import de.rpicloud.ipv64net.main.views.security.HoneypotView
+import de.rpicloud.ipv64net.main.views.security.PasswordCheckView
+import de.rpicloud.ipv64net.main.views.security.SecurityView
+import de.rpicloud.ipv64net.main.views.security.ThreatLookupView
+import de.rpicloud.ipv64net.main.views.security.ThreatStatsView
+import de.rpicloud.ipv64net.main.views.security.ThreatWatchView
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.rpicloud.ipv64net.models.Tabs.Companion.AddItem
@@ -183,6 +213,98 @@ class MainActivity : AppCompatActivity() {
                             }
                             composable(Tabs.Companion.getRoute(Tab.login)) {
                                 LoginView(navController, true)
+                            }
+
+                            // Neue Bereiche (Plan 2); Signatur aller Screens: (navController, mainPadding)
+                            composable(Tabs.getRoute(Tab.domain_settings)) {
+                                DomainSettingsView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.domain_record_edit)) {
+                                DomainRecordEditView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.monitoring)) {
+                                MonitoringView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.hc2_activity)) {
+                                Hc2ActivityView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.maintenance)) {
+                                MaintenanceView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.maintenance_edit)) {
+                                MaintenanceEditView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.hc2_settings)) {
+                                Hc2SettingsView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.status_pages)) {
+                                StatusPagesView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.status_page_edit)) {
+                                StatusPageEditView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.failover)) {
+                                FailoverView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.failover_details)) {
+                                FailoverDetailView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.failover_edit)) {
+                                FailoverEditView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.offline_pages)) {
+                                OfflinePagesView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.offline_page_edit)) {
+                                OfflinePageEditView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.network)) {
+                                NetworkView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.cdn)) {
+                                CdnView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.cdn_details)) {
+                                CdnDetailView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.cdn_settings)) {
+                                CdnSettingsView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.dns64)) {
+                                Dns64View(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.dns64_details)) {
+                                Dns64DetailView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.nodes)) {
+                                NodesView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.node_details)) {
+                                NodeDetailView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.security)) {
+                                SecurityView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.threat_lookup)) {
+                                ThreatLookupView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.threat_stats)) {
+                                ThreatStatsView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.threat_watch)) {
+                                ThreatWatchView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.password_check)) {
+                                PasswordCheckView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.honeypot)) {
+                                HoneypotView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.api_keys)) {
+                                ApiKeysView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.account_links)) {
+                                AccountLinksView(navController, mainPadding = mainPadding)
                             }
                         }
                     }

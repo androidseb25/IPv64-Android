@@ -42,6 +42,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.helper.AccountCache
+import de.rpicloud.ipv64net.helper.DomainListCache
 import de.rpicloud.ipv64net.helper.IPv64Client
 import de.rpicloud.ipv64net.helper.IPv64Context
 import de.rpicloud.ipv64net.helper.ipv64Request
@@ -91,11 +93,14 @@ fun DomainNewView(navController: NavHostController, mainPadding: PaddingValues) 
         scope.launch {
             try {
                 ipv64Request { IPv64Client.get(ctx).domains.create(newDomain) }
+                // Gemeinsame Domainliste (Pickers) beim nächsten Zugriff neu laden
+                DomainListCache.invalidate()
+                // Domainzähler in Me.usage haben sich geändert
+                AccountCache.invalidate()
                 showLoadingDialog = false
                 navController.popBackStack()
             } catch (e: IPv64Exception) {
                 showLoadingDialog = false
-                println(e.message)
                 val error = e.toError(IPv64Context.Create)
                 if (error.requestType != null) {
                     requestType = error.requestType

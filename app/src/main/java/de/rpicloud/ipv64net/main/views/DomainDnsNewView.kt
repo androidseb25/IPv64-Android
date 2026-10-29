@@ -121,7 +121,6 @@ fun DomainDnsNewView(navController: NavHostController, mainPadding: PaddingValue
                 navController.popBackStack() // zurück zur Domain-Detailansicht, die neu lädt
             } catch (e: IPv64Exception) {
                 showLoadingDialog = false
-                println(e.message)
                 val error = e.toError()
                 if (error.requestType != null) {
                     requestType = error.requestType

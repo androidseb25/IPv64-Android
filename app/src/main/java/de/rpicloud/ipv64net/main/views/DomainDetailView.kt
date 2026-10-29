@@ -1,45 +1,27 @@
 package de.rpicloud.ipv64net.main.views
 
 import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,78 +29,84 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.navigation.NavHostController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.helper.AccountCache
 import de.rpicloud.ipv64net.helper.DomainCache
+import de.rpicloud.ipv64net.helper.DomainListCache
 import de.rpicloud.ipv64net.helper.IPv64Client
 import de.rpicloud.ipv64net.helper.IPv64Context
-import de.rpicloud.ipv64net.helper.ipv64Request
-import de.rpicloud.ipv64net.helper.myIp
+import de.rpicloud.ipv64net.helper.NavKeys
+import de.rpicloud.ipv64net.helper.copyText
 import de.rpicloud.ipv64net.helper.formatGermanTime
-import de.rpicloud.ipv64net.helper.toError
-import de.rpicloud.ipv64net.helper.views.ErrorDialog
-import de.rpicloud.ipv64net.helper.views.RequestDialogs
-import de.rpicloud.ipv64net.helper.views.SpinnerDialog
+import de.rpicloud.ipv64net.helper.ipv64Request
+import de.rpicloud.ipv64net.helper.ipv64Retrying
+import de.rpicloud.ipv64net.helper.myIp
+import de.rpicloud.ipv64net.helper.navigateWithArgs
+import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
+import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.InfoRow
+import de.rpicloud.ipv64net.main.views.common.RefreshableList
+import de.rpicloud.ipv64net.main.views.common.RequestStateHost
+import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
+import de.rpicloud.ipv64net.main.views.common.SectionHeader
+import de.rpicloud.ipv64net.main.views.common.rememberRequestState
+import de.rpicloud.ipv64net.models.IsWildcard
 import de.rpicloud.ipv64net.models.NO_IPV4
 import de.rpicloud.ipv64net.models.NO_IPV6
-import de.rpicloud.ipv64net.models.RequestTyp
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
-import de.rpicloud.ipv64net.models.IsWildcard
+import de.rpicloud.ipv64net.models.domainUpdateUrl
+import de.rpicloud.ipv64net.models.isFailure
+import de.rpicloud.ipv64net.models.isLocked
 import de.rpicloud.ipv64net.models.isSameTypeAAAAAddress
-import de.rpicloud.ipv64net.models.knownIp
-import de.sr.ipv64.model.IpFamily
 import de.rpicloud.ipv64net.models.isSameTypeAAddress
+import de.rpicloud.ipv64net.models.knownIp
+import de.rpicloud.ipv64net.models.label
+import de.rpicloud.ipv64net.models.prefixLabel
 import de.sr.ipv64.IPv64ApiException
 import de.sr.ipv64.IPv64Exception
 import de.sr.ipv64.model.DomainDetail
-import de.sr.ipv64.model.DynDnsOutcome
+import de.sr.ipv64.model.IpFamily
+import de.sr.ipv64.model.Record
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+// Schlüssel im savedStateHandle dieses Eintrags; DomainDnsNewView liest ihn über getBackStackEntry("domain_details")
+private const val ADD_FQDN_KEY = "ADD_FQDN"
+
 @SuppressLint("UnrememberedGetBackStackEntry")
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValues) {
 
     val ctx = LocalContext.current
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-
+    val req = rememberRequestState()
     val haptics = LocalHapticFeedback.current
-    val clipboard = LocalClipboard.current
 
-    var showLoadingDialog by remember { mutableStateOf(false) }
-    var showDialog by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var showDeleteDNSDialog by remember { mutableStateOf(false) }
     var fabVisible by remember { mutableStateOf(true) }
-    var errorDialogTitle by remember { mutableStateOf("") }
-    var errorDialogText by remember { mutableStateOf("") }
-    var errorDialogButtonText by remember { mutableIntStateOf(android.R.string.ok) }
-    var deleteDialogTitle by remember { mutableStateOf("") }
-    var deleteDialogText by remember { mutableStateOf("") }
-    var deleteDialogButtonText by remember { mutableIntStateOf(R.string.delete) }
+    var refreshing by remember { mutableStateOf(false) }
     var selectedDomain by remember { mutableStateOf(DomainDetail()) }
-    var selectedRecordId by remember { mutableLongStateOf(0L) }
 
-    var showRequestDialog by remember { mutableStateOf(false) }
-    var requestType by remember { mutableStateOf(RequestTyp.UnAuthorized) }
+    // Offene Dialoge
+    var confirmAction by remember { mutableStateOf<DomainAction?>(null) }
+    var recordToDelete by remember { mutableStateOf<Record?>(null) }
+    var showDynDns by remember { mutableStateOf(false) }
+    // Neue Update-URL nach dem Token-Wechsel (nur im Speicher, nicht im savedState)
+    var rotatedUrl by remember { mutableStateOf<String?>(null) }
 
     var myV4 by remember { mutableStateOf(NO_IPV4) }
     var myV6 by remember { mutableStateOf(NO_IPV6) }
@@ -126,21 +114,24 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
     val domainBackStackEntry = remember(domainRoute) {
         navController.getBackStackEntry(domainRoute)
     }
-    // Jetpack Compose Best Practice: collectAsStateWithLifecycle pauses flow collection when UI is stopped (e.g. backgrounded), saving battery and CPU.
-    val domain by domainBackStackEntry.savedStateHandle.getStateFlow<String>("SELECTED_DOMAIN", "").collectAsStateWithLifecycle()
-
-    fun GetDomainUpdateUrl(): String {
-        return "https://ipv64.net/nic/update?key=" + selectedDomain.updateToken
-    }
+    // collectAsStateWithLifecycle pausiert das Sammeln, solange die UI gestoppt ist
+    val domain by domainBackStackEntry.savedStateHandle.getStateFlow("SELECTED_DOMAIN", "").collectAsStateWithLifecycle()
 
     var domainJob by remember { mutableStateOf<Job?>(null) }
 
-    fun GetDomain() {
+    fun getDomain(pull: Boolean = false) {
+        if (domain.isEmpty()) return
         // Eine neue Anfrage ersetzt eine noch laufende
         domainJob?.cancel()
+        if (pull) refreshing = true
         // Mit Cache-Treffer wird ohne Spinner im Hintergrund aktualisiert
-        showLoadingDialog = DomainCache.get(domain) == null
-        domainJob = scope.launch {
+        val silent = pull || DomainCache.get(domain) != null
+        domainJob = req.launch(
+            scope,
+            spinner = if (silent) null else "Loading...",
+            retry = { getDomain() },
+            onFinally = { refreshing = false }
+        ) {
             try {
                 val ipv64 = IPv64Client.get(ctx)
                 val result = try {
@@ -154,446 +145,231 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                 DomainCache.put(domain, result)
                 selectedDomain = result
             } catch (e: IPv64Exception) {
+                // Abgelöste Anfrage: keinen Fehler anzeigen
                 if (!isActive) return@launch
-                println(e.message)
-                val error = e.toError()
-                if (error.requestType != null) {
-                    requestType = error.requestType
-                    showRequestDialog = true
-                } else {
-                    errorDialogTitle = error.title
-                    errorDialogText = error.text
-                    errorDialogButtonText = R.string.retry
-                    showDialog = true
-                }
-            } finally {
-                if (isActive) showLoadingDialog = false
+                throw e
             }
         }
     }
 
-    fun GetMyIPs() {
+    fun getMyIPs() {
         // Die aktuellen IPs werden nur für den Vergleich mit den Records benötigt, Fehler sind daher unkritisch
         scope.launch { myV4 = myIp(IpFamily.IPV4) ?: NO_IPV4 }
         scope.launch { myV6 = myIp(IpFamily.IPV6) ?: NO_IPV6 }
     }
 
-    fun DeleteDomain() {
-        if (domain.isEmpty()) {
-            errorDialogTitle = "Data not found"
-            errorDialogText = "FQDN not found!"
-            errorDialogButtonText = R.string.retry
-            showDialog = true
-            return
+    fun deleteDomain() {
+        if (domain.isEmpty()) return
+        req.launch(
+            scope,
+            spinner = "Deleting...",
+            onError = { e ->
+                // 409: Domain wird von einer aktiven DNS-Failover-Policy verwendet
+                if (e is IPv64ApiException && e.isConflict) {
+                    req.message(
+                        "Domain cannot be deleted",
+                        e.detail ?: "DNS failover is active for this domain. Remove or pause the failover policy first.",
+                        R.drawable.warning_24px
+                    )
+                    true
+                } else false
+            }
+        ) {
+            ipv64Request { IPv64Client.get(ctx).domains.delete(domain) }
+            DomainCache.invalidate(domain)
+            DomainListCache.invalidate()
+            // Domainzähler in Me.usage haben sich geändert
+            AccountCache.invalidate()
+            navController.popBackStack()
         }
-        showLoadingDialog = true
-        scope.launch {
-            try {
-                ipv64Request { IPv64Client.get(ctx).domains.delete(domain) }
+    }
+
+    fun deleteRecord(record: Record) {
+        val id = record.id ?: return
+        req.launch(scope, spinner = "Deleting...") {
+            ipv64Request { IPv64Client.get(ctx).records.delete(id.toString()) }
+            // Record lokal entfernen statt neu zu laden
+            val updated = selectedDomain.copy(records = selectedDomain.records.filter { it.id != id })
+            selectedDomain = updated
+            DomainCache.put(domain, updated)
+        }
+    }
+
+    fun rotateToken() {
+        req.launch(scope, spinner = "Rotating token...") {
+            val result = ipv64Retrying { IPv64Client.get(ctx).domains.rotateToken(domain) }
+            DomainListCache.invalidate()
+            val token = result.updateToken
+            if (token.isNullOrEmpty()) {
+                // Antwort ohne Token: Domain neu laden, die URL steht dann im Abschnitt "General"
                 DomainCache.invalidate(domain)
-                showLoadingDialog = false
+                getDomain()
+                req.message("Token rotated", "The update token was rotated. Copy the new update URL from the domain details.")
+            } else {
+                val updated = selectedDomain.copy(updateToken = token)
+                selectedDomain = updated
+                DomainCache.put(domain, updated)
+                rotatedUrl = domainUpdateUrl(token)
+            }
+        }
+    }
+
+    fun resetDomain() {
+        req.launch(scope, spinner = "Resetting...") {
+            val result = ipv64Retrying { IPv64Client.get(ctx).domains.reset(domain) }
+            DomainCache.put(domain, result)
+            DomainListCache.invalidate()
+            selectedDomain = result
+        }
+    }
+
+    fun updateDNSRecord() {
+        req.launch(scope, spinner = "Loading...", context = IPv64Context.Update) {
+            // Nur bekannte IPs explizit senden, sonst verwendet die API die Absenderadresse
+            val result = ipv64Request {
+                IPv64Client.get(ctx).dynDns.update(
+                    domain,
+                    ipv4 = knownIp(myV4),
+                    ipv6 = knownIp(myV6)
+                )
+            }
+            DomainCache.invalidate(domain)
+            val failed = result.results.filter { it.result.isFailure }
+            if (failed.isEmpty()) {
                 navController.popBackStack()
-            } catch (e: IPv64Exception) {
-                showLoadingDialog = false
-                println(e.message)
-                val error = e.toError()
-                if (error.requestType != null) {
-                    requestType = error.requestType
-                    showRequestDialog = true
-                } else {
-                    errorDialogTitle = error.title
-                    errorDialogText = error.text
-                    errorDialogButtonText = R.string.retry
-                    showDialog = true
-                }
+            } else {
+                req.message(
+                    "Update error",
+                    failed.joinToString("\n") { "${it.type ?: ""} ${it.ip ?: ""}: ${it.result.label}" },
+                    R.drawable.error_24px
+                )
             }
         }
     }
 
-    fun DeleteDNSRecord(recordId: Long) {
-        showLoadingDialog = true
-        scope.launch {
-            try {
-                ipv64Request { IPv64Client.get(ctx).records.delete(recordId.toString()) }
-                DomainCache.invalidate(domain)
-                showLoadingDialog = false
-                GetDomain()
-            } catch (e: IPv64Exception) {
-                showLoadingDialog = false
-                println(e.message)
-                val error = e.toError()
-                if (error.requestType != null) {
-                    requestType = error.requestType
-                    showRequestDialog = true
-                } else {
-                    errorDialogTitle = error.title
-                    errorDialogText = error.text
-                    errorDialogButtonText = R.string.retry
-                    showDialog = true
-                }
-            }
+    fun onAction(action: DomainAction) {
+        when (action) {
+            DomainAction.SETTINGS ->
+                navController.navigateWithArgs(Tab.domain_settings, NavKeys.EDIT_DOMAIN_NAME to domain)
+
+            DomainAction.DYNDNS -> showDynDns = true
+            else -> confirmAction = action
         }
     }
 
-    fun UpdateDNSRecord() {
-        showLoadingDialog = true
-        scope.launch {
-            try {
-                // Nur bekannte IPs explizit senden, sonst verwendet die API die Absenderadresse
-                val result = ipv64Request {
-                    IPv64Client.get(ctx).dynDns.update(
-                        domain,
-                        ipv4 = knownIp(myV4),
-                        ipv6 = knownIp(myV6)
-                    )
-                }
-                DomainCache.invalidate(domain)
-                showLoadingDialog = false
-                val failed = result.results.filter {
-                    it.result == DynDnsOutcome.INVALID_IP || it.result == DynDnsOutcome.CNAME_CONFLICT ||
-                            it.result == DynDnsOutcome.CDN_MANAGED
-                }
-                if (failed.isEmpty()) {
-                    navController.popBackStack()
-                } else {
-                    errorDialogTitle = "Update error"
-                    errorDialogText = failed.joinToString("\n") { "${it.type ?: ""} ${it.ip ?: ""}: ${it.result?.value}" }
-                    errorDialogButtonText = R.string.retry
-                    showDialog = true
-                }
-            } catch (e: IPv64Exception) {
-                showLoadingDialog = false
-                println(e.message)
-                val error = e.toError(IPv64Context.Update)
-                if (error.requestType != null) {
-                    requestType = error.requestType
-                    showRequestDialog = true
-                } else {
-                    errorDialogTitle = error.title
-                    errorDialogText = error.text
-                    errorDialogButtonText = R.string.retry
-                    showDialog = true
-                }
-            }
-        }
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.arrow_back_24px),
-                        contentDescription = "Close"
-                    )
-                }
-            }, actions = {
-                IconButton(onClick = {
-                    deleteDialogText = "Do you really want to delete the Domain?"
-                    deleteDialogTitle = "Delete Domain"
-                    showDeleteDialog = true
-                }) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.delete_24px),
-                        contentDescription = "Delete"
-                    )
-                }
-            }, title = {
-                Text(domain, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }, modifier = Modifier.statusBarsPadding()
-            )
+    ScreenScaffold(
+        title = domain,
+        navController = navController,
+        mainPadding = mainPadding,
+        actions = {
+            DomainActionsMenu(enabled = domain.isNotEmpty() && selectedDomain.name != null) { onAction(it) }
         },
-        floatingActionButton = {
+        fab = {
             AnimatedVisibility(
                 visible = fabVisible,
                 enter = fadeIn() + scaleIn(),
                 exit = fadeOut() + scaleOut()
             ) {
                 FloatingActionButton(onClick = {
-                    navController.currentBackStackEntry?.savedStateHandle?.set("ADD_FQDN", domain)
+                    navController.currentBackStackEntry?.savedStateHandle?.set(ADD_FQDN_KEY, domain)
                     navController.navigate(Tabs.getRoute(Tab.domain_new_dns))
                 }) {
                     Icon(
                         painter = painterResource(id = R.drawable.add_24px),
-                        contentDescription = "icon"
+                        contentDescription = "New DNS record"
                     )
                 }
             }
-        },
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(mainPadding)
-            .consumeWindowInsets(mainPadding)  // avoids double insets
+        }
     ) {
-        Column(
-            modifier = Modifier
-                .padding(it)
-                .fillMaxHeight()
+        RefreshableList(
+            refreshing = refreshing,
+            onRefresh = { getMyIPs(); getDomain(pull = true) },
+            state = listState,
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                if (selectedDomain.name != null && ((!selectedDomain.isSameTypeAAddress(myV4) && myV4 != NO_IPV4) || (!selectedDomain.isSameTypeAAAAAddress(myV6) && myV6 != NO_IPV6))) {
-                    stickyHeader {
-                        Surface( // nimmt Theme-Hintergrund, hebt Text hervor
-                            tonalElevation = 2.dp
-                        ) {
-                            Text(
-                                text = "Notice",
-                                style = MaterialTheme.typography.titleMedium,
+            val mismatchV4 = !selectedDomain.isSameTypeAAddress(myV4) && myV4 != NO_IPV4
+            val mismatchV6 = !selectedDomain.isSameTypeAAAAAddress(myV6) && myV6 != NO_IPV6
+            if (selectedDomain.name != null && (mismatchV4 || mismatchV6)) {
+                item(key = "notice_header") { SectionHeader("Notice") }
+                item(key = "notice") {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Your A or AAAA record doesn't match your current IP! This could be due to an active cellular connection or the IP address being assigned a server address.")
+                            Button(
+                                onClick = { updateDNSRecord() },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row {
-                                    Text("Your A or AAAA record doesn't match your current IP! This could be due to an active cellular connection or the IP address being assigned a server address.")
-                                }
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 32.dp)
-                                ) {
-                                    Button(
-                                        onClick = {
-                                            UpdateDNSRecord()
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            containerColor = Color(
-                                                ContextCompat.getColor(
-                                                    ctx, R.color.ipv64_orange_trans20
-                                                )
-                                            ),
-                                            contentColor = Color(
-                                                ContextCompat.getColor(
-                                                    ctx, R.color.ipv64_orange
-                                                )
-                                            ),
-                                        )
-                                    ) {
-                                        if (!selectedDomain.isSameTypeAAddress(myV4) && myV4 != NO_IPV4) {
-                                            Text("Set A-Record to current IP?")
-                                        } else {
-                                            Text("Set AAAA-Record to current IP?")
-                                        }
-                                    }
-                                }
+                                    .padding(top = 24.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = Color(ContextCompat.getColor(ctx, R.color.ipv64_orange_trans20)),
+                                    contentColor = Color(ContextCompat.getColor(ctx, R.color.ipv64_orange)),
+                                )
+                            ) {
+                                Text(if (mismatchV4) "Set A-Record to current IP?" else "Set AAAA-Record to current IP?")
                             }
                         }
                     }
                 }
-                stickyHeader {
-                    Surface( // nimmt Theme-Hintergrund, hebt Text hervor
-                        tonalElevation = 2.dp
+            }
+            item(key = "general_header") { SectionHeader("General") }
+            item(key = "general") {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = "General",
-                            style = MaterialTheme.typography.titleMedium,
+                        InfoRow("Kind", selectedDomain.kind.label)
+                        InfoRow("Wildcard", selectedDomain.IsWildcard)
+                        InfoRow("Updates", "${selectedDomain.updateCount ?: 0}")
+                        InfoRow("Ignored on DynDNS updates", selectedDomain.ignore.label)
+                        InfoRow("Fixed IPv6 prefix", selectedDomain.ipv6Prefix?.takeIf { it.isNotBlank() } ?: "Off", monospace = true)
+                        if (selectedDomain.active == false) InfoRow("Status", "Inactive")
+                        selectedDomain.createdAt?.let { InfoRow("Created", it.formatGermanTime()) }
+                        Button(
+                            enabled = !selectedDomain.updateToken.isNullOrEmpty(),
+                            onClick = {
+                                val token = selectedDomain.updateToken ?: return@Button
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                copyText(ctx, "Domain Update URL", domainUpdateUrl(token), sensitive = true)
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surface)
-                                .padding(horizontal = 16.dp)
-                        )
-                    }
-                }
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row {
-                                Text(
-                                    "Wildcard:", fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    selectedDomain.IsWildcard,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    textAlign = TextAlign.End,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    color = Color.Gray
-                                )
-                            }
-                            Row(modifier = Modifier.padding(top = 16.dp)) {
-                                Text(
-                                    "Updates:", fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "${selectedDomain.updateCount ?: 0}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    textAlign = TextAlign.End,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    color = Color.Gray
-                                )
-                            }
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 32.dp)
-                            ) {
-                                Button(
-                                    enabled = selectedDomain.updateToken != null,
-                                    onClick = {
-                                        haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                        val clipboard =
-                                            ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        val clip = ClipData.newPlainText(
-                                            "Domain Update URL", GetDomainUpdateUrl()
-                                        )
-                                        clipboard.setPrimaryClip(clip)
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth(),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = Color(
-                                            ContextCompat.getColor(
-                                                ctx, R.color.ipv64_blue_trans15
-                                            )
-                                        ),
-                                        contentColor = Color(
-                                            ContextCompat.getColor(
-                                                ctx, R.color.ipv64_blue
-                                            )
-                                        ),
-                                    )
-                                ) {
-                                    Text("Copy Domain Update URL")
-                                }
-                            }
+                                .padding(top = 16.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = Color(ContextCompat.getColor(ctx, R.color.ipv64_blue_trans15)),
+                                contentColor = Color(ContextCompat.getColor(ctx, R.color.ipv64_blue)),
+                            )
+                        ) {
+                            Text("Copy Domain Update URL")
                         }
                     }
                 }
-                selectedDomain.records.forEach { recordInfos ->
-                    stickyHeader {
-                        Surface( // nimmt Theme-Hintergrund, hebt Text hervor
-                            tonalElevation = 2.dp
-                        ) {
-                            recordInfos.type?.value?.let { text ->
-                                Text(
-                                    text = text,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(MaterialTheme.colorScheme.surface)
-                                        .padding(horizontal = 16.dp)
+            }
+            if (selectedDomain.name != null) {
+                item(key = "records_header") { SectionHeader("DNS records (${selectedDomain.records.size})") }
+                if (selectedDomain.records.isEmpty()) {
+                    item(key = "records_empty") { EmptyState("No DNS records.") }
+                }
+                val sorted = selectedDomain.records.sortedWith(
+                    compareBy<Record> { it.type?.ordinal ?: Int.MAX_VALUE }.thenBy { it.prefixLabel }
+                )
+                items(sorted, key = { r -> "record_${r.id ?: r.token ?: r.hashCode()}" }) { record ->
+                    DomainRecordCard(
+                        record = record,
+                        onEdit = {
+                            val id = record.id
+                            if (!record.isLocked && id != null) {
+                                navController.navigateWithArgs(
+                                    Tab.domain_record_edit,
+                                    NavKeys.EDIT_RECORD_ID to id.toString(),
+                                    NavKeys.EDIT_RECORD_DOMAIN to domain
                                 )
                             }
-                        }
-                    }
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row {
-                                    Text(
-                                        "Präfix:", fontWeight = FontWeight.Bold
-                                    )
-                                    recordInfos.prefix?.let { text ->
-                                        Text(
-                                            text,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            textAlign = TextAlign.End,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            color = Color.Gray
-                                        )
-                                    }
-                                }
-                                Row(modifier = Modifier.padding(top = 16.dp)) {
-                                    Text(
-                                        "TTL:", fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        "${recordInfos.ttl}",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        textAlign = TextAlign.End,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        color = Color.Gray
-                                    )
-                                }
-                                Row(modifier = Modifier.padding(top = 16.dp)) {
-                                    Text(
-                                        "Typ:", fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        "${recordInfos.type?.value}",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        textAlign = TextAlign.End,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        color = Color.Gray
-                                    )
-                                }
-                                Row(modifier = Modifier.padding(top = 16.dp)) {
-                                    Text(
-                                        "Value:", fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        "${recordInfos.content}",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        textAlign = TextAlign.End,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        color = Color.Gray
-                                    )
-                                }
-                                Row(modifier = Modifier.padding(top = 16.dp)) {
-                                    Text(
-                                        "last update:", fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        recordInfos.updatedAt?.formatGermanTime()
-                                            ?: "01.01.0001 00:00:00",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        textAlign = TextAlign.End,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        color = Color.Gray
-                                    )
-                                }
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 32.dp)
-                                ) {
-                                    Button(
-                                        onClick = {
-                                            selectedRecordId = recordInfos.id ?: 0L
-                                            deleteDialogText =
-                                                "Do you really want to delete the DNS Record?"
-                                            deleteDialogTitle = "Delete DNS Record"
-                                            showDeleteDNSDialog = true
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            containerColor = Color(
-                                                ContextCompat.getColor(
-                                                    ctx, R.color.ipv64_red_trans20
-                                                )
-                                            ),
-                                            contentColor = Color(
-                                                ContextCompat.getColor(
-                                                    ctx, R.color.ipv64_red
-                                                )
-                                            ),
-                                        )
-                                    ) {
-                                        Text("Delete DNS Record")
-                                    }
-                                }
-                            }
-                        }
-                    }
+                        },
+                        onDelete = { recordToDelete = record }
+                    )
                 }
             }
         }
@@ -601,8 +377,8 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
 
     LaunchedEffect(Unit) {
         DomainCache.get(domain)?.let { selectedDomain = it }
-        GetDomain()
-        GetMyIPs()
+        getDomain()
+        getMyIPs()
     }
 
     // Sichtbarkeit abhängig von Scrollrichtung steuern
@@ -626,52 +402,61 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
         if (!listState.isScrollInProgress) fabVisible = true
     }
 
-    if (showLoadingDialog) {
-        SpinnerDialog(
-            spinnerText = "Loading..."
+    when (confirmAction) {
+        DomainAction.ROTATE_TOKEN -> ConfirmDialog(
+            title = "Rotate update token?",
+            text = "A new update token is created and the old one stops working immediately. " +
+                    "Routers and scripts using the old update URL stop updating until you enter the new URL.",
+            confirmLabel = "Rotate",
+            destructive = true,
+            onConfirm = { confirmAction = null; rotateToken() },
+            onDismiss = { confirmAction = null }
+        )
+
+        DomainAction.RESET -> ConfirmDialog(
+            title = "Reset domain?",
+            text = "All active DNS records of $domain are deleted and the zone is set up anew. This cannot be undone.",
+            confirmLabel = "Reset",
+            destructive = true,
+            requireTyping = domain,
+            onConfirm = { confirmAction = null; resetDomain() },
+            onDismiss = { confirmAction = null }
+        )
+
+        DomainAction.DELETE -> ConfirmDialog(
+            title = "Delete domain?",
+            text = "Do you really want to delete $domain with all its DNS records?",
+            confirmLabel = "Delete",
+            destructive = true,
+            onConfirm = { confirmAction = null; deleteDomain() },
+            onDismiss = { confirmAction = null }
+        )
+
+        else -> Unit
+    }
+
+    recordToDelete?.let { record ->
+        ConfirmDialog(
+            title = "Delete DNS record?",
+            text = "Do you really want to delete the ${record.type?.value ?: ""} record \"${record.prefixLabel}\" " +
+                    "(${record.content ?: "–"})?",
+            confirmLabel = "Delete",
+            destructive = true,
+            onConfirm = { recordToDelete = null; deleteRecord(record) },
+            onDismiss = { recordToDelete = null }
         )
     }
 
-    if (showDialog) {
-        ErrorDialog(
-            onDismissRequest = { showDialog = false },
-            onConfirmation = { showDialog = false; },
-            dialogTitle = errorDialogTitle,
-            dialogText = errorDialogText,
-            dialogConfirmText = errorDialogButtonText
-        )
+    if (showDynDns && domain.isNotEmpty()) {
+        DomainDynDnsDialog(domain = domain, req = req) { updated ->
+            showDynDns = false
+            if (updated) getDomain()
+        }
     }
 
-    if (showDeleteDialog) {
-        ErrorDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            onConfirmation = { showDeleteDialog = false; DeleteDomain() },
-            dialogTitle = deleteDialogTitle,
-            dialogText = deleteDialogText,
-            dialogConfirmText = deleteDialogButtonText,
-            icon = R.drawable.delete_24px,
-            showDismiss = true
-        )
+    rotatedUrl?.let { url ->
+        RotatedTokenDialog(updateUrl = url) { rotatedUrl = null }
     }
 
-    if (showDeleteDNSDialog && selectedRecordId != 0L) {
-        ErrorDialog(
-            onDismissRequest = { showDeleteDNSDialog = false },
-            onConfirmation = { showDeleteDNSDialog = false; DeleteDNSRecord(selectedRecordId) },
-            dialogTitle = deleteDialogTitle,
-            dialogText = deleteDialogText,
-            dialogConfirmText = deleteDialogButtonText,
-            icon = R.drawable.delete_24px,
-            showDismiss = true
-        )
-    }
-
-    if (showRequestDialog) {
-        RequestDialogs(
-            onDismissRequest = { showRequestDialog = false },
-            onConfirmation = { showRequestDialog = false; },
-            dialogConfirmText = errorDialogButtonText,
-            request = requestType
-        )
-    }
+    RequestStateHost(req)
 }

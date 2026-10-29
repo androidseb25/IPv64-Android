@@ -1,5 +1,8 @@
 package de.rpicloud.ipv64net.main.views
 
+import androidx.compose.runtime.saveable.rememberSaveable
+import de.rpicloud.ipv64net.main.views.monitoring.MonitoringNavKeys
+import de.rpicloud.ipv64net.main.views.common.rememberCanGoBack
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -16,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -75,6 +79,7 @@ private enum class HcFilter(val label: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues) {
+    val canGoBack = rememberCanGoBack(navController)
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var showLoadingDialog by remember { mutableStateOf(false) }
@@ -88,7 +93,20 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
 
     var checks by remember { mutableStateOf<List<Hc2Check>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
-    var filter by remember { mutableStateOf(HcFilter.ALL) }
+    // Startfilter aus der Monitoring-Übersicht (Kachel), einmal lesen und entfernen
+    val startFilter = remember {
+        val handle = navController.previousBackStackEntry?.savedStateHandle
+        val name = handle?.get<String>(MonitoringNavKeys.CHECK_FILTER)
+        handle?.remove<String>(MonitoringNavKeys.CHECK_FILTER)
+        when (name) {
+            Hc2StateUi.UP.name -> HcFilter.UP
+            Hc2StateUi.DEGRADED.name, Hc2StateUi.FLAPPING.name -> HcFilter.DEGRADED
+            Hc2StateUi.DOWN.name -> HcFilter.DOWN
+            Hc2StateUi.PAUSED.name -> HcFilter.PAUSED
+            else -> HcFilter.ALL
+        }
+    }
+    var filter by rememberSaveable { mutableStateOf(startFilter) }
     var query by remember { mutableStateOf("") }
 
     // Liste einmal laden (20 s Cache), force = Pull-to-Refresh; nie pro Zeile
@@ -142,6 +160,14 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    // Kein Tab mehr: Zurück-Pfeil nur, wenn es einen vorherigen Screen gibt (z. B. Monitoring-Hub)
+                    if (canGoBack) {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(painter = painterResource(id = R.drawable.arrow_back_24px), contentDescription = "Back")
+                        }
+                    }
+                },
                 title = { Text(Tabs.getLabel(Tab.healthcheck)) },
                 modifier = Modifier.statusBarsPadding()
             )
@@ -168,7 +194,6 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                item { HealthcheckSummaryView(counts) }
                 item {
                     OutlinedTextField(
                         value = query,
@@ -184,7 +209,14 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         HcFilter.entries.forEach { f ->
-                            FilterChip(selected = f == filter, onClick = { filter = f }, label = { Text(f.label) })
+                            val n = when (f) {
+                                HcFilter.ALL -> checks.size
+                                HcFilter.UP -> counts.up
+                                HcFilter.DEGRADED -> counts.degraded
+                                HcFilter.DOWN -> counts.down
+                                HcFilter.PAUSED -> counts.paused
+                            }
+                            FilterChip(selected = f == filter, onClick = { filter = f }, label = { Text("${f.label} $n") })
                         }
                     }
                 }

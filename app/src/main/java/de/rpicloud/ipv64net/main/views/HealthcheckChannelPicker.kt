@@ -62,7 +62,7 @@ fun HealthcheckChannelPicker(
         if (!useDefault) {
             if (channels.isEmpty()) {
                 Text(
-                    "No channels yet. Create one in the Channels tab.",
+                    "No channels yet. Create one under Monitoring › Channels.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 48.dp)

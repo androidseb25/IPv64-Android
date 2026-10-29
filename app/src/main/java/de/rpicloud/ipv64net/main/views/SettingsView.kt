@@ -41,6 +41,11 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.helper.CacheRegistry
+import de.rpicloud.ipv64net.helper.DomainCache
+import de.rpicloud.ipv64net.helper.Hc2ChannelCache
+import de.rpicloud.ipv64net.helper.Hc2ChannelTypeCache
+import de.rpicloud.ipv64net.helper.Hc2CheckListCache
 import de.rpicloud.ipv64net.helper.PreferencesManager
 import de.rpicloud.ipv64net.helper.findActivity
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
@@ -107,6 +112,30 @@ fun SettingsView(navController: NavHostController, mainPadding: PaddingValues) {
                         }
                     ) {
                         navController.navigate(Tabs.getRoute(Tab.account))
+                    }
+                    preference(
+                        key = "PREF_ACCOUNT_API_KEYS",
+                        title = { Text(text = "API keys") },
+                        icon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.key_24px),
+                                contentDescription = "API keys Icon"
+                            )
+                        }
+                    ) {
+                        navController.navigate(Tabs.getRoute(Tab.api_keys))
+                    }
+                    preference(
+                        key = "PREF_ACCOUNT_LINKS",
+                        title = { Text(text = "Account links") },
+                        icon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.link_24px),
+                                contentDescription = "Account links Icon"
+                            )
+                        }
+                    ) {
+                        navController.navigate(Tabs.getRoute(Tab.account_links))
                     }
                     preference(
                         key = "PREF_ACCOUNT_LOGS",
@@ -229,6 +258,12 @@ fun SettingsView(navController: NavHostController, mainPadding: PaddingValues) {
                         }
                     ) {
                         PreferencesManager.saveString(ctx, "APIKEY", "")
+                        // Zwischengespeicherte Daten (u. a. Update-Tokens) aus dem Speicher entfernen
+                        CacheRegistry.clearAll()
+                        DomainCache.clear()
+                        Hc2ChannelCache.clear()
+                        Hc2ChannelTypeCache.clear()
+                        Hc2CheckListCache.clear()
                         lockScreenEnabled.value = false
                         val activity = ctx.findActivity()
 

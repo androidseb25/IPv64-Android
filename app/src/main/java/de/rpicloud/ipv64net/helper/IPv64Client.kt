@@ -27,6 +27,8 @@ object IPv64Client {
         Hc2ChannelCache.clear()
         Hc2ChannelTypeCache.clear()
         Hc2CheckListCache.clear()
+        // Alle bei CacheRegistry angemeldeten Caches (TimedCache u. a.) ebenfalls leeren
+        CacheRegistry.clearAll()
         return IPv64(apiKey = apiKey).also {
             cachedKey = apiKey
             cachedClient = it
