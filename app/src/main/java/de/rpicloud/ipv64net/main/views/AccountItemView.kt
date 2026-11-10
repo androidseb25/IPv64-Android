@@ -1,75 +1,60 @@
 package de.rpicloud.ipv64net.main.views
 
-import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
+import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
+import de.rpicloud.ipv64net.main.views.common.StatusChip
 import de.rpicloud.ipv64net.models.User
 import de.rpicloud.ipv64net.ui.theme.AppTheme
 
+/**
+ * Zeile eines gespeicherten Accounts (in einer [ListGroup]): Antippen wechselt den Account, langes Drücken
+ * öffnet die Bearbeitung. Der aktive Account trägt den Chip "Active".
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AccountItemView(
     user: User,
+    isActive: Boolean,
     onClick: (selectedUser: User) -> Unit,
-    onLongClick: (selectedUser: User) -> Unit
+    onLongClick: (selectedUser: User) -> Unit,
+    onRemove: ((selectedUser: User) -> Unit)? = null
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                interactionSource = interactionSource,
-                indication = LocalIndication.current,         // oder `LocalIndication.current` für Ripple
-                onLongClick = { onLongClick(user) },
-                onClick = { onClick(user) }
-            )
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.Start,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    user.Username,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    user.Information.ifEmpty { "No Information" },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+    ListRow(
+        title = user.Username,
+        subtitle = user.Information.ifEmpty { "No Information" },
+        subtitleMaxLines = 1,
+        icon = R.drawable.account_circle_24px,
+        trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isActive) StatusChip("Active", colorResource(R.color.ipv64_green))
+                // Eintrag nur aus der App entfernen (öffnet einen Bestätigungsdialog)
+                if (onRemove != null) {
+                    IconButton(onClick = { onRemove(user) }) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.delete_24px),
+                            contentDescription = "Remove ${user.Username} from this app",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
             }
-            Spacer(Modifier.weight(1f))
-            RadioButton(
-                selected = User.current!!.ApiKey == user.ApiKey,
-                onClick = { onClick(user) }
-            )
-        }
-    }
+        },
+        showChevron = false,
+        modifier = Modifier.combinedClickable(onLongClick = { onLongClick(user) }, onClick = { onClick(user) })
+    )
 }
 
 @Preview(showBackground = true, device = "id:pixel_5")
@@ -79,14 +64,14 @@ fun AccountItemViewPreview() {
         val user = User.empty
         user.Information = "No Informations"
         user.Username = "Default User"
-        AccountItemView(
-            user,
-            onClick = {
-                println(it)
-            },
-            onLongClick = {
-                println(it)
-            }
-        )
+        ListGroup {
+            AccountItemView(
+                user,
+                isActive = true,
+                onClick = { },
+                onLongClick = { },
+                onRemove = { }
+            )
+        }
     }
 }

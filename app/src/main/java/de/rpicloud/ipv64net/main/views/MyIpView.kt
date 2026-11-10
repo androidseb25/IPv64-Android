@@ -20,7 +20,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -32,13 +31,15 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
-import de.rpicloud.ipv64net.helper.NetworkService
-import de.rpicloud.ipv64net.helper.views.ErrorDialog
+import de.rpicloud.ipv64net.helper.myIp
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
-import de.rpicloud.ipv64net.models.IPResult
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.models.NO_IPV4
+import de.rpicloud.ipv64net.models.NO_IPV6
+import de.sr.ipv64.model.IpFamily
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,93 +50,22 @@ fun MyIpView(navController: NavHostController, mainPadding: PaddingValues) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var showLoadingDialog by remember { mutableStateOf(false) }
-    var showDialog by remember { mutableStateOf(false) }
-    var errorDialogTitle by remember { mutableStateOf("") }
-    var errorDialogText by remember { mutableStateOf("") }
-    var errorDialogButtonText by remember { mutableIntStateOf(android.R.string.ok) }
 
-    var myV4 by remember { mutableStateOf(IPResult.empty) }
-    var myV6 by remember { mutableStateOf(IPResult.empty) }
+    var myV4 by remember { mutableStateOf(NO_IPV4) }
+    var myV6 by remember { mutableStateOf(NO_IPV6) }
 
-    fun getMyV6() {
+    fun getMyIps() {
         showLoadingDialog = true
-        scope.launch(Dispatchers.IO) {
-            NetworkService(ctx).GetMyIP(forV4 = false) { nwResult ->
+        // IPv4 und IPv6 unabhängig voneinander; der Spinner wartet nicht auf ein langsames IPv6
+        scope.launch {
+            try {
+                myV4 = myIp(IpFamily.IPV4) ?: NO_IPV4
+            } finally {
                 showLoadingDialog = false
-                when (nwResult.status) {
-                    200 -> {
-                        if (nwResult.data == null) {
-                            println(nwResult.message)
-                            errorDialogTitle = "Data not found"
-                            errorDialogText = "There are no data found!"
-                            errorDialogButtonText = R.string.retry
-                            showDialog = true
-                        } else {
-                            (nwResult.data as IPResult).also { myV6 = it }
-                            println(myV6)
-                        }
-                    }
-
-                    400 -> {
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
-
-                    else -> {
-//                        println(nwResult.message)
-//                        errorDialogTitle = "Loading error"
-//                        errorDialogText = nwResult.message.toString()
-//                        errorDialogButtonText = R.string.retry
-//                        showDialog = true
-                        myV6.ip = "::"
-                    }
-                }
             }
         }
-    }
-
-    fun getMyV4() {
-        showLoadingDialog = true
-        scope.launch(Dispatchers.IO) {
-            NetworkService(ctx).GetMyIP(forV4 = true) { nwResult ->
-                showLoadingDialog = false
-                when (nwResult.status) {
-                    200 -> {
-                        if (nwResult.data == null) {
-                            println(nwResult.message)
-                            errorDialogTitle = "Data not found"
-                            errorDialogText = "There are no data found!"
-                            errorDialogButtonText = R.string.retry
-                            showDialog = true
-                        } else {
-                            (nwResult.data as IPResult).also { myV4 = it }
-                            println(myV4)
-                            getMyV6()
-                        }
-                    }
-
-                    400 -> {
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
-
-                    else -> {
-//                        println(nwResult.message)
-//                        errorDialogTitle = "Loading error"
-//                        errorDialogText = nwResult.message.toString()
-//                        errorDialogButtonText = R.string.retry
-//                        showDialog = true
-                        myV4.ip = "0.0.0.0"
-                        getMyV6()
-                    }
-                }
-            }
+        scope.launch {
+            myV6 = myIp(IpFamily.IPV6) ?: NO_IPV6
         }
     }
 
@@ -170,35 +100,26 @@ fun MyIpView(navController: NavHostController, mainPadding: PaddingValues) {
                     .fillMaxWidth()
                     .weight(1f),
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                item {
-                    MyIpItemView(ctx, haptics,myV4)
-                }
-                item {
-                    MyIpItemView(ctx, haptics,myV6)
+                item(key = "ips") {
+                    ListGroup {
+                        MyIpItemView(ctx, haptics, myV4)
+                        GroupDivider()
+                        MyIpItemView(ctx, haptics, myV6)
+                    }
                 }
             }
         }
     }
 
     LaunchedEffect(Unit) {
-        getMyV4()
+        getMyIps()
     }
 
     if (showLoadingDialog) {
         SpinnerDialog(
             spinnerText = "Loading..."
-        )
-    }
-
-    if (showDialog) {
-        ErrorDialog(
-            onDismissRequest = { showDialog = false },
-            onConfirmation = { showDialog = false; getMyV6() },
-            dialogTitle = errorDialogTitle,
-            dialogText = errorDialogText,
-            dialogConfirmText = errorDialogButtonText
         )
     }
 }

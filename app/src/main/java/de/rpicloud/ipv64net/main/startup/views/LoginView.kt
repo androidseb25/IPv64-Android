@@ -2,7 +2,9 @@ package de.rpicloud.ipv64net.main.startup.views
 
 import android.Manifest
 import android.content.Intent
-import android.os.Build
+import android.net.Uri
+import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -21,7 +23,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.navigation.NavHostController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -54,40 +56,38 @@ fun LoginView(navController: NavHostController, isFromUser: Boolean = false) {
     val context = LocalContext.current
     var showDialog by remember { mutableStateOf(false) }
     var hasHandledResult by remember { mutableStateOf(false) }
-    var currentPermissionRequest by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf("") }
     var showRationaleDialog by remember { mutableStateOf(false) }
 
+    // Kamera ist ab API 23 eine Laufzeitberechtigung; nach Erteilung den Scanner direkt öffnen
     val cameraPermissionState = rememberPermissionState(
-        permission = Manifest.permission.CAMERA
-    )
-    val readExternalStoragePermissionState = rememberPermissionState(
-        permission = Manifest.permission.READ_EXTERNAL_STORAGE
+        permission = Manifest.permission.CAMERA,
+        onPermissionResult = { granted ->
+            if (granted) {
+                hasHandledResult = false
+                showDialog = true
+            } else {
+                // Ohne Rationale nach einer Ablehnung ("Nicht mehr fragen") antwortet das System nicht mehr: Einstellungen öffnen.
+                // minSdk 31: bereits die erste Ablehnung liefert Rationale = true, daher kein Merker nötig.
+                val activity = context.findActivity()
+                if (activity != null && !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.CAMERA)) {
+                    Toast.makeText(context, "Camera permission is denied. Enable it in the app settings.", Toast.LENGTH_LONG).show()
+                    context.startActivity(
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            }
+        }
     )
 
     fun openCamera() {
         hasHandledResult = false
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || cameraPermissionState.status.isGranted) {
-            currentPermissionRequest = Manifest.permission.CAMERA
-            showRationaleDialog = cameraPermissionState.status.shouldShowRationale
-        } else {
-            cameraPermissionState.launchPermissionRequest()
+        when {
+            cameraPermissionState.status.isGranted -> showDialog = true
+            cameraPermissionState.status.shouldShowRationale -> showRationaleDialog = true
+            else -> cameraPermissionState.launchPermissionRequest()
         }
-
-        if (cameraPermissionState.status.isGranted) {
-            // CAMERA CODE
-            showDialog = true
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || readExternalStoragePermissionState.status.isGranted) {
-            currentPermissionRequest = Manifest.permission.READ_EXTERNAL_STORAGE
-            showRationaleDialog = readExternalStoragePermissionState.status.shouldShowRationale
-        } else {
-            readExternalStoragePermissionState.launchPermissionRequest()
-        }
-        apiKey = ""
     }
 
     Scaffold(
@@ -193,17 +193,32 @@ fun LoginView(navController: NavHostController, isFromUser: Boolean = false) {
                 Column(modifier = Modifier.padding(bottom = 32.dp)) {
                     Button(
                         onClick = {
-                            val isContains = User.list.find { it.ApiKey == apiKey } != null
+                            // Liste nur einmal lesen (jeder Zugriff liest die Preferences neu)
+                            val users = User.list
+                            val isContains = users.any { it.ApiKey == apiKey }
 
-                            if (isContains) {
+                            if (isContains && isFromUser) {
+                                Toast.makeText(context, "This account has already been added.", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
 
-                            val user = User.empty
-                            user.ApiKey = apiKey
-                            user.Username = if (User.list.count() > 0) "Default User ${User.list.count()}" else "Default User"
-                            user.Information = ""
-                            user.save()
+                            // Bereits vorhandener Key (z. B. erneuter Login nach Logout): nicht doppelt speichern
+                            if (!isContains) {
+                                // Ersten freien Namen wählen ("Default User", "Default User 1", ...)
+                                var username = "Default User"
+                                var index = 1
+                                while (users.any { it.Username == username }) {
+                                    username = "Default User ${index++}"
+                                }
+
+                                // Immer ein neues Objekt (eigene ID), nicht das geteilte User.empty verändern
+                                val user = User(
+                                    ApiKey = apiKey,
+                                    Username = username,
+                                    Information = ""
+                                )
+                                user.save()
+                            }
 
                             if (!isFromUser) {
                                 PreferencesManager.saveString(context, "APIKEY", apiKey)
@@ -231,8 +246,7 @@ fun LoginView(navController: NavHostController, isFromUser: Boolean = false) {
 
     if (showRationaleDialog) {
         ShowPermissionDialog(
-            currentPermissionRequest = currentPermissionRequest,
-            readExternalStoragePermissionState = readExternalStoragePermissionState,
+            currentPermissionRequest = Manifest.permission.CAMERA,
             cameraPermissionState = cameraPermissionState
         ) {
             showRationaleDialog = false

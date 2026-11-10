@@ -1,4 +1,7 @@
 # Add project specific ProGuard rules here.
+
+# User wird per Gson unter APP_USERS gespeichert; Feldnamen sind die JSON-Keys und dürfen nicht umbenannt werden
+-keepclassmembers class de.rpicloud.ipv64net.models.User { <fields>; }
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
 #

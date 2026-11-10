@@ -1,13 +1,13 @@
 package de.rpicloud.ipv64net.main.startup.activity
 
 import android.annotation.SuppressLint
-import android.content.Context
+import de.rpicloud.ipv64net.BuildConfig
 import android.content.Intent
 import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import de.rpicloud.ipv64net.helper.PreferencesManager
+import de.rpicloud.ipv64net.helper.SecNtfyHelper
 import de.rpicloud.ipv64net.main.activity.MainActivity
 import de.rpicloud.ipv64net.models.LaunchScreens
 
@@ -20,6 +20,21 @@ class LaunchActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         val apiKey: String = PreferencesManager.loadString(applicationContext, "APIKEY")
+        val secntfyUrl = PreferencesManager.loadString(applicationContext, "SECNTFY_API_URL")
+        val secntfyAppKey = PreferencesManager.loadString(applicationContext, "SECNTFY_APP_KEY")
+
+        if (secntfyUrl.isEmpty() || secntfyAppKey.isEmpty()) {
+            PreferencesManager.saveString(applicationContext, "SECNTFY_API_URL", "https://api.secntfy.app")
+            PreferencesManager.saveString(applicationContext, "SECNTFY_APP_KEY", "NTFY-APP-Mx0Ggr0DsWozTxVwGFfUj9uaAdkC7eVGR4u8wSYLDNw")
+        }
+
+        // Debug mit -PmockApi: Push-Registrierung an den Mock-Server statt api.secntfy.app
+        if (BuildConfig.MOCK_API.isNotEmpty()) {
+            PreferencesManager.saveString(applicationContext, "SECNTFY_API_URL", BuildConfig.MOCK_API + "/secntfy")
+        }
+
+        // Register FCM token with SecNtfy on app launch
+        SecNtfyHelper.registerDeviceToken(applicationContext)
 
         activeScreen = if (apiKey.isEmpty())
             LaunchScreens.LOGIN

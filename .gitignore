@@ -18,3 +18,17 @@ app/release/
 *.jks
 *.b64
 *.pem
+
+# graphify knowledge graph
+graphify-out/
+
+# Firebase config (injected via CI secret) and Kotlin compiler cache
+app/google-services.json
+.kotlin/
+
+# Screenshots (groß, nicht ins Repo)
+docs/screenshots/
+
+# macOS / Backups
+.DS_Store
+*.bak

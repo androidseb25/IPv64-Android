@@ -2,25 +2,36 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
 }
 
 android {
     namespace = "de.rpicloud.ipv64net"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "de.rpicloud.ipv64net"
-        minSdk = 28
+        minSdk = 31
+        //noinspection OldTargetApi
         targetSdk = 36
-        versionCode = 21
-        versionName = "2.0.1"
-
+        versionCode = 22
+        versionName = "2.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        vectorDrawables {
+            useSupportLibrary = true
+        }
     }
 
     buildTypes {
+        // -PmockApi=http://10.0.2.2:8064 leitet alle Cloud-Anfragen an tools/mockapi (nur Debug; Release bleibt leer)
+        debug {
+            buildConfigField("String", "MOCK_API", "\"${(project.findProperty("mockApi") as String? ?: "").trim().trimEnd('/')}\"")
+        }
         release {
-            isMinifyEnabled = false
+            buildConfigField("String", "MOCK_API", "\"\"")
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -28,15 +39,22 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-    kotlinOptions {
-        jvmTarget = "11"
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+kotlin {
+    jvmToolchain(17)
 }
 
 tasks.register("printVersionName") {
@@ -60,16 +78,15 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.library)
     implementation(libs.core)
-    implementation(libs.logging.interceptor)
-    implementation(libs.okhttp)
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.core)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.accompanist.permissions)
     implementation(libs.androidx.biometric)
-    implementation(libs.androidx.datastore.preferences)
-    implementation(libs.androidx.lifecycle.process)
+    implementation(libs.secntfy.android)
+    implementation(libs.ipv64)
+    implementation(libs.firebase.messaging)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

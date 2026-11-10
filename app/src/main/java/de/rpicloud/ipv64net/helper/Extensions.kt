@@ -4,13 +4,15 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.ComponentActivity
-import de.rpicloud.ipv64net.models.Unit
+import de.sr.ipv64.model.UsageCounter
+import de.sr.ipv64.model.VpnTrafficUsage
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.ln
 import kotlin.math.pow
+import kotlin.time.Instant
 
 fun Context.findActivity(): ComponentActivity? = when (this) {
     is ComponentActivity -> this
@@ -28,22 +30,10 @@ fun Date.formatGermanTime(): String {
     return format.format(this)
 }
 
-fun Date.formatDbTime(): String {
-    val format = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.GERMANY)
-    return format.format(this)
-}
+fun Instant.formatGermanTime(): String = Date(toEpochMilliseconds()).formatGermanTime()
 
-fun String.parseDbDate(): String {
-    val dbFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-    val date: Date? = runCatching { dbFormat.parse(this) }.getOrNull()
-    return date?.formatGerman() ?: "01.01.0001"
-}
-
-fun String.parseDbDateTime(): String {
-    val dbFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-    val date: Date? = runCatching { dbFormat.parse(this) }.getOrNull()
-    return date?.formatGermanTime() ?: "01.01.0001 00:00:00"
-}
+/** Go schickt ungesetzte Zeiten als 0001-01-01 statt null: solche Werte ausblenden. */
+fun Instant.realOrNull(): Instant? = takeIf { it.toEpochMilliseconds() > 0 }
 
 @SuppressLint("DefaultLocale")
 fun Long.formatBytes(): String {
@@ -79,11 +69,28 @@ fun String.v64domains(): List<String> {
     )
 }
 
-fun Int.apiUsageText(usage: Int): String {
-    val nf = NumberFormat.getIntegerInstance(Locale.getDefault())
-    val usedStr = nf.format(usage)
-    val maxStr = if (this == 0) "∞" else nf.format(this)
+// Ganzzahlen ohne Nachkommastellen, sonst höchstens 2 (z. B. Traffic in GB)
+fun Double.formatUsage(): String {
+    val nf = NumberFormat.getNumberInstance(Locale.getDefault())
+    nf.maximumFractionDigits = 2
+    return nf.format(this)
+}
+
+// Limit null bedeutet unbegrenzt; fehlt der Zähler (noch nicht geladen), wird "–" angezeigt
+fun UsageCounter?.usageText(): String {
+    if (this == null) return "–"
+    val usedStr = (used ?: 0.0).formatUsage()
+    val maxStr = limit?.let { it.toDouble().formatUsage() } ?: "∞"
     return "$usedStr / $maxStr"
+}
+
+// Für VPN-Traffic ist "null = unbegrenzt" nicht dokumentiert, daher "–" bei fehlendem Limit
+fun VpnTrafficUsage?.usageText(): String {
+    if (this == null) return "–"
+    val usedStr = (used ?: 0.0).formatUsage()
+    val maxStr = limit?.let { it.toDouble().formatUsage() } ?: "–"
+    val text = "$usedStr / $maxStr"
+    return if (limited == true) "$text (limit reached)" else text
 }
 
 fun String.v64DnsRecordTypes(): List<String> {
@@ -100,10 +107,50 @@ fun String.v64DnsRecordTypes(): List<String> {
     )
 }
 
-fun String.v64Units(): List<Unit> {
-    return listOf(
-        Unit.Minuten,
-        Unit.Stunden,
-        Unit.Tage
-    )
+// Relative Zeit ("just now", "5 min ago", "2 h ago", "3 d ago"), ab 30 Tagen das Datum
+fun Instant.formatRelative(): String {
+    val diffSeconds = (System.currentTimeMillis() - toEpochMilliseconds()) / 1000
+    return when {
+        diffSeconds < 0 -> formatGermanTime()
+        diffSeconds < 60 -> "just now"
+        diffSeconds < 3_600 -> "${diffSeconds / 60} min ago"
+        diffSeconds < 86_400 -> "${diffSeconds / 3_600} h ago"
+        diffSeconds < 30 * 86_400L -> "${diffSeconds / 86_400} d ago"
+        else -> Date(toEpochMilliseconds()).formatGerman()
+    }
 }
+
+// Dauer in Sekunden lesbar (höchstens zwei Einheiten), z. B. "1 h 30 min"
+fun Long.formatDuration(): String {
+    if (this <= 0) return "0 s"
+    val units = listOf(86_400L to "d", 3_600L to "h", 60L to "min", 1L to "s")
+    var rest = this
+    val parts = mutableListOf<String>()
+    for ((size, unit) in units) {
+        val value = rest / size
+        if (value > 0) {
+            parts += "$value $unit"
+            rest -= value * size
+        }
+    }
+    return parts.take(2).joinToString(" ")
+}
+
+// Prozentwert mit höchstens zwei Nachkommastellen; null → "–"
+fun Double?.formatPercent(): String {
+    if (this == null) return "–"
+    val nf = NumberFormat.getNumberInstance(Locale.getDefault())
+    nf.maximumFractionDigits = 2
+    return "${nf.format(this)} %"
+}
+
+// Latenz in ms; null → "–"
+fun Double?.formatLatency(): String {
+    if (this == null) return "–"
+    val nf = NumberFormat.getNumberInstance(Locale.getDefault())
+    nf.maximumFractionDigits = if (this < 10) 1 else 0
+    return "${nf.format(this)} ms"
+}
+
+// Dynamischen Text für ErrorDialog (rendert HTML) maskieren; Zeilenumbrüche als <br>
+fun htmlText(s: String): String = android.text.TextUtils.htmlEncode(s).replace("\n", "<br>")

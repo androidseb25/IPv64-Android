@@ -1,0 +1,166 @@
+package de.rpicloud.ipv64net.helper
+
+import android.content.Context
+import android.os.SystemClock
+import de.rpicloud.ipv64net.BuildConfig
+import de.rpicloud.ipv64net.models.RequestTyp
+import de.sr.ipv64.IPv64
+import de.sr.ipv64.IPv64ApiException
+import de.sr.ipv64.IPv64Exception
+import de.sr.ipv64.IPv64NetworkException
+import de.sr.ipv64.IPv64SerializationException
+import de.sr.ipv64.model.DomainDetail
+import de.sr.ipv64.model.IpFamily
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
+
+object IPv64Client {
+    private var cachedKey: String? = null
+    private var cachedClient: IPv64? = null
+
+    // Ein Client pro API-Key; beim Account-Wechsel oder Logout ändert sich APIKEY und der Client wird neu erstellt
+    @Synchronized
+    fun get(ctx: Context): IPv64 {
+        val apiKey = PreferencesManager.loadString(ctx, "APIKEY").trim().ifEmpty { null }
+        cachedClient?.let { if (cachedKey == apiKey) return it }
+        // Alle bei CacheRegistry angemeldeten Caches (TimedCache, DomainCache u. a.) leeren
+        CacheRegistry.clearAll()
+        return IPv64(apiKey = apiKey, baseUrl = apiBase(IPv64.DEFAULT_BASE_URL)).also {
+            cachedKey = apiKey
+            cachedClient = it
+        }
+    }
+}
+
+// Öffentliche Clients ohne API-Key, jeweils nur über IPv4 bzw. IPv6 erreichbar (A- bzw. AAAA-Record)
+private val ipv4Client by lazy { IPv64(baseUrl = apiBase("https://ipv4.ipv64.net/api/v2")) }
+private val ipv6Client by lazy { IPv64(baseUrl = apiBase("https://ipv6.ipv64.net/api/v2")) }
+
+// Debug mit -PmockApi: alle Clients gehen an den Mock-Server (tools/mockapi); sonst unverändert [default]
+// Mock-Pfade: /api/v2 (Cloud, ipv4/ipv6 identisch), /secntfy (Push)
+private fun apiBase(default: String): String =
+    if (BuildConfig.MOCK_API.isEmpty()) default else BuildConfig.MOCK_API + "/api/v2"
+
+// Eigene öffentliche IP der gewünschten Familie; null, wenn sie nicht ermittelt werden kann (z. B. kein IPv6)
+// Das Timeout verhindert lange Wartezeiten, wenn die Familie nicht erreichbar ist (DNS-/Verbindungs-Timeouts)
+suspend fun myIp(family: IpFamily): String? {
+    val client = if (family == IpFamily.IPV6) ipv6Client else ipv4Client
+    return try {
+        withTimeoutOrNull(5_000) { ipv64Request { client.meta.ip() } }
+            ?.takeIf { it.family == null || it.family == family }
+            ?.ip?.trim()?.takeIf { it.isNotEmpty() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: IPv64Exception) {
+        null
+    }
+}
+
+// Domain-Details kurz zwischenspeichern, damit Liste und Detailansicht das Rate-Limit nicht ausreizen
+object DomainCache : ClearableCache {
+    private const val TTL_MS = 5 * 60 * 1000L
+    private class Entry(val detail: DomainDetail, val time: Long)
+
+    private val entries = mutableMapOf<String, Entry>()
+
+    init {
+        CacheRegistry.register(this)
+    }
+
+    @Synchronized
+    fun get(name: String): DomainDetail? {
+        val entry = entries[name] ?: return null
+        if (SystemClock.elapsedRealtime() - entry.time > TTL_MS) {
+            entries.remove(name)
+            return null
+        }
+        return entry.detail
+    }
+
+    @Synchronized
+    fun put(name: String, detail: DomainDetail) {
+        entries[name] = Entry(detail, SystemClock.elapsedRealtime())
+    }
+
+    @Synchronized
+    fun invalidate(name: String) {
+        entries.remove(name)
+    }
+
+    @Synchronized
+    override fun clear() {
+        entries.clear()
+    }
+}
+
+// Ungültige Header-Werte (z. B. Zeilenumbruch im API-Key) lösen in OkHttp eine IllegalArgumentException aus
+suspend fun <T> ipv64Request(block: suspend () -> T): T {
+    try {
+        return block()
+    } catch (e: IllegalArgumentException) {
+        throw IPv64NetworkException(e.message ?: "Invalid request", e)
+    }
+}
+
+// Wie ipv64Request, aber bei 429 mit kurzer Wartezeit (Retry-After, sonst 3 s, höchstens 5 s) genau ein zweiter Versuch.
+// Abbruch (CancellationException) während des Wartens wird weitergereicht.
+suspend fun <T> ipv64Retrying(block: suspend () -> T): T {
+    try {
+        return ipv64Request(block)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: IPv64ApiException) {
+        val waitSeconds = e.retryAfterSeconds ?: 3
+        if (!e.isRateLimited || waitSeconds > 5) throw e
+        delay(waitSeconds.coerceAtLeast(1) * 1000L)
+    }
+    return ipv64Request(block)
+}
+
+enum class IPv64Context { Create, Update, Other }
+
+// Entweder requestType (RequestDialogs) oder title/text (ErrorDialog) wird angezeigt
+data class IPv64Error(
+    val requestType: RequestTyp? = null,
+    val title: String = "Loading error",
+    val text: String = ""
+)
+
+fun IPv64Exception.toError(context: IPv64Context = IPv64Context.Other): IPv64Error {
+    if (this !is IPv64ApiException) {
+        // Nicht lesbare Antwort mit Ursache anzeigen; echte Netzwerkfehler wie bisher als Verbindungsfehler
+        return if (this is IPv64SerializationException) IPv64Error(
+            title = "Unexpected server response",
+            text = "The app could not read the server response. " + message.orEmpty().take(300)
+        ) else IPv64Error(requestType = RequestTyp.WebsiteRequestFailed)
+    }
+    val info = "${code.orEmpty()} ${detail.orEmpty()}".lowercase()
+    return when {
+        isUnauthorized -> IPv64Error(RequestTyp.UnAuthorized)
+        isRateLimited || retryAfterSeconds != null ->
+            IPv64Error(if (context == IPv64Context.Update) RequestTyp.UpdateCoolDown else RequestTyp.TooManyRequests)
+
+        context == IPv64Context.Create && (isForbidden || isConflict) -> IPv64Error(
+            when {
+                info.contains("limit") -> RequestTyp.DomainLimitReached
+                isConflict || info.contains("not available") || info.contains("taken") || info.contains("exists") ->
+                    RequestTyp.DomainNotAvailable
+
+                else -> RequestTyp.DomainRulesNotCreated
+            }
+        )
+
+        // Serverfehler mit Text und Status anzeigen statt als Verbindungsfehler
+        status >= 500 -> IPv64Error(
+            title = "Server error",
+            text = (detail ?: problem?.title ?: "The server could not process the request.") +
+                    " (HTTP $status" + (code?.let { ", $it" } ?: "") + ")"
+        )
+        else -> {
+            val text = detail ?: problem?.title ?: message.orEmpty()
+            // Betroffenes Eingabefeld anhängen, damit Validierungsfehler zuordenbar sind
+            IPv64Error(text = field?.let { "$text (field: $it)" } ?: text)
+        }
+    }
+}

@@ -1,32 +1,12 @@
 package de.rpicloud.ipv64net.main.views
 
+import de.rpicloud.ipv64net.main.views.common.SecureWindowEffect
 import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -35,45 +15,43 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import de.rpicloud.ipv64net.R
-import de.rpicloud.ipv64net.helper.NetworkService
-import de.rpicloud.ipv64net.helper.apiUsageText
-import de.rpicloud.ipv64net.helper.parseDbDate
+import de.rpicloud.ipv64net.helper.IPv64Client
+import de.rpicloud.ipv64net.helper.PreferencesManager
+import de.rpicloud.ipv64net.helper.formatGermanTime
+import de.rpicloud.ipv64net.helper.ipv64Request
+import de.rpicloud.ipv64net.helper.toError
+import de.rpicloud.ipv64net.helper.usageText
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
 import de.rpicloud.ipv64net.main.activity.TabView
-import de.rpicloud.ipv64net.models.AccountInfo
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
+import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
+import de.rpicloud.ipv64net.main.views.common.InfoGroup
+import de.rpicloud.ipv64net.main.views.common.InfoItem
 import de.rpicloud.ipv64net.models.RequestTyp
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.rpicloud.ipv64net.models.User
 import de.rpicloud.ipv64net.ui.theme.AppTheme
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import me.zhanghai.compose.preference.ProvidePreferenceLocals
-import me.zhanghai.compose.preference.preference
+import de.sr.ipv64.IPv64Exception
+import de.sr.ipv64.model.Me
 
-@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter", "ContextCastToActivity")
-@OptIn(ExperimentalMaterial3Api::class)
+@SuppressLint("ContextCastToActivity")
 @Composable
 fun AccountView(navController: NavHostController, mainPadding: PaddingValues) {
 
-    val haptics = LocalHapticFeedback.current
-
+    SecureWindowEffect() // API-Key kann per "Show" im Klartext angezeigt werden
     val ctx = LocalContext.current
-    val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
     var showLoadingDialog by remember { mutableStateOf(false) }
@@ -86,350 +64,153 @@ fun AccountView(navController: NavHostController, mainPadding: PaddingValues) {
     var requestType by remember { mutableStateOf(RequestTyp.UnAuthorized) }
 
 
-    var accountInfos by remember { mutableStateOf(AccountInfo.empty) }
+    var me by remember { mutableStateOf<Me?>(null) }
 
     fun getAccountInfos() {
         showLoadingDialog = true
-        scope.launch(Dispatchers.IO) {
-            NetworkService(ctx).GetAccountStatus { nwResult ->
+        scope.launch {
+            val ipv64 = IPv64Client.get(ctx)
+            try {
+                me = ipv64Request { ipv64.account.me() }
                 showLoadingDialog = false
-                when (nwResult.status) {
-                    200 -> {
-                        if (nwResult.data == null) {
-                            println(nwResult.message)
-                            errorDialogTitle = "Data not found"
-                            errorDialogText = "There are no data found!"
-                            errorDialogButtonText = R.string.retry
-                            showDialog = true
-                        } else {
-                            (nwResult.data as AccountInfo).also { accountInfos = it }
-                            println(accountInfos)
-                        }
-                    }
-
-                    400 -> {
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
-
-                    401 -> {
-                        requestType = RequestTyp.UnAuthorized
-                        showRequestDialog = true
-                    }
-
-                    403 -> {
-                        requestType =
-                            if ((nwResult.data as String).contains("domain limit reached")) {
-                                RequestTyp.DomainLimitReached
-                            } else if ((nwResult.data as String).contains("domainname not available"))
-                                RequestTyp.DomainNotAvailable
-                            else
-                                RequestTyp.DomainRulesNotCreated
-
-                        showRequestDialog = true
-                    }
-
-                    429 -> {
-                        requestType =
-                            if ((nwResult.data as String).contains("Updateintervall overcommited")) {
-                                RequestTyp.UpdateCoolDown
-                            } else
-                                RequestTyp.TooManyRequests
-                        showRequestDialog = true
-                    }
-
-                    500 -> {
-                        requestType = RequestTyp.WebsiteRequestFailed
-                        showRequestDialog = true
-                    }
-
-                    else -> {
-                        println(nwResult.message)
-                        errorDialogTitle = "Loading error"
-                        errorDialogText = nwResult.message.toString()
-                        errorDialogButtonText = R.string.retry
-                        showDialog = true
-                    }
+            } catch (e: IPv64Exception) {
+                showLoadingDialog = false
+                println(e.message)
+                val error = e.toError()
+                if (error.requestType != null) {
+                    requestType = error.requestType
+                    showRequestDialog = true
+                } else {
+                    errorDialogTitle = error.title
+                    errorDialogText = error.text
+                    errorDialogButtonText = R.string.retry
+                    showDialog = true
                 }
             }
         }
     }
 
-    ProvidePreferenceLocals {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(Tabs.getLabel(Tab.account))
-                    }, modifier = Modifier.statusBarsPadding(), navigationIcon = {
-                        IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.arrow_back_24px),
-                                contentDescription = "Close"
-                            )
-                        }
-                    }
-                )
-            }, modifier = Modifier
-                .fillMaxSize()
-                .padding(mainPadding)
-                .consumeWindowInsets(mainPadding)  // avoids double insets
-        ) { it ->
-            Column(modifier = Modifier.padding(it)) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    User.current?.let { user ->
-//                    val user = User.empty
-//                    user.Information = "No Informations"
-//                    user.Username = "Default Username"
-                        item {
-                            Button(onClick = {
-                                navController.navigate(Tabs.getRoute(Tab.account_details))
-                            }) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Start
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.account_circle_24px),
-                                        contentDescription = "Account Icon",
-                                        modifier = Modifier
-                                            .width(55.dp)
-                                            .height(55.dp)
-                                    )
-                                    Column {
-                                        Text(
-                                            user.Username,
-                                            style = MaterialTheme.typography.titleLarge,
-                                            modifier = Modifier.padding(start = 8.dp),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            user.Information,
-                                            modifier = Modifier.padding(start = 8.dp),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    stickyHeader {
-                        Surface( // nimmt Theme-Hintergrund, hebt Text hervor
-                            tonalElevation = 2.dp
-                        ) {
-                            Text(
-                                text = "Account",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-                    preference(
-                        key = "PREF_ACCOUNT_STATUS",
-                        title = { Text(text = "Account Status") },
-                        summary = { Text(if (accountInfos.account_status == 1) "activated" else "disabled") }
-                    )
-                    preference(
-                        key = "PREF_ACCOUNT_PLAN",
-                        title = { Text(text = "Account Plan") },
-                        summary = { Text(accountInfos.account_class.class_name.ifEmpty { "none" }) }
-                    )
-                    preference(
-                        key = "PREF_ACCOUNT_MAIL",
-                        title = { Text(text = "E-Mail") },
-                        summary = { Text(accountInfos.email.ifEmpty { "none" }) }
-                    )
-                    preference(
-                        key = "PREF_ACCOUNT_REGISTERED",
-                        title = { Text(text = "Registered since") },
-                        summary = { Text(accountInfos.reg_date.parseDbDate()) }
-                    )
-                    stickyHeader {
-                        Surface( // nimmt Theme-Hintergrund, hebt Text hervor
-                            tonalElevation = 2.dp
-                        ) {
-                            Text(
-                                text = "DynDNS",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-                    preference(
-                        key = "PREF_DYNDNS_OWN_DOMAIN_LIMIT",
-                        title = { Text(text = "Own Domain") },
-                        summary = {
-                            Text(
-                                accountInfos.account_class.owndomain_limit.apiUsageText(
-                                    accountInfos.owndomains
-                                )
-                            )
-                        }
-                    )
-                    preference(
-                        key = "PREF_DYNDNS_DOMAIN_LIMIT",
-                        title = { Text(text = "DynDNS Domains") },
-                        summary = {
-                            Text(
-                                accountInfos.account_class.dyndns_domain_limit.apiUsageText(
-                                    accountInfos.dyndns_subdomains
-                                )
-                            )
-                        }
-                    )
-                    preference(
-                        key = "PREF_DYNDNS_UPDATE_LIMIT",
-                        title = { Text(text = "DynDNS Update Limit / 24h") },
-                        summary = {
-                            Text(
-                                accountInfos.account_class.dyndns_update_limit.apiUsageText(
-                                    accountInfos.dyndns_updates
-                                )
-                            )
-                        }
-                    )
-                    preference(
-                        key = "PREF_DYNDNS_KEY",
-                        title = { Text(text = "DynDNS Updatehash") },
-                        summary = { Text("•••••••••••••••••••") }
-                    ) {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        val clipboard =
-                            ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip =
-                            ClipData.newPlainText("DynDNS Updatehash", accountInfos.update_hash)
-                        clipboard.setPrimaryClip(clip)
-                    }
-                    stickyHeader {
-                        Surface( // nimmt Theme-Hintergrund, hebt Text hervor
-                            tonalElevation = 2.dp
-                        ) {
-                            Text(
-                                text = "Healthcheck",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-                    preference(
-                        key = "PREF_HEALTHCHECK_LIMIT",
-                        title = { Text(text = "Healthchecks") },
-                        summary = {
-                            Text(
-                                accountInfos.account_class.healthcheck_limit.apiUsageText(
-                                    accountInfos.healthchecks
-                                )
-                            )
-                        }
-                    )
-                    preference(
-                        key = "PREF_HEALTHCHECK_UPDATE_LIMIT",
-                        title = { Text(text = "Healthchecks Updates / 24h") },
-                        summary = {
-                            Text(
-                                accountInfos.account_class.healthcheck_update_limit.apiUsageText(
-                                    accountInfos.healthchecks_updates
-                                )
-                            )
-                        }
-                    )
-                    preference(
-                        key = "PREF_HEALTHCHECK_SMS_LIMIT",
-                        title = { Text(text = "SMS Limit / 24h") },
-                        summary = {
-                            Text(
-                                accountInfos.account_class.sms_limit.apiUsageText(
-                                    accountInfos.sms_count
-                                )
-                            )
-                        }
-                    )
-                    stickyHeader {
-                        Surface( // nimmt Theme-Hintergrund, hebt Text hervor
-                            tonalElevation = 2.dp
-                        ) {
-                            Text(
-                                text = "API",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-                    preference(
-                        key = "PREF_API_LIMIT",
-                        title = { Text(text = "API Limit / 24") },
-                        summary = {
-                            Text(
-                                accountInfos.account_class.api_limit.apiUsageText(
-                                    accountInfos.api_updates
-                                )
-                            )
-                        }
-                    )
-                    preference(
-                        key = "PREF_API_KEY",
-                        title = { Text(text = "API Key") },
-                        summary = { Text("•••••••••••••••••••") }
-                    ) {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        val clipboard =
-                            ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("APIKey", accountInfos.api_key)
-                        clipboard.setPrimaryClip(clip)
+    ScreenScaffold(title = Tabs.getLabel(Tab.account), navController = navController, mainPadding = mainPadding) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            User.current?.let { user ->
+                item(key = "summary") {
+                    ListGroup {
+                        ListRow(
+                            title = user.Username,
+                            subtitle = user.Information.ifEmpty { "No Information" },
+                            subtitleMaxLines = 1,
+                            icon = R.drawable.account_circle_24px,
+                            onClick = { navController.navigate(Tabs.getRoute(Tab.account_details)) { launchSingleTop = true } }
+                        )
                     }
                 }
             }
-
-            if (showLoadingDialog) {
-                SpinnerDialog(
-                    spinnerText = "Loading..."
+            val usage = me?.usage
+            item(key = "account") {
+                InfoGroup(
+                    "Account",
+                    listOf(
+                        InfoItem("Username", me?.username.orEmpty().ifEmpty { "none" }),
+                        InfoItem("Account Plan", me?.plan?.name.orEmpty().ifEmpty { "none" }),
+                        InfoItem("Plan valid until", me?.plan?.let { it.validUntil?.formatGermanTime() ?: "unlimited" } ?: "–"),
+                        InfoItem("E-Mail", me?.email.orEmpty().ifEmpty { "none" }),
+                        InfoItem("Registered since", me?.registeredAt?.formatGermanTime() ?: "none"),
+                        InfoItem("Last login", me?.lastLoginAt?.formatGermanTime() ?: "none")
+                    )
                 )
             }
-
-            if (showDialog) {
-                ErrorDialog(
-                    onDismissRequest = { showDialog = false },
-                    onConfirmation = { showDialog = false; getAccountInfos() },
-                    dialogTitle = errorDialogTitle,
-                    dialogText = errorDialogText,
-                    dialogConfirmText = errorDialogButtonText,
-                    icon = 0
+            item(key = "dyndns") {
+                InfoGroup(
+                    "DynDNS",
+                    listOf(
+                        InfoItem("Own Domain", usage?.ownDomains.usageText()),
+                        InfoItem("DynDNS Domains", usage?.dyndnsDomains.usageText()),
+                        InfoItem("DynDNS Update Limit / 24h", usage?.dyndnsUpdates24h.usageText())
+                    )
                 )
             }
-
-            if (showRequestDialog) {
-                RequestDialogs(
-                    onDismissRequest = { showRequestDialog = false },
-                    onConfirmation = { showRequestDialog = false; getAccountInfos() },
-                    dialogConfirmText = errorDialogButtonText,
-                    request = requestType
+            item(key = "healthcheck") {
+                InfoGroup(
+                    "Healthcheck",
+                    listOf(
+                        InfoItem("Healthchecks", usage?.healthchecks.usageText()),
+                        InfoItem("Healthchecks Updates / 24h", usage?.healthcheckPings24h.usageText()),
+                        InfoItem("SMS Limit / 24h", usage?.sms24h.usageText())
+                    )
+                )
+            }
+            item(key = "failover") {
+                InfoGroup(
+                    "Failover",
+                    listOf(
+                        InfoItem("Failover Policies", usage?.failoverPolicies.usageText()),
+                        InfoItem("Failover Monitors", usage?.failoverMonitors.usageText()),
+                        InfoItem("Failover Rules", usage?.failoverRules.usageText())
+                    )
+                )
+            }
+            item(key = "cdn") {
+                InfoGroup(
+                    "CDN",
+                    listOf(
+                        InfoItem("CDN Domains", usage?.cdnDomains.usageText()),
+                        InfoItem("CDN Traffic (GB)", usage?.cdnTrafficGb.usageText())
+                    )
+                )
+            }
+            item(key = "vpn") {
+                InfoGroup(
+                    "VPN / DNS64",
+                    listOf(
+                        InfoItem("VPN Traffic (GB)", usage?.vpnTrafficGb.usageText()),
+                        InfoItem("DNS64 Clients", usage?.dns64Clients.usageText())
+                    )
+                )
+            }
+            item(key = "api") {
+                // v2 liefert den Key nicht mehr zurück, daher der lokal gespeicherte Key
+                InfoGroup(
+                    "API",
+                    listOf(
+                        InfoItem(
+                            "API Key",
+                            PreferencesManager.loadString(ctx, "APIKEY").trim(),
+                            copyable = true, sensitive = true, monospace = true
+                        )
+                    )
                 )
             }
         }
+    }
+
+    if (showLoadingDialog) {
+        SpinnerDialog(
+            spinnerText = "Loading..."
+        )
+    }
+
+    if (showDialog) {
+        ErrorDialog(
+            onDismissRequest = { showDialog = false },
+            onConfirmation = { showDialog = false; getAccountInfos() },
+            dialogTitle = errorDialogTitle,
+            dialogText = errorDialogText,
+            dialogConfirmText = errorDialogButtonText,
+            icon = 0
+        )
+    }
+
+    if (showRequestDialog) {
+        RequestDialogs(
+            onDismissRequest = { showRequestDialog = false },
+            onConfirmation = { showRequestDialog = false; getAccountInfos() },
+            dialogConfirmText = errorDialogButtonText,
+            request = requestType
+        )
     }
 
     LaunchedEffect(Unit) {
