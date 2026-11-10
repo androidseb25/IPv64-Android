@@ -174,5 +174,5 @@ jobs:
           files: |
             ${{ steps.renamesign.outputs.apk }}
             ${{ steps.renamesign.outputs.aab }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_RELEASE }}
+          # action-gh-release nimmt das `token`-Input (Standard: GITHUB_TOKEN, hier nur lesend), nicht env.GITHUB_TOKEN
+          token: ${{ secrets.GH_RELEASE }}
