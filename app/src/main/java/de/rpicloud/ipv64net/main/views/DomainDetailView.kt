@@ -11,10 +11,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.key
+import androidx.compose.ui.res.colorResource
+import de.rpicloud.ipv64net.main.views.common.ActionTile
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
+import de.rpicloud.ipv64net.main.views.common.StatusChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -28,13 +38,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
@@ -56,8 +64,8 @@ import de.rpicloud.ipv64net.main.views.common.InfoRow
 import de.rpicloud.ipv64net.main.views.common.RefreshableList
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
-import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
+import de.rpicloud.ipv64net.main.views.common.GroupRowPadding
 import de.rpicloud.ipv64net.models.IsWildcard
 import de.rpicloud.ipv64net.models.NO_IPV4
 import de.rpicloud.ipv64net.models.NO_IPV6
@@ -66,10 +74,10 @@ import de.rpicloud.ipv64net.models.Tabs
 import de.rpicloud.ipv64net.models.domainUpdateUrl
 import de.rpicloud.ipv64net.models.isFailure
 import de.rpicloud.ipv64net.models.isLocked
-import de.rpicloud.ipv64net.models.isSameTypeAAAAAddress
-import de.rpicloud.ipv64net.models.isSameTypeAAddress
 import de.rpicloud.ipv64net.models.knownIp
 import de.rpicloud.ipv64net.models.label
+import de.rpicloud.ipv64net.models.mismatchV4
+import de.rpicloud.ipv64net.models.mismatchV6
 import de.rpicloud.ipv64net.models.prefixLabel
 import de.sr.ipv64.IPv64ApiException
 import de.sr.ipv64.IPv64Exception
@@ -84,9 +92,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-// Schlüssel im savedStateHandle dieses Eintrags; DomainDnsNewView liest ihn über getBackStackEntry("domain_details")
-private const val ADD_FQDN_KEY = "ADD_FQDN"
-
+@OptIn(ExperimentalLayoutApi::class)
 @SuppressLint("UnrememberedGetBackStackEntry")
 @Composable
 fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValues) {
@@ -118,6 +124,8 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
     val domain by domainBackStackEntry.savedStateHandle.getStateFlow("SELECTED_DOMAIN", "").collectAsStateWithLifecycle()
 
     var domainJob by remember { mutableStateOf<Job?>(null) }
+
+    var showNewRecord by remember { mutableStateOf(false) }
 
     fun getDomain(pull: Boolean = false) {
         if (domain.isEmpty()) return
@@ -224,13 +232,15 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
     }
 
     fun updateDNSRecord() {
+        // Nur die abweichende(n) Familie(n) senden
+        val sendV4 = selectedDomain.mismatchV4(myV4)
+        val sendV6 = selectedDomain.mismatchV6(myV6)
         req.launch(scope, spinner = "Loading...", context = IPv64Context.Update) {
-            // Nur bekannte IPs explizit senden, sonst verwendet die API die Absenderadresse
             val result = ipv64Request {
                 IPv64Client.get(ctx).dynDns.update(
                     domain,
-                    ipv4 = knownIp(myV4),
-                    ipv6 = knownIp(myV6)
+                    ipv4 = if (sendV4) knownIp(myV4) else null,
+                    ipv6 = if (sendV6) knownIp(myV6) else null
                 )
             }
             DomainCache.invalidate(domain)
@@ -270,10 +280,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
                 enter = fadeIn() + scaleIn(),
                 exit = fadeOut() + scaleOut()
             ) {
-                FloatingActionButton(onClick = {
-                    navController.currentBackStackEntry?.savedStateHandle?.set(ADD_FQDN_KEY, domain)
-                    navController.navigate(Tabs.getRoute(Tab.domain_new_dns))
-                }) {
+                FloatingActionButton(onClick = { showNewRecord = true }) {
                     Icon(
                         painter = painterResource(id = R.drawable.add_24px),
                         contentDescription = "New DNS record"
@@ -287,89 +294,111 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
             onRefresh = { getMyIPs(); getDomain(pull = true) },
             state = listState,
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            val mismatchV4 = !selectedDomain.isSameTypeAAddress(myV4) && myV4 != NO_IPV4
-            val mismatchV6 = !selectedDomain.isSameTypeAAAAAddress(myV6) && myV6 != NO_IPV6
-            if (selectedDomain.name != null && (mismatchV4 || mismatchV6)) {
-                item(key = "notice_header") { SectionHeader("Notice") }
+            val loadedDomain = selectedDomain.name != null
+            val mismatchV4 = selectedDomain.mismatchV4(myV4)
+            val mismatchV6 = selectedDomain.mismatchV6(myV6)
+            if (loadedDomain && (mismatchV4 || mismatchV6)) {
                 item(key = "notice") {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text("Your A or AAAA record doesn't match your current IP! This could be due to an active cellular connection or the IP address being assigned a server address.")
-                            Button(
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = colorResource(R.color.ipv64_orange_trans20),
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(
+                                "Your A or AAAA record doesn't match your current IP! This could be due to an active cellular connection or the IP address being assigned a server address.",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            FilledTonalButton(
                                 onClick = { updateDNSRecord() },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 24.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    containerColor = Color(ContextCompat.getColor(ctx, R.color.ipv64_orange_trans20)),
-                                    contentColor = Color(ContextCompat.getColor(ctx, R.color.ipv64_orange)),
-                                )
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(if (mismatchV4) "Set A-Record to current IP?" else "Set AAAA-Record to current IP?")
+                                Text(
+                                    when {
+                                        mismatchV4 && mismatchV6 -> "Set A and AAAA records to current IP?"
+                                        mismatchV4 -> "Set A-Record to current IP?"
+                                        else -> "Set AAAA-Record to current IP?"
+                                    }
+                                )
                             }
                         }
                     }
                 }
             }
-            item(key = "general_header") { SectionHeader("General") }
             item(key = "general") {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        InfoRow("Kind", selectedDomain.kind.label)
-                        InfoRow("Wildcard", selectedDomain.IsWildcard)
-                        InfoRow("Updates", "${selectedDomain.updateCount ?: 0}")
-                        InfoRow("Ignored on DynDNS updates", selectedDomain.ignore.label)
-                        InfoRow("Fixed IPv6 prefix", selectedDomain.ipv6Prefix?.takeIf { it.isNotBlank() } ?: "Off", monospace = true)
-                        if (selectedDomain.active == false) InfoRow("Status", "Inactive")
-                        selectedDomain.createdAt?.let { InfoRow("Created", it.formatGermanTime()) }
-                        Button(
-                            enabled = !selectedDomain.updateToken.isNullOrEmpty(),
-                            onClick = {
-                                val token = selectedDomain.updateToken ?: return@Button
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                copyText(ctx, "Domain Update URL", domainUpdateUrl(token), sensitive = true)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 16.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = Color(ContextCompat.getColor(ctx, R.color.ipv64_blue_trans15)),
-                                contentColor = Color(ContextCompat.getColor(ctx, R.color.ipv64_blue)),
-                            )
-                        ) {
-                            Text("Copy Domain Update URL")
-                        }
+                val (statusText, statusColor) = domainIpStatus(selectedDomain.takeIf { loadedDomain }, myV4, myV6)
+                ListGroup {
+                    ListRow(
+                        title = domain,
+                        subtitle = selectedDomain.kind.label,
+                        trailing = { StatusChip(if (selectedDomain.active == false) "Inactive" else statusText, if (selectedDomain.active == false) colorResource(R.color.ipv64_gray) else statusColor) }
+                    )
+                    GroupDivider()
+                    InfoRow("Wildcard", selectedDomain.IsWildcard, GroupRowPadding)
+                    GroupDivider()
+                    InfoRow("Updates", "${selectedDomain.updateCount ?: 0}", GroupRowPadding)
+                    GroupDivider()
+                    InfoRow("Ignored on DynDNS updates", selectedDomain.ignore.label, GroupRowPadding)
+                    GroupDivider()
+                    InfoRow("Fixed IPv6 prefix", selectedDomain.ipv6Prefix?.takeIf { it.isNotBlank() } ?: "Off", GroupRowPadding, monospace = true)
+                    selectedDomain.createdAt?.let {
+                        GroupDivider()
+                        InfoRow("Created", it.formatGermanTime(), GroupRowPadding)
                     }
                 }
             }
-            if (selectedDomain.name != null) {
-                item(key = "records_header") { SectionHeader("DNS records (${selectedDomain.records.size})") }
+            item(key = "actions") {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ActionTile(
+                        icon = R.drawable.content_copy_24px,
+                        label = "Copy update URL",
+                        enabled = !selectedDomain.updateToken.isNullOrEmpty(),
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            val token = selectedDomain.updateToken ?: return@ActionTile
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            copyText(ctx, "Domain Update URL", domainUpdateUrl(token), sensitive = true)
+                        }
+                    )
+                    ActionTile(R.drawable.autorenew_24px, "DynDNS update", { onAction(DomainAction.DYNDNS) }, Modifier.weight(1f), enabled = loadedDomain)
+                    ActionTile(R.drawable.tune_24px, "Settings", { onAction(DomainAction.SETTINGS) }, Modifier.weight(1f), enabled = loadedDomain)
+                }
+            }
+            if (loadedDomain) {
                 if (selectedDomain.records.isEmpty()) {
                     item(key = "records_empty") { EmptyState("No DNS records.") }
                 }
                 val sorted = selectedDomain.records.sortedWith(
                     compareBy<Record> { it.type?.ordinal ?: Int.MAX_VALUE }.thenBy { it.prefixLabel }
                 )
-                items(sorted, key = { r -> "record_${r.id ?: r.token ?: r.hashCode()}" }) { record ->
-                    DomainRecordCard(
-                        record = record,
-                        onEdit = {
-                            val id = record.id
-                            if (!record.isLocked && id != null) {
-                                navController.navigateWithArgs(
-                                    Tab.domain_record_edit,
-                                    NavKeys.EDIT_RECORD_ID to id.toString(),
-                                    NavKeys.EDIT_RECORD_DOMAIN to domain
-                                )
+                sorted.groupBy { it.type?.value ?: "?" }.forEach { (type, records) ->
+                    item(key = "records_$type") {
+                        ListGroup("$type records (${records.size})") {
+                            records.forEachIndexed { i, record ->
+                                if (i > 0) GroupDivider()
+                                key(record.id ?: record.token ?: record.hashCode()) {
+                                    DomainRecordRow(
+                                        record = record,
+                                        onEdit = {
+                                            val id = record.id
+                                            if (!record.isLocked && id != null) {
+                                                navController.navigateWithArgs(
+                                                    Tab.domain_record_edit,
+                                                    NavKeys.EDIT_RECORD_ID to id.toString(),
+                                                    NavKeys.EDIT_RECORD_DOMAIN to domain
+                                                )
+                                            }
+                                        },
+                                        onDelete = { recordToDelete = record }
+                                    )
+                                }
                             }
-                        },
-                        onDelete = { recordToDelete = record }
-                    )
+                        }
+                    }
                 }
             }
         }
@@ -428,6 +457,7 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
             text = "Do you really want to delete $domain with all its DNS records?",
             confirmLabel = "Delete",
             destructive = true,
+            requireTyping = domain,
             onConfirm = { confirmAction = null; deleteDomain() },
             onDismiss = { confirmAction = null }
         )
@@ -458,5 +488,6 @@ fun DomainDetailView(navController: NavHostController, mainPadding: PaddingValue
         RotatedTokenDialog(updateUrl = url) { rotatedUrl = null }
     }
 
+    if (showNewRecord) DomainDnsNewSheet(domain, onDismiss = { showNewRecord = false }, onCreated = { showNewRecord = false; getDomain(pull = true) })
     RequestStateHost(req)
 }

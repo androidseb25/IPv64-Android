@@ -13,4 +13,6 @@
     <exclude domain="sharedpref" path="de.sr.SecNtfy.xml" />
     <!-- Push-Einrichtung und Gerätekanal (hc2) dieses Geräts -->
     <exclude domain="sharedpref" path="HC2_PUSH_SETUP.xml" />
+    <!-- Lokale Node-Zugänge (URL + API-Key) -->
+    <exclude domain="sharedpref" path="NODE64_LOCAL.xml" />
 </full-backup-content>

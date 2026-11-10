@@ -1,64 +1,33 @@
 package de.rpicloud.ipv64net.main.views
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import de.rpicloud.ipv64net.helper.copyText
+import de.rpicloud.ipv64net.main.views.common.InfoRow
 
+/** Zeile einer eigenen IP-Adresse (in einer ListGroup); Antippen kopiert die Adresse. */
 @Composable
 fun MyIpItemView(
     ctx: Context,
     haptics: HapticFeedback,
     ip: String
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = {
-            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-            val clipboard =
-                ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip =
-                ClipData.newPlainText("IP", ip)
-            clipboard.setPrimaryClip(clip)
-        }
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.Center
-        ) {
-            if (ip.contains(other = ":")) {
-                Text(
-                    "IPv6:",
-                    style = MaterialTheme.typography.titleSmall
-                )
-            } else {
-                Text(
-                    "IPv4:",
-                    style = MaterialTheme.typography.titleSmall
-                )
+    InfoRow(
+        label = if (ip.contains(other = ":")) "IPv6" else "IPv4",
+        value = ip,
+        copyable = true,
+        monospace = true,
+        modifier = Modifier
+            .clickable {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                copyText(ctx, "IP", ip)
             }
-            Text(
-                ip,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    )
 }

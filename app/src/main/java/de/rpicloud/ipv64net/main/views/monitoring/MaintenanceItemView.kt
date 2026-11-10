@@ -1,21 +1,9 @@
 package de.rpicloud.ipv64net.main.views.monitoring
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.main.views.common.StatusChip
 import de.sr.ipv64.model.Hc2Maintenance
 import de.sr.ipv64.model.Hc2MaintenanceRepeat
@@ -78,45 +66,19 @@ fun Hc2Maintenance.phase(nowMs: Long = System.currentTimeMillis()): MaintenanceP
 @Composable
 fun MaintenanceItemView(item: Hc2Maintenance, onClick: () -> Unit) {
     val phase = item.phase()
-    Card(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    item.name.orEmpty().ifBlank { "(unnamed)" },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                StatusChip(phase.label, colorResource(phase.color))
-            }
-            val start = item.startAt?.formatMinute() ?: "–"
-            val end = item.endAt?.formatMinute() ?: "–"
-            Text("$start – $end", style = MaterialTheme.typography.bodyMedium)
-            val details = buildList {
-                if (item.repeat != null && item.repeat != Hc2MaintenanceRepeat.NONE) {
-                    add(
-                        item.repeat.label() + (item.repeatUntil?.let { " until ${it.formatMinute()}" } ?: "")
-                    )
-                }
-                add(if (item.tokens.isEmpty()) "All checks" else "${item.tokens.size} selected check(s)")
-                if (!item.nodeId.isNullOrBlank()) add("Managed by a node")
-            }
-            Text(
-                details.joinToString(" · "),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+    val start = item.startAt?.formatMinute() ?: "–"
+    val end = item.endAt?.formatMinute() ?: "–"
+    val details = buildList {
+        if (item.repeat != null && item.repeat != Hc2MaintenanceRepeat.NONE) {
+            add(item.repeat.label() + (item.repeatUntil?.let { " until ${it.formatMinute()}" } ?: ""))
         }
+        add(if (item.tokens.isEmpty()) "All checks" else "${item.tokens.size} selected check(s)")
+        if (!item.nodeId.isNullOrBlank()) add("Managed by a node")
     }
+    ListRow(
+        title = item.name.orEmpty().ifBlank { "(unnamed)" },
+        subtitle = "$start – $end\n" + details.joinToString(" · "),
+        trailing = { StatusChip(phase.label, colorResource(phase.color)) },
+        onClick = onClick
+    )
 }

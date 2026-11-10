@@ -1,5 +1,10 @@
 package de.rpicloud.ipv64net.main.views
 
+import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
+import de.rpicloud.ipv64net.main.views.common.StatusChip
 import de.rpicloud.ipv64net.main.views.common.rememberCanGoBack
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -20,7 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -46,8 +50,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
@@ -222,7 +224,7 @@ fun ChannelsView(navController: NavHostController, mainPadding: PaddingValues) {
                 }
                 if (isLoaded) {
                     item(key = "this-device") {
-                        ThisDeviceCard(
+                        ThisDeviceGroup(
                             channel = thisDevice,
                             onSetup = { navController.navigate(Tabs.getRoute(Tab.push_setup)) { launchSingleTop = true } },
                             onOpen = { thisDevice?.let { ch -> openChannel(ch) } },
@@ -240,27 +242,23 @@ fun ChannelsView(navController: NavHostController, mainPadding: PaddingValues) {
                         }
                     }
                     if (channels.isEmpty()) {
-                        item(key = "empty") {
-                            Text(
-                                "No channels yet. Tap + to add one.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(horizontal = 4.dp)
-                            )
+                        item(key = "empty") { EmptyState("No channels yet. Tap + to add one.") }
+                    } else {
+                        item(key = "channels") {
+                            ListGroup("Channels") {
+                                channels.forEachIndexed { index, ch ->
+                                    if (index > 0) GroupDivider(inset = 56.dp)
+                                    ChannelItemView(
+                                        channel = ch,
+                                        awaitingVerification = ch.isAwaitingVerification(types),
+                                        isThisDevice = ch.id != null && ch.id == thisDeviceId,
+                                        onClick = { openChannel(ch) },
+                                        onVerifyClick = { verifyChannel = ch }
+                                    )
+                                }
+                            }
                         }
                     }
-                }
-                items(
-                    items = channels,
-                    key = { ch -> ch.id ?: "idx-${channels.indexOf(ch)}" }
-                ) { ch ->
-                    val awaiting = ch.isAwaitingVerification(types)
-                    ChannelItemView(
-                        channel = ch,
-                        awaitingVerification = awaiting,
-                        isThisDevice = ch.id != null && ch.id == thisDeviceId,
-                        onClick = { openChannel(ch) },
-                        onVerifyClick = { verifyChannel = ch }
-                    )
                 }
             }
         }
@@ -286,63 +284,46 @@ fun ChannelsView(navController: NavHostController, mainPadding: PaddingValues) {
     ChannelDialogHost(dialog)
 }
 
-// Karte "Dieses Gerät": einrichten oder (registriert) Name, Status und Testnachricht
+// Gruppe "This device": einrichten oder (registriert) Name, Status und Testnachricht
 @Composable
-private fun ThisDeviceCard(
+private fun ThisDeviceGroup(
     channel: Hc2Channel?,
     onSetup: () -> Unit,
     onOpen: () -> Unit,
     onTest: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = if (channel != null) onOpen else onSetup
-    ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
-            Icon(
-                painter = painterResource(id = R.drawable.mobile_24px),
-                contentDescription = null,
-                modifier = Modifier
-                    .padding(top = 2.dp)
-                    .size(28.dp)
+    ListGroup("This device") {
+        if (channel == null) {
+            ListRow(
+                title = "Push notifications",
+                subtitle = "Receive healthcheck alerts as push notifications on this device.",
+                icon = R.drawable.mobile_24px,
+                subtitleMaxLines = 3
             )
-            Column(
-                modifier = Modifier
-                    .padding(start = 12.dp)
-                    .fillMaxWidth()
-            ) {
-                if (channel == null) {
-                    Text("This device", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Receive healthcheck alerts as push notifications on this device.",
-                        style = MaterialTheme.typography.bodySmall
+            Button(onClick = onSetup, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                Text("Set up push notifications")
+            }
+        } else {
+            val disabled = channel.enabled == false
+            ListRow(
+                title = channel.displayName,
+                subtitle = "This device",
+                icon = R.drawable.mobile_24px,
+                trailing = {
+                    StatusChip(
+                        if (disabled) "Disabled" else "Enabled",
+                        colorResource(if (disabled) R.color.ipv64_gray else R.color.ipv64_teal)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = onSetup) { Text("Set up push notifications") }
-                } else {
-                    Text(
-                        channel.displayName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        if (channel.enabled == false) "This device · Disabled" else "This device · Enabled",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (channel.enabled == false) colorResource(R.color.ipv64_gray)
-                        else colorResource(R.color.ipv64_teal)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedButton(onClick = onTest) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.send_24px),
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text("Send test", modifier = Modifier.padding(start = 8.dp))
-                    }
-                }
+                },
+                onClick = onOpen
+            )
+            OutlinedButton(onClick = onTest, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                Icon(
+                    painter = painterResource(id = R.drawable.send_24px),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text("Send test", modifier = Modifier.padding(start = 8.dp))
             }
         }
     }
@@ -368,8 +349,7 @@ private fun NotificationsDisabledCard(permission: NotificationPermissionState) {
             Column(modifier = Modifier.padding(start = 12.dp)) {
                 Text(
                     "Notifications are disabled",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.titleSmall
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 NotificationPermissionActions(permission)

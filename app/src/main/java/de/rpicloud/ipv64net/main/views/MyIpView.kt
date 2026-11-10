@@ -33,6 +33,8 @@ import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.myIp
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListGroup
 import de.rpicloud.ipv64net.models.NO_IPV4
 import de.rpicloud.ipv64net.models.NO_IPV6
 import de.sr.ipv64.model.IpFamily
@@ -98,13 +100,14 @@ fun MyIpView(navController: NavHostController, mainPadding: PaddingValues) {
                     .fillMaxWidth()
                     .weight(1f),
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                item {
-                    MyIpItemView(ctx, haptics,myV4)
-                }
-                item {
-                    MyIpItemView(ctx, haptics,myV6)
+                item(key = "ips") {
+                    ListGroup {
+                        MyIpItemView(ctx, haptics, myV4)
+                        GroupDivider()
+                        MyIpItemView(ctx, haptics, myV6)
+                    }
                 }
             }
         }

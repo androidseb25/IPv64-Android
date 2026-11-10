@@ -8,7 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,14 +21,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.IPv64Client
 import de.rpicloud.ipv64net.helper.NavKeys
 import de.rpicloud.ipv64net.helper.PlanFeature
 import de.rpicloud.ipv64net.helper.ipv64Retrying
 import de.rpicloud.ipv64net.helper.rememberNavArg
-import de.rpicloud.ipv64net.main.views.ChannelFormSection
 import de.rpicloud.ipv64net.main.views.FormDropdown
 import de.rpicloud.ipv64net.main.views.FormNumberField
 import de.rpicloud.ipv64net.main.views.FormSwitchRow
@@ -36,6 +38,7 @@ import de.rpicloud.ipv64net.main.views.common.NotAvailableView
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
+import de.rpicloud.ipv64net.main.views.common.FormSection
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.sr.ipv64.model.CdnAccessListMode
@@ -171,7 +174,9 @@ fun CdnSettingsView(navController: NavHostController, mainPadding: PaddingValues
         req.launch(scope, spinner = "Saving...") {
             val updated = ipv64Retrying { IPv64Client.get(ctx).cdn.update(t, request) }
             if (updated.id != null) {
-                CdnDetailStore.put(updated)
+                // Die PATCH-Antwort kann ohne Mappings kommen: bekannte Mappings behalten
+                val known = CdnDetailStore.get(t)?.mappings.orEmpty()
+                CdnDetailStore.put(updated.copy(mappings = updated.mappings.ifEmpty { known }))
                 CdnCache.upsertCdn(updated.toCdnDomain())
             } else {
                 // Antwort ohne ID: Zwischenspeicher verwerfen, damit der Detail-Screen neu lädt
@@ -185,7 +190,12 @@ fun CdnSettingsView(navController: NavHostController, mainPadding: PaddingValues
     ScreenScaffold(
         title = Tabs.getLabel(Tab.cdn_settings),
         navController = navController,
-        mainPadding = mainPadding
+        mainPadding = mainPadding,
+        actions = {
+            IconButton(onClick = { save() }, enabled = !req.isBusy && req.notAvailable == null && form != null) {
+                Icon(painterResource(R.drawable.save_24px), contentDescription = "Save")
+            }
+        }
     ) {
         val unavailable = req.notAvailable
         val f = form
@@ -197,7 +207,7 @@ fun CdnSettingsView(navController: NavHostController, mainPadding: PaddingValues
                 modifier = Modifier
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 val proxyOn = original?.proxy?.state == CdnProxyState.ON
                 Text(
@@ -205,7 +215,7 @@ fun CdnSettingsView(navController: NavHostController, mainPadding: PaddingValues
                     style = MaterialTheme.typography.titleMedium
                 )
 
-                ChannelFormSection("Visitors") {
+                FormSection("Visitors") {
                     FormDropdown(
                         label = "Frontend",
                         value = f.frontend,
@@ -220,7 +230,7 @@ fun CdnSettingsView(navController: NavHostController, mainPadding: PaddingValues
                     )
                 }
 
-                ChannelFormSection("Your server") {
+                FormSection("Your server") {
                     FormDropdown(
                         label = "Protocol",
                         value = f.scheme,
@@ -244,7 +254,7 @@ fun CdnSettingsView(navController: NavHostController, mainPadding: PaddingValues
                     )
                 }
 
-                ChannelFormSection("Cache") {
+                FormSection("Cache") {
                     FormSwitchRow(
                         label = "Cache responses",
                         checked = f.cacheEnabled,
@@ -266,12 +276,15 @@ fun CdnSettingsView(navController: NavHostController, mainPadding: PaddingValues
                     }
                 }
 
-                ChannelFormSection("Access list") {
+                FormSection("Access list") {
                     FormSwitchRow(
                         label = "Use access list",
                         checked = f.aclEnabled,
                         onChange = { form = f.copy(aclEnabled = it) },
-                        supporting = "Entries are managed on the CDN page."
+                        supporting = if (f.aclEnabled && f.aclMode == CdnAccessListMode.ALLOWLIST)
+                            "Entries are managed on the CDN page. Only listed addresses can reach this site: " +
+                                    "make sure your own address is in the list."
+                        else "Entries are managed on the CDN page."
                     )
                     if (f.aclEnabled) {
                         FormDropdown(
@@ -283,12 +296,6 @@ fun CdnSettingsView(navController: NavHostController, mainPadding: PaddingValues
                         )
                     }
                 }
-
-                Button(
-                    onClick = { save() },
-                    enabled = !req.isBusy,
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Save") }
             }
         }
     }

@@ -9,8 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -30,8 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
@@ -46,7 +43,10 @@ import de.rpicloud.ipv64net.helper.rememberNavArg
 import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
 import de.rpicloud.ipv64net.main.views.common.EmptyState
 import de.rpicloud.ipv64net.main.views.common.Hc2CheckPickerDialog
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
 import de.rpicloud.ipv64net.main.views.common.InfoRow
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.main.views.common.NotAvailableView
 import de.rpicloud.ipv64net.main.views.common.RefreshableList
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
@@ -55,6 +55,7 @@ import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.rpicloud.ipv64net.main.views.common.StatusChip
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
 import de.rpicloud.ipv64net.main.views.common.unknownCheckLabel
+import de.rpicloud.ipv64net.main.views.common.GroupRowPadding
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.sr.ipv64.model.FailoverMonitor
@@ -172,7 +173,7 @@ fun FailoverDetailView(navController: NavHostController, mainPadding: PaddingVal
             unavailable != null -> NotAvailableView("DNS failover", unavailable)
             p == null -> Box(modifier = Modifier)
             else -> RefreshableList(refreshing = refreshing, onRefresh = { load(pull = true) }) {
-                item(key = "header") { PolicyHeader(p, transitioning) }
+                item(key = "header") { PolicySummary(p, transitioning) }
 
                 item(key = "actions") {
                     PolicyActions(
@@ -185,17 +186,24 @@ fun FailoverDetailView(navController: NavHostController, mainPadding: PaddingVal
                     )
                 }
 
+                item(key = "facts") { PolicyFacts(p) }
+
                 item(key = "monitors_header") {
                     SectionRow("Monitors", "Add monitor", !busy) { showMonitorPicker = true }
                 }
                 if (p.monitors.isEmpty()) {
                     item(key = "monitors_empty") { EmptyState("No monitors. Add a healthcheck that triggers the failover.") }
-                }
-                items(p.monitors.size, key = { "monitor_${p.monitors[it].healthcheck ?: it}" }) { index ->
-                    val monitor = p.monitors[index]
-                    MonitorRow(monitor, enabled = !busy) {
-                        val token = monitor.healthcheck ?: return@MonitorRow
-                        confirm = DetailConfirm.RemoveMonitor(token, monitor.name?.takeIf { it.isNotBlank() } ?: unknownCheckLabel(token))
+                } else {
+                    item(key = "monitors") {
+                        ListGroup {
+                            p.monitors.forEachIndexed { index, monitor ->
+                                if (index > 0) GroupDivider()
+                                MonitorRow(monitor, enabled = !busy) {
+                                    val token = monitor.healthcheck ?: return@MonitorRow
+                                    confirm = DetailConfirm.RemoveMonitor(token, monitor.name?.takeIf { it.isNotBlank() } ?: unknownCheckLabel(token))
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -204,12 +212,17 @@ fun FailoverDetailView(navController: NavHostController, mainPadding: PaddingVal
                 }
                 if (p.rules.isEmpty()) {
                     item(key = "rules_empty") { EmptyState("No rules. Add an A or AAAA record that should be replaced.") }
-                }
-                items(p.rules.size, key = { "rule_${p.rules[it].record ?: it}" }) { index ->
-                    val rule = p.rules[index]
-                    RuleRow(rule, enabled = !busy) {
-                        val record = rule.record ?: return@RuleRow
-                        confirm = DetailConfirm.RemoveRule(record, rule.fqdn?.takeIf { it.isNotBlank() } ?: "…" + record.takeLast(4))
+                } else {
+                    item(key = "rules") {
+                        ListGroup {
+                            p.rules.forEachIndexed { index, rule ->
+                                if (index > 0) GroupDivider()
+                                RuleRow(rule, enabled = !busy) {
+                                    val record = rule.record ?: return@RuleRow
+                                    confirm = DetailConfirm.RemoveRule(record, rule.fqdn?.takeIf { it.isNotBlank() } ?: "…" + record.takeLast(4))
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -381,26 +394,18 @@ fun FailoverDetailView(navController: NavHostController, mainPadding: PaddingVal
 }
 
 @Composable
-private fun PolicyHeader(policy: FailoverPolicy, transitioning: Boolean) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    policy.name?.takeIf { it.isNotBlank() } ?: "Unnamed policy",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                StatusChip(policy.status.failoverLabel(), policy.status.failoverColor())
-            }
-            if (transitioning) {
+private fun PolicySummary(policy: FailoverPolicy, transitioning: Boolean) {
+    ListGroup {
+        ListRow(
+            title = policy.name?.takeIf { it.isNotBlank() } ?: "Unnamed policy",
+            subtitle = policy.mode.failoverTitle(),
+            trailing = { StatusChip(policy.status.failoverLabel(), policy.status.failoverColor()) }
+        )
+        if (transitioning) {
+            Column(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 Text(
                     "Switching DNS records. This usually takes a few seconds.",
@@ -408,13 +413,27 @@ private fun PolicyHeader(policy: FailoverPolicy, transitioning: Boolean) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            InfoRow("Mode", policy.mode.failoverTitle())
-            InfoRow("Monitor logic", policy.linking.failoverTitle())
-            InfoRow("Fall back only when all monitors are UP", if (policy.fallbackRequiresAll == true) "Yes" else "No")
-            InfoRow("Notifications", notificationText(policy))
-            InfoRow("Monitors down", "${policy.monitorsDown ?: 0} of ${policy.monitors.size}")
-            InfoRow("Last check", policy.lastCheckAt?.formatRelative())
-            if (policy.manual == true) InfoRow("Last switch", "Manual")
+        }
+    }
+}
+
+@Composable
+private fun PolicyFacts(policy: FailoverPolicy) {
+    ListGroup("Details") {
+        InfoRow("Mode", policy.mode.failoverTitle(), GroupRowPadding)
+        GroupDivider()
+        InfoRow("Monitor logic", policy.linking.failoverTitle(), GroupRowPadding)
+        GroupDivider()
+        InfoRow("Fall back only when all monitors are UP", if (policy.fallbackRequiresAll == true) "Yes" else "No", GroupRowPadding)
+        GroupDivider()
+        InfoRow("Notifications", notificationText(policy), GroupRowPadding)
+        GroupDivider()
+        InfoRow("Monitors down", "${policy.monitorsDown ?: 0} of ${policy.monitors.size}", GroupRowPadding)
+        GroupDivider()
+        InfoRow("Last check", policy.lastCheckAt?.formatRelative(), GroupRowPadding)
+        if (policy.manual == true) {
+            GroupDivider()
+            InfoRow("Last switch", "Manual", GroupRowPadding)
         }
     }
 }
@@ -441,17 +460,17 @@ private fun PolicyActions(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             when (policy.status) {
                 FailoverStatus.ACTIVE -> {
-                    Button(onClick = onFailover, enabled = enabled && policy.rules.isNotEmpty(), modifier = Modifier.weight(1f)) {
+                    FilledTonalButton(onClick = onFailover, enabled = enabled && policy.rules.isNotEmpty(), modifier = Modifier.weight(1f)) {
                         Text("Switch to replacement")
                     }
                     OutlinedButton(onClick = onPause, enabled = enabled) { Text("Pause") }
                 }
 
-                FailoverStatus.FAILED_OVER -> Button(onClick = onFallback, enabled = enabled, modifier = Modifier.weight(1f)) {
+                FailoverStatus.FAILED_OVER -> FilledTonalButton(onClick = onFallback, enabled = enabled, modifier = Modifier.weight(1f)) {
                     Text("Switch back to original")
                 }
 
-                FailoverStatus.PAUSED -> Button(onClick = onResume, enabled = enabled, modifier = Modifier.weight(1f)) {
+                FailoverStatus.PAUSED -> FilledTonalButton(onClick = onResume, enabled = enabled, modifier = Modifier.weight(1f)) {
                     Text("Resume")
                 }
 
@@ -484,62 +503,34 @@ private fun SectionRow(title: String, addLabel: String, enabled: Boolean, onAdd:
 
 @Composable
 private fun MonitorRow(monitor: FailoverMonitor, enabled: Boolean, onRemove: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    monitor.name?.takeIf { it.isNotBlank() } ?: unknownCheckLabel(monitor.healthcheck.orEmpty()),
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    monitor.healthcheckStatus?.takeIf { it.isNotBlank() }?.let {
-                        StatusChip(it.uppercase(), failoverMonitorColor(it))
-                    }
-                    if (monitor.negate == true) {
-                        StatusChip("Inverted", MaterialTheme.colorScheme.primary)
-                    }
+    ListRow(
+        title = monitor.name?.takeIf { it.isNotBlank() } ?: unknownCheckLabel(monitor.healthcheck.orEmpty()),
+        subtitle = if (monitor.negate == true) "Inverted" else null,
+        trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                monitor.healthcheckStatus?.takeIf { it.isNotBlank() }?.let {
+                    StatusChip(it.uppercase(), failoverMonitorColor(it))
+                }
+                IconButton(onClick = onRemove, enabled = enabled) {
+                    Icon(painter = painterResource(R.drawable.close_24px), contentDescription = "Remove monitor")
                 }
             }
-            IconButton(onClick = onRemove, enabled = enabled) {
-                Icon(painter = painterResource(R.drawable.close_24px), contentDescription = "Remove monitor")
-            }
         }
-    }
+    )
 }
 
 @Composable
 private fun RuleRow(rule: FailoverRule, enabled: Boolean, onRemove: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    "${rule.fqdn?.takeIf { it.isNotBlank() } ?: "Record …" + rule.record.orEmpty().takeLast(4)} (${rule.recordType ?: "?"})",
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    rule.target.describe(OfflinePageCache.peek()),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+    ListRow(
+        title = "${rule.fqdn?.takeIf { it.isNotBlank() } ?: "Record …" + rule.record.orEmpty().takeLast(4)} (${rule.recordType ?: "?"})",
+        subtitle = rule.target.describe(OfflinePageCache.peek()),
+        trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 StatusChip(rule.state.ruleLabel(), rule.state.ruleColor())
-            }
-            IconButton(onClick = onRemove, enabled = enabled) {
-                Icon(painter = painterResource(R.drawable.close_24px), contentDescription = "Remove rule")
+                IconButton(onClick = onRemove, enabled = enabled) {
+                    Icon(painter = painterResource(R.drawable.close_24px), contentDescription = "Remove rule")
+                }
             }
         }
-    }
+    )
 }

@@ -2,6 +2,7 @@ package de.rpicloud.ipv64net.helper
 
 import android.content.Context
 import android.os.SystemClock
+import de.rpicloud.ipv64net.BuildConfig
 import de.rpicloud.ipv64net.models.RequestTyp
 import de.sr.ipv64.IPv64
 import de.sr.ipv64.IPv64ApiException
@@ -23,13 +24,9 @@ object IPv64Client {
     fun get(ctx: Context): IPv64 {
         val apiKey = PreferencesManager.loadString(ctx, "APIKEY").trim().ifEmpty { null }
         cachedClient?.let { if (cachedKey == apiKey) return it }
-        DomainCache.clear()
-        Hc2ChannelCache.clear()
-        Hc2ChannelTypeCache.clear()
-        Hc2CheckListCache.clear()
-        // Alle bei CacheRegistry angemeldeten Caches (TimedCache u. a.) ebenfalls leeren
+        // Alle bei CacheRegistry angemeldeten Caches (TimedCache, DomainCache u. a.) leeren
         CacheRegistry.clearAll()
-        return IPv64(apiKey = apiKey).also {
+        return IPv64(apiKey = apiKey, baseUrl = apiBase(IPv64.DEFAULT_BASE_URL)).also {
             cachedKey = apiKey
             cachedClient = it
         }
@@ -37,8 +34,13 @@ object IPv64Client {
 }
 
 // Öffentliche Clients ohne API-Key, jeweils nur über IPv4 bzw. IPv6 erreichbar (A- bzw. AAAA-Record)
-private val ipv4Client by lazy { IPv64(baseUrl = "https://ipv4.ipv64.net/api/v2") }
-private val ipv6Client by lazy { IPv64(baseUrl = "https://ipv6.ipv64.net/api/v2") }
+private val ipv4Client by lazy { IPv64(baseUrl = apiBase("https://ipv4.ipv64.net/api/v2")) }
+private val ipv6Client by lazy { IPv64(baseUrl = apiBase("https://ipv6.ipv64.net/api/v2")) }
+
+// Debug mit -PmockApi: alle Clients gehen an den Mock-Server (tools/mockapi); sonst unverändert [default]
+// Mock-Pfade: /api/v2 (Cloud, ipv4/ipv6 identisch), /secntfy (Push)
+private fun apiBase(default: String): String =
+    if (BuildConfig.MOCK_API.isEmpty()) default else BuildConfig.MOCK_API + "/api/v2"
 
 // Eigene öffentliche IP der gewünschten Familie; null, wenn sie nicht ermittelt werden kann (z. B. kein IPv6)
 // Das Timeout verhindert lange Wartezeiten, wenn die Familie nicht erreichbar ist (DNS-/Verbindungs-Timeouts)
@@ -56,11 +58,15 @@ suspend fun myIp(family: IpFamily): String? {
 }
 
 // Domain-Details kurz zwischenspeichern, damit Liste und Detailansicht das Rate-Limit nicht ausreizen
-object DomainCache {
+object DomainCache : ClearableCache {
     private const val TTL_MS = 5 * 60 * 1000L
     private class Entry(val detail: DomainDetail, val time: Long)
 
     private val entries = mutableMapOf<String, Entry>()
+
+    init {
+        CacheRegistry.register(this)
+    }
 
     @Synchronized
     fun get(name: String): DomainDetail? {
@@ -83,7 +89,7 @@ object DomainCache {
     }
 
     @Synchronized
-    fun clear() {
+    override fun clear() {
         entries.clear()
     }
 }

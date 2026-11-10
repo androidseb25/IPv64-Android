@@ -1,5 +1,8 @@
 package de.rpicloud.ipv64net.main.views.monitoring
 
+import de.rpicloud.ipv64net.main.views.common.GroupGap
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -21,8 +24,8 @@ import de.rpicloud.ipv64net.main.views.common.NotAvailableView
 import de.rpicloud.ipv64net.main.views.common.RefreshableList
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
-import de.rpicloud.ipv64net.main.views.common.itemsOrEmpty
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
+import de.rpicloud.ipv64net.main.views.common.groupedItemsOrEmpty
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.sr.ipv64.model.StatusPage
@@ -71,8 +74,8 @@ fun StatusPagesView(navController: NavHostController, mainPadding: PaddingValues
             NotAvailableView("Status pages", na)
         } else {
             val list = pages.orEmpty().sortedBy { it.name.orEmpty().lowercase() }
-            RefreshableList(refreshing, { load(force = true, pull = true) }) {
-                itemsOrEmpty(list, pages != null, "No status pages yet.", key = { "sp_" + (it.id ?: it.hashCode()) }) { page ->
+            RefreshableList(refreshing, { load(force = true, pull = true) }, verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                groupedItemsOrEmpty(list, pages != null, "No status pages yet.", key = "status_pages") { page ->
                     StatusPageItemView(
                         page,
                         onClick = { open(page) },

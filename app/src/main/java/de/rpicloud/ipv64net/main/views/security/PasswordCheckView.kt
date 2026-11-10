@@ -3,6 +3,7 @@ package de.rpicloud.ipv64net.main.views.security
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -42,6 +43,7 @@ import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
 import de.rpicloud.ipv64net.main.views.common.SecureWindowEffect
 import de.rpicloud.ipv64net.main.views.common.StatusChip
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
+import de.rpicloud.ipv64net.main.views.common.FormSection
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 
@@ -97,7 +99,7 @@ fun PasswordCheckView(navController: NavHostController, mainPadding: PaddingValu
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 "Find out whether a password was tried by attackers at Honeypot64 sensors. " +
@@ -118,6 +120,7 @@ fun PasswordCheckView(navController: NavHostController, mainPadding: PaddingValu
                     imeAction = ImeAction.Search
                 ),
                 keyboardActions = KeyboardActions(onSearch = { check() }),
+                shape = MaterialTheme.shapes.extraLarge,
                 trailingIcon = {
                     IconButton(onClick = { revealed = !revealed }) {
                         Icon(
@@ -130,10 +133,15 @@ fun PasswordCheckView(navController: NavHostController, mainPadding: PaddingValu
                 },
                 modifier = Modifier.fillMaxWidth()
             )
-            Button(onClick = { check() }, enabled = password.isNotEmpty() && !req.isBusy) { Text("Check password") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { check() }, enabled = password.isNotEmpty() && !req.isBusy) { Text("Check password") }
+                if (password.isNotEmpty()) {
+                    OutlinedButton(onClick = { clearAll() }) { Text("Clear") }
+                }
+            }
 
             count?.let { c ->
-                SecurityCard {
+                FormSection(title = "Result") {
                     if (c > 0L) {
                         StatusChip("Found in attacks", colorResource(R.color.ipv64_red))
                         Text(
@@ -150,10 +158,6 @@ fun PasswordCheckView(navController: NavHostController, mainPadding: PaddingValu
                         )
                     }
                 }
-            }
-
-            if (password.isNotEmpty()) {
-                OutlinedButton(onClick = { clearAll() }) { Text("Clear") }
             }
         }
     }

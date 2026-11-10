@@ -23,12 +23,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import de.rpicloud.ipv64net.main.views.common.FormSection
 import de.rpicloud.ipv64net.main.views.FormNumberField
 import de.rpicloud.ipv64net.main.views.FormSwitchRow
 import de.rpicloud.ipv64net.main.views.common.RefreshableList
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
-import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
@@ -188,65 +188,57 @@ fun Hc2SettingsView(navController: NavHostController, mainPadding: PaddingValues
             TextButton(onClick = { save() }, enabled = changed && valid && !req.isBusy) { Text("Save") }
         }
     ) {
-        RefreshableList(refreshing, { load(pull = true) }) {
+        RefreshableList(refreshing, { load(pull = true) }, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (base == null) return@RefreshableList
-            item(key = "quiet_title") { SectionHeader("Quiet hours") }
-            item(key = "quiet_switch") {
-                FormSwitchRow(
-                    "Enable quiet hours", form.quietEnabled, { form = form.copy(quietEnabled = it) },
-                    supporting = "Notifications are held back during these hours."
-                )
-            }
-            if (form.quietEnabled) {
-                item(key = "quiet_times") {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TimeOfDayField("From", form.from, { form = form.copy(from = it) }, Modifier.weight(1f))
-                        TimeOfDayField("To", form.to, { form = form.copy(to = it) }, Modifier.weight(1f))
-                    }
-                }
-                item(key = "quiet_days") {
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        DAY_LABELS.forEachIndexed { index, label ->
-                            val day = index + 1
-                            FilterChip(
-                                selected = day in form.days,
-                                onClick = {
-                                    form = form.copy(days = if (day in form.days) form.days - day else form.days + day)
-                                },
-                                label = { Text(label) }
-                            )
+            item(key = "quiet") {
+                FormSection("Quiet hours") {
+                    FormSwitchRow(
+                        "Enable quiet hours", form.quietEnabled, { form = form.copy(quietEnabled = it) },
+                        supporting = "Notifications are held back during these hours."
+                    )
+                    if (form.quietEnabled) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TimeOfDayField("From", form.from, { form = form.copy(from = it) }, Modifier.weight(1f))
+                            TimeOfDayField("To", form.to, { form = form.copy(to = it) }, Modifier.weight(1f))
                         }
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            DAY_LABELS.forEachIndexed { index, label ->
+                                val day = index + 1
+                                FilterChip(
+                                    selected = day in form.days,
+                                    onClick = {
+                                        form = form.copy(days = if (day in form.days) form.days - day else form.days + day)
+                                    },
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
+                        Text(
+                            if (!daysOk) "Select at least one day." else "Times use the server's time zone.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (!daysOk) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
-                item(key = "quiet_hint") {
-                    Text(
-                        if (!daysOk) "Select at least one day." else "Times use the server's time zone.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (!daysOk) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            item(key = "batch") {
+                FormSection("Rate limit and batching") {
+                    FormNumberField(
+                        "Notifications per hour", form.rate, { form = form.copy(rate = it) },
+                        supporting = if (rateOk) "0 = unlimited" else "Enter a whole number."
+                    )
+                    FormNumberField(
+                        "Batch threshold", form.threshold, { form = form.copy(threshold = it) },
+                        supporting = if (thresholdOk) "From this many notifications they are combined into one." else "Enter a whole number (cannot be empty)."
+                    )
+                    FormNumberField(
+                        "Batch window (seconds)", form.window, { form = form.copy(window = it) },
+                        supporting = if (windowOk) "Time span in which notifications are counted." else "Enter a whole number (cannot be empty)."
                     )
                 }
-            }
-            item(key = "batch_title") { SectionHeader("Rate limit and batching") }
-            item(key = "rate") {
-                FormNumberField(
-                    "Notifications per hour", form.rate, { form = form.copy(rate = it) },
-                    supporting = if (rateOk) "0 = unlimited" else "Enter a whole number."
-                )
-            }
-            item(key = "threshold") {
-                FormNumberField(
-                    "Batch threshold", form.threshold, { form = form.copy(threshold = it) },
-                    supporting = if (thresholdOk) "From this many notifications they are combined into one." else "Enter a whole number (cannot be empty)."
-                )
-            }
-            item(key = "window") {
-                FormNumberField(
-                    "Batch window (seconds)", form.window, { form = form.copy(window = it) },
-                    supporting = if (windowOk) "Time span in which notifications are counted." else "Enter a whole number (cannot be empty)."
-                )
             }
         }
     }

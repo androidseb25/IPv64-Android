@@ -13,7 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +43,7 @@ import de.rpicloud.ipv64net.helper.loadHc2Checks
 import de.rpicloud.ipv64net.helper.openUrl
 import de.rpicloud.ipv64net.helper.rememberNavArg
 import de.rpicloud.ipv64net.helper.shareText
+import de.rpicloud.ipv64net.main.views.common.FormSection
 import de.rpicloud.ipv64net.main.views.FormDropdown
 import de.rpicloud.ipv64net.main.views.FormSwitchRow
 import de.rpicloud.ipv64net.main.views.FormTextField
@@ -53,7 +53,6 @@ import de.rpicloud.ipv64net.main.views.common.InfoRow
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
 import de.rpicloud.ipv64net.main.views.common.SecureWindowEffect
-import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
 import de.rpicloud.ipv64net.main.views.common.unknownCheckLabel
 import de.rpicloud.ipv64net.models.Tab
@@ -232,101 +231,103 @@ fun StatusPageEditView(navController: NavHostController, mainPadding: PaddingVal
                 .verticalScroll(rememberScrollState())
                 .imePadding()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             val url = original?.url?.takeIf { it.isNotBlank() }
             if (url != null) {
-                InfoRow("Public URL", url, copyable = true)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { openUrl(ctx, url) }) { Text("Open") }
-                    OutlinedButton(onClick = { copyText(ctx, "Status page URL", url) }) { Text("Copy") }
-                    OutlinedButton(onClick = { shareText(ctx, url, name.ifBlank { null }) }) { Text("Share") }
+                FormSection("Public URL") {
+                    InfoRow("Public URL", url, copyable = true)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { openUrl(ctx, url) }) { Text("Open") }
+                        OutlinedButton(onClick = { copyText(ctx, "Status page URL", url) }) { Text("Copy") }
+                        OutlinedButton(onClick = { shareText(ctx, url, name.ifBlank { null }) }) { Text("Share") }
+                    }
                 }
             }
 
-            FormTextField("Title", name, { name = it; errors.remove("name") }, supporting = errors["name"])
-            FormTextField(
-                "Description", description, { description = it; errors.remove("description") },
-                singleLine = false, minLines = 2, supporting = errors["description"] ?: "Optional."
-            )
-            FormTextField(
-                "Address", slug, { slug = it.filter { c -> c.isLetterOrDigit() }; errors.remove("slug") },
-                supporting = errors["slug"] ?: if (isEdit) "Changing the address changes the public URL."
-                else "Optional; letters and digits (3 to 128). Leave empty for a random address."
-            )
-            FormDropdown(
-                label = "Design", value = design, options = listOf(1, 2, 3, 4),
-                labelOf = { "Design $it" }, onSelect = { design = it }
-            )
-            FormSwitchRow(
-                "Auto refresh", autorefresh, { autorefresh = it },
-                supporting = "The page reloads itself regularly."
-            )
+            FormSection("General") {
+                FormTextField("Title", name, { name = it; errors.remove("name") }, supporting = errors["name"])
+                FormTextField(
+                    "Description", description, { description = it; errors.remove("description") },
+                    singleLine = false, minLines = 2, supporting = errors["description"] ?: "Optional."
+                )
+                FormTextField(
+                    "Address", slug, { slug = it.filter { c -> c.isLetterOrDigit() }; errors.remove("slug") },
+                    supporting = errors["slug"] ?: if (isEdit) "Changing the address changes the public URL."
+                    else "Optional; letters and digits (3 to 128). Leave empty for a random address."
+                )
+                FormDropdown(
+                    label = "Design", value = design, options = listOf(1, 2, 3, 4),
+                    labelOf = { "Design $it" }, onSelect = { design = it }
+                )
+                FormSwitchRow(
+                    "Auto refresh", autorefresh, { autorefresh = it },
+                    supporting = "The page reloads itself regularly."
+                )
+            }
 
-            SectionHeader("Access")
-            Text(
-                if (protectedNow) "This page is protected by a password." else "This page is public.",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = passwordMode == PasswordMode.KEEP,
-                    onClick = { passwordMode = PasswordMode.KEEP; password = ""; errors.remove("password") },
-                    label = { Text(if (protectedNow) "Keep password" else "Public") }
+            FormSection("Access") {
+                Text(
+                    if (protectedNow) "This page is protected by a password." else "This page is public.",
+                    style = MaterialTheme.typography.bodyMedium
                 )
-                FilterChip(
-                    selected = passwordMode == PasswordMode.SET,
-                    onClick = { passwordMode = PasswordMode.SET },
-                    label = { Text(if (protectedNow) "Change password" else "Set password") }
-                )
-                if (protectedNow) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
-                        selected = passwordMode == PasswordMode.REMOVE,
-                        onClick = { passwordMode = PasswordMode.REMOVE; password = ""; errors.remove("password") },
-                        label = { Text("Remove password") }
+                        selected = passwordMode == PasswordMode.KEEP,
+                        onClick = { passwordMode = PasswordMode.KEEP; password = ""; errors.remove("password") },
+                        label = { Text(if (protectedNow) "Keep password" else "Public") }
+                    )
+                    FilterChip(
+                        selected = passwordMode == PasswordMode.SET,
+                        onClick = { passwordMode = PasswordMode.SET },
+                        label = { Text(if (protectedNow) "Change password" else "Set password") }
+                    )
+                    if (protectedNow) {
+                        FilterChip(
+                            selected = passwordMode == PasswordMode.REMOVE,
+                            onClick = { passwordMode = PasswordMode.REMOVE; password = ""; errors.remove("password") },
+                            label = { Text("Remove password") }
+                        )
+                    }
+                }
+                if (passwordMode == PasswordMode.SET) {
+                    FormTextField(
+                        "New password", password, { password = it; errors.remove("password") },
+                        secret = true, visualTransformation = PasswordVisualTransformation(),
+                        supporting = errors["password"]
                     )
                 }
             }
-            if (passwordMode == PasswordMode.SET) {
-                FormTextField(
-                    "New password", password, { password = it; errors.remove("password") },
-                    secret = true, visualTransformation = PasswordVisualTransformation(),
-                    supporting = errors["password"]
-                )
-            }
 
-            SectionHeader("Healthchecks")
-            if (tokens.isEmpty()) {
-                Text("No checks selected.", style = MaterialTheme.typography.bodyMedium)
-            } else {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp, end = 4.dp)) {
-                        tokens.forEachIndexed { index, token ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    checkNames[token]?.takeIf { it.isNotBlank() } ?: unknownCheckLabel(token),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                IconButton(onClick = { moveToken(index, -1) }, enabled = index > 0) {
-                                    Icon(painterResource(R.drawable.arrow_upward_24px), contentDescription = "Move up")
-                                }
-                                IconButton(onClick = { moveToken(index, 1) }, enabled = index < tokens.lastIndex) {
-                                    Icon(painterResource(R.drawable.arrow_downward_24px), contentDescription = "Move down")
-                                }
-                                IconButton(onClick = { tokens = ArrayList(tokens.filterIndexed { i, _ -> i != index }) }) {
-                                    Icon(painterResource(R.drawable.close_24px), contentDescription = "Remove")
-                                }
+            FormSection("Healthchecks") {
+                if (tokens.isEmpty()) {
+                    Text("No checks selected.", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    tokens.forEachIndexed { index, token ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                checkNames[token]?.takeIf { it.isNotBlank() } ?: unknownCheckLabel(token),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { moveToken(index, -1) }, enabled = index > 0) {
+                                Icon(painterResource(R.drawable.arrow_upward_24px), contentDescription = "Move up")
+                            }
+                            IconButton(onClick = { moveToken(index, 1) }, enabled = index < tokens.lastIndex) {
+                                Icon(painterResource(R.drawable.arrow_downward_24px), contentDescription = "Move down")
+                            }
+                            IconButton(onClick = { tokens = ArrayList(tokens.filterIndexed { i, _ -> i != index }) }) {
+                                Icon(painterResource(R.drawable.close_24px), contentDescription = "Remove")
                             }
                         }
                     }
                 }
-            }
-            errors["healthchecks"]?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            }
-            OutlinedButton(onClick = { showPicker = true }, modifier = Modifier.fillMaxWidth()) {
-                Text(if (tokens.isEmpty()) "Add checks" else "Add or remove checks")
+                errors["healthchecks"]?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+                OutlinedButton(onClick = { showPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (tokens.isEmpty()) "Add checks" else "Add or remove checks")
+                }
             }
 
             Button(onClick = { save() }, enabled = !req.isBusy, modifier = Modifier.fillMaxWidth()) {

@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -45,11 +44,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
 import de.rpicloud.ipv64net.helper.HC2_CHANNEL_TYPE_APP
 import de.rpicloud.ipv64net.helper.Hc2ChannelCache
 import de.rpicloud.ipv64net.helper.Hc2ChannelTypeCache
@@ -66,6 +65,10 @@ import de.rpicloud.ipv64net.helper.systemChannelLang
 import de.rpicloud.ipv64net.helper.toError
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
+import de.rpicloud.ipv64net.main.views.common.FormSection
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.sr.ipv64.IPv64Exception
@@ -368,21 +371,28 @@ fun ChannelSetupView(navController: NavHostController, mainPadding: PaddingValue
                     .padding(innerPadding)
                     .fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 if (list != null && list.isEmpty()) {
                     item(key = "empty") { Text("No channel types available.") }
                 }
-                items(items = list.orEmpty(), key = { it.type ?: it.hashCode() }) { type ->
-                    ChannelTypeRow(type) {
-                        if (type.type == HC2_CHANNEL_TYPE_APP) {
-                            // Dieses Gerät wird über die Push-Einrichtung registriert
-                            navController.navigate(Tabs.getRoute(Tab.push_setup)) {
-                                popUpTo(Tabs.getRoute(Tab.channel_new)) { inclusive = true }
-                                launchSingleTop = true
+                if (!list.isNullOrEmpty()) {
+                    item(key = "types") {
+                        ListGroup {
+                            list.forEachIndexed { index, type ->
+                                if (index > 0) GroupDivider(inset = 56.dp)
+                                ChannelTypeRow(type) {
+                                    if (type.type == HC2_CHANNEL_TYPE_APP) {
+                                        // Dieses Gerät wird über die Push-Einrichtung registriert
+                                        navController.navigate(Tabs.getRoute(Tab.push_setup)) {
+                                            popUpTo(Tabs.getRoute(Tab.channel_new)) { inclusive = true }
+                                            launchSingleTop = true
+                                        }
+                                    } else {
+                                        startForm(type, null)
+                                    }
+                                }
                             }
-                        } else {
-                            startForm(type, null)
                         }
                     }
                 }
@@ -417,7 +427,7 @@ fun ChannelSetupView(navController: NavHostController, mainPadding: PaddingValue
                     }
                 }
 
-                ChannelFormSection("General") {
+                FormSection("General") {
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
@@ -451,14 +461,14 @@ fun ChannelSetupView(navController: NavHostController, mainPadding: PaddingValue
                 val sectionTitle = selectedType?.label?.takeIf { it.isNotBlank() }
                     ?: loadedChannel?.typeLabel?.takeIf { it.isNotBlank() } ?: "Settings"
                 if (selectedType == null && editMode) {
-                    ChannelFormSection(sectionTitle) {
+                    FormSection(sectionTitle) {
                         Text(
                             "The settings of this channel type can only be changed at ipv64.net.",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
                 } else if (visibleFields.isNotEmpty()) {
-                    ChannelFormSection(sectionTitle) {
+                    FormSection(sectionTitle) {
                         visibleFields.forEach { field ->
                             val key = field.key.orEmpty()
                             ChannelConfigField(
@@ -484,9 +494,6 @@ fun ChannelSetupView(navController: NavHostController, mainPadding: PaddingValue
                     )
                 }
 
-                Button(onClick = { save() }, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (editMode) "Save" else "Create channel")
-                }
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
@@ -538,21 +545,18 @@ fun ChannelSetupView(navController: NavHostController, mainPadding: PaddingValue
 
     if (showDeleteConfirm) {
         val target = loadedChannel
-        ErrorDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            onConfirmation = {
+        ConfirmDialog(
+            title = "Delete channel?",
+            text = "“${target?.displayName.orEmpty()}” will be deleted. Checks using only this channel will notify " +
+                    "default channels instead." +
+                    if (isThisDevice) " This device will no longer receive push notifications." else "",
+            confirmLabel = "Delete",
+            destructive = true,
+            onConfirm = {
                 showDeleteConfirm = false
                 delete()
             },
-            dialogTitle = "Delete channel?",
-            dialogText = android.text.TextUtils.htmlEncode(
-                "“${target?.displayName.orEmpty()}” will be deleted. Checks using only this channel will notify " +
-                        "default channels instead." +
-                        if (isThisDevice) " This device will no longer receive push notifications." else ""
-            ),
-            dialogConfirmText = R.string.delete,
-            icon = R.drawable.delete_24px,
-            showDismiss = true
+            onDismiss = { showDeleteConfirm = false }
         )
     }
 
@@ -565,29 +569,12 @@ fun ChannelSetupView(navController: NavHostController, mainPadding: PaddingValue
 @Composable
 private fun ChannelTypeRow(type: Hc2ChannelType, onClick: () -> Unit) {
     val isApp = type.type == HC2_CHANNEL_TYPE_APP
-    Card(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                painter = painterResource(id = channelTypeIcon(type.type)),
-                contentDescription = null,
-                modifier = Modifier.size(28.dp)
-            )
-            Column(modifier = Modifier.padding(start = 12.dp)) {
-                Text(
-                    if (isApp) "IPv64 App (this device)" else type.label?.takeIf { it.isNotBlank() } ?: type.type.orEmpty(),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                if (type.needsVerification == true) {
-                    Text(
-                        "Needs verification",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
+    ListRow(
+        title = if (isApp) "IPv64 App (this device)" else type.label?.takeIf { it.isNotBlank() } ?: type.type.orEmpty(),
+        subtitle = if (type.needsVerification == true) "Needs verification" else null,
+        icon = channelTypeIcon(type.type),
+        onClick = onClick
+    )
 }
 
 // Hinweis: Kanal noch nicht bestätigt (Test nicht möglich)
@@ -599,7 +586,7 @@ private fun VerificationNeededCard(onVerify: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = orange.copy(alpha = 0.15f))
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Not verified", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = orange)
+            Text("Not verified", style = MaterialTheme.typography.titleSmall, color = orange)
             Text(
                 "This channel won't receive notifications and can't be tested until it is verified.",
                 style = MaterialTheme.typography.bodySmall

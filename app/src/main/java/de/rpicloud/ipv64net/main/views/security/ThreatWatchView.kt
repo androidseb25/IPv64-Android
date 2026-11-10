@@ -3,17 +3,13 @@ package de.rpicloud.ipv64net.main.views.security
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,8 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -51,6 +45,10 @@ import de.rpicloud.ipv64net.helper.ipv64Retrying
 import de.rpicloud.ipv64net.helper.navigateWithArgs
 import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
 import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.FilterChipRow
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.main.views.common.NotAvailableView
 import de.rpicloud.ipv64net.main.views.common.RefreshableList
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
@@ -58,6 +56,8 @@ import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
 import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.rpicloud.ipv64net.main.views.common.StatusChip
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
+import de.rpicloud.ipv64net.main.views.common.InfoItem
+import de.rpicloud.ipv64net.main.views.common.InfoRows
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.sr.ipv64.IPv64ApiException
@@ -242,7 +242,11 @@ fun ThreatWatchView(navController: NavHostController, mainPadding: PaddingValues
                     M3Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Alerts") })
                 }
                 if (tab == 0) {
-                    RefreshableList(refreshing = refreshing, onRefresh = { loadWatch(true) }) {
+                    RefreshableList(
+                        refreshing = refreshing,
+                        onRefresh = { loadWatch(true) },
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         val w = watch
                         if (w == null) {
                             item(key = "loading") { EmptyState(if (req.isBusy) "Loading..." else "No data.") }
@@ -250,25 +254,27 @@ fun ThreatWatchView(navController: NavHostController, mainPadding: PaddingValues
                             val max = w.limits?.max
                             val full = max != null && w.networks.size >= max
                             item(key = "limits") {
-                                SecurityCard {
-                                    Text("Early warning", style = MaterialTheme.typography.titleMedium)
-                                    KeyValueLine(
-                                        "Watched networks",
-                                        if (max != null) "${w.networks.size} / $max" else "${w.networks.size}"
+                                ListGroup("Early warning") {
+                                    InfoRows(
+                                        listOfNotNull(
+                                            InfoItem("Watched networks", if (max != null) "${w.networks.size} / $max" else "${w.networks.size}"),
+                                            w.limits?.minPrefixV4?.let { InfoItem("Shortest IPv4 prefix", "/$it") },
+                                            w.limits?.minPrefixV6?.let { InfoItem("Shortest IPv6 prefix", "/$it") }
+                                        )
                                     )
-                                    w.limits?.minPrefixV4?.let { KeyValueLine("Shortest IPv4 prefix", "/$it") }
-                                    w.limits?.minPrefixV6?.let { KeyValueLine("Shortest IPv6 prefix", "/$it") }
+                                    GroupDivider()
                                     Text(
                                         "Unverified networks only report IPs that are on the blocklist. " +
                                                 "Verified networks report every sighting.",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(16.dp)
                                     )
                                 }
                             }
                             item(key = "add") {
-                                SecurityCard {
-                                    Text("Add network", style = MaterialTheme.typography.titleSmall)
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    SectionHeader("Add network", Modifier.padding(start = 4.dp))
                                     OutlinedTextField(
                                         value = cidr,
                                         onValueChange = { cidr = it; cidrError = null },
@@ -276,6 +282,7 @@ fun ThreatWatchView(navController: NavHostController, mainPadding: PaddingValues
                                         singleLine = true,
                                         isError = cidrError != null,
                                         supportingText = cidrError?.let { { Text(it) } },
+                                        shape = MaterialTheme.shapes.extraLarge,
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
                                         modifier = Modifier.fillMaxWidth()
                                     )
@@ -284,6 +291,7 @@ fun ThreatWatchView(navController: NavHostController, mainPadding: PaddingValues
                                         onValueChange = { label = it },
                                         label = { Text("Label (optional)") },
                                         singleLine = true,
+                                        shape = MaterialTheme.shapes.extraLarge,
                                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                                         keyboardActions = KeyboardActions(onDone = { if (!full && cidr.isNotBlank() && !req.isBusy) addNetwork() }),
                                         modifier = Modifier.fillMaxWidth()
@@ -300,54 +308,51 @@ fun ThreatWatchView(navController: NavHostController, mainPadding: PaddingValues
                                     }
                                 }
                             }
-                            item(key = "networks_header") { SectionHeader("Watched networks") }
-                            if (w.networks.isEmpty()) {
-                                item(key = "networks_empty") { EmptyState("No networks yet.") }
-                            } else {
-                                itemsIndexed(w.networks, key = { i, n -> n.id ?: -(i + 1L) }) { _, n ->
-                                    WatchNetworkItem(n, onDelete = { deleteTarget = n })
+                            item(key = "networks") {
+                                ListGroup("Watched networks") {
+                                    if (w.networks.isEmpty()) {
+                                        EmptyState("No networks yet.")
+                                    } else {
+                                        w.networks.forEachIndexed { i, n ->
+                                            if (i > 0) GroupDivider()
+                                            WatchNetworkItem(n, onDelete = { deleteTarget = n })
+                                        }
+                                    }
                                 }
                             }
-                            item(key = "dyndns_header") { SectionHeader("Automatically watched DynDNS IPs") }
-                            if (w.dyndns.isEmpty()) {
-                                item(key = "dyndns_empty") { EmptyState("None. The current A/AAAA records of your domains are watched automatically.") }
-                            } else {
-                                itemsIndexed(w.dyndns, key = { i, d -> "dyndns_${i}_${d.ip}" }) { _, d ->
-                                    SecurityCard {
-                                        Text(
-                                            d.ip ?: "–",
-                                            fontFamily = FontFamily.Monospace,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            d.domain ?: "–",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                            item(key = "dyndns") {
+                                ListGroup("Automatically watched DynDNS IPs") {
+                                    if (w.dyndns.isEmpty()) {
+                                        EmptyState("None. The current A/AAAA records of your domains are watched automatically.")
+                                    } else {
+                                        w.dyndns.forEachIndexed { i, d ->
+                                            if (i > 0) GroupDivider()
+                                            ListRow(title = d.ip ?: "–", subtitle = d.domain ?: "–")
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 } else {
-                    RefreshableList(refreshing = refreshing, onRefresh = { loadAlerts(true) }) {
+                    RefreshableList(
+                        refreshing = refreshing,
+                        onRefresh = { loadAlerts(true) },
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         item(key = "period") {
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ALERT_PERIODS.forEach { (days, name) ->
-                                    FilterChip(
-                                        selected = periodDays == days,
-                                        onClick = {
-                                            if (periodDays != days) {
-                                                periodDays = days
-                                                alertsLoaded = false
-                                                alerts = emptyList()
-                                            }
-                                        },
-                                        label = { Text(name) },
-                                        enabled = !req.isBusy
-                                    )
+                            FilterChipRow(
+                                options = ALERT_PERIODS,
+                                selected = ALERT_PERIODS.first { it.first == periodDays },
+                                label = { it.second },
+                                onSelect = { (days, _) ->
+                                    if (periodDays != days && !req.isBusy) {
+                                        periodDays = days
+                                        alertsLoaded = false
+                                        alerts = emptyList()
+                                    }
                                 }
-                            }
+                            )
                         }
                         if (!alertsLoaded) {
                             item(key = "alerts_loading") { EmptyState(if (req.isBusy) "Loading..." else "No data.") }
@@ -363,11 +368,16 @@ fun ThreatWatchView(navController: NavHostController, mainPadding: PaddingValues
                                     )
                                 }
                             }
-                            itemsIndexed(alerts, key = { i, a -> a.id ?: -(i + 1L) }) { _, a ->
-                                ThreatAlertItemView(a, onClick = {
-                                    val ip = a.ip
-                                    if (ip != null) navController.navigateWithArgs(Tab.threat_lookup, NavKeys.THREAT_LOOKUP_IP to ip)
-                                })
+                            item(key = "alerts") {
+                                ListGroup("Alerts") {
+                                    alerts.forEachIndexed { i, a ->
+                                        if (i > 0) GroupDivider()
+                                        ThreatAlertItemView(a, onClick = {
+                                            val ip = a.ip
+                                            if (ip != null) navController.navigateWithArgs(Tab.threat_lookup, NavKeys.THREAT_LOOKUP_IP to ip)
+                                        })
+                                    }
+                                }
                             }
                         }
                     }
@@ -391,27 +401,21 @@ fun ThreatWatchView(navController: NavHostController, mainPadding: PaddingValues
 
 @Composable
 private fun WatchNetworkItem(n: ThreatWatchNetwork, onDelete: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(n.cidr ?: "–", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                n.label?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                n.createdAt?.let {
-                    Text(
-                        "Added ${it.formatRelative()}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+    ListRow(
+        title = n.cidr ?: "–",
+        monospaceTitle = true,
+        subtitle = listOfNotNull(
+            n.label?.takeIf { it.isNotBlank() },
+            n.createdAt?.let { "Added ${it.formatRelative()}" }
+        ).joinToString("\n").ifEmpty { null },
+        trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 if (n.verified == true) StatusChip("Verified", colorResource(R.color.ipv64_green))
                 else StatusChip("Unverified", colorResource(R.color.ipv64_gray))
-            }
-            IconButton(onClick = onDelete) {
-                Icon(painter = painterResource(id = R.drawable.delete_24px), contentDescription = "Delete network")
+                IconButton(onClick = onDelete) {
+                    Icon(painter = painterResource(id = R.drawable.delete_24px), contentDescription = "Delete network")
+                }
             }
         }
-    }
+    )
 }

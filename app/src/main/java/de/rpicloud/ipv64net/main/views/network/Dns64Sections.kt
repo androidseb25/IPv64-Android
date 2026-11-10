@@ -7,14 +7,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -27,18 +27,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.formatGermanTime
 import de.rpicloud.ipv64net.helper.myIp
-import de.rpicloud.ipv64net.main.views.FormSwitchRow
 import de.rpicloud.ipv64net.main.views.FormTextField
 import de.rpicloud.ipv64net.main.views.common.EmptyState
-import de.rpicloud.ipv64net.main.views.common.InfoRow
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.rpicloud.ipv64net.main.views.common.StatusChip
+import de.rpicloud.ipv64net.main.views.common.InfoGroup
+import de.rpicloud.ipv64net.main.views.common.InfoItem
+import de.rpicloud.ipv64net.main.views.common.GroupText
 import de.sr.ipv64.model.Dns64Blocklist
 import de.sr.ipv64.model.Dns64Client
 import de.sr.ipv64.model.Dns64Rule
@@ -53,45 +55,19 @@ import kotlinx.coroutines.launch
 // Listenzeile
 // =============================================================================================
 
-// Zeile der Client-Liste: nur Daten aus der Liste, keine Einzelabfragen
+// Zeile der Client-Liste (für eine ListGroup): nur Daten aus der Liste, keine Einzelabfragen
 @Composable
-fun Dns64ItemView(client: Dns64Client, onClick: (Dns64Client) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth(), onClick = { onClick(client) }) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = client.displayName(),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                StatusChip(client.state.dns64Label(), client.state.dns64Color())
-            }
-            val filter = if (client.blockingEnabled == true) {
-                if (client.blocklists.isEmpty()) "Filtering on" else "Filtering: " + client.blocklists.joinToString(", ") { it.value }
-            } else "Filtering off"
-            Text(filter, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            val total = client.queriesTotal
-            if (total != null) {
-                Text(
-                    "$total queries · ${client.queriesBlocked ?: 0} blocked",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
+fun Dns64Row(client: Dns64Client, onClick: (Dns64Client) -> Unit) {
+    val filter = if (client.blockingEnabled == true) {
+        if (client.blocklists.isEmpty()) "Filtering on" else "Filtering: " + client.blocklists.joinToString(", ") { it.value }
+    } else "Filtering off"
+    val total = client.queriesTotal
+    ListRow(
+        title = client.displayName(),
+        subtitle = if (total != null) "$filter\n$total queries · ${client.queriesBlocked ?: 0} blocked" else filter,
+        trailing = { StatusChip(client.state.dns64Label(), client.state.dns64Color()) },
+        onClick = { onClick(client) }
+    )
 }
 
 // =============================================================================================
@@ -101,49 +77,39 @@ fun Dns64ItemView(client: Dns64Client, onClick: (Dns64Client) -> Unit) {
 // Kopf: Name, Zustand, Fortschritt und Statistik
 fun LazyListScope.dns64HeaderItem(client: Dns64Client) {
     item(key = "dns64_header") {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        client.displayName(),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    StatusChip(client.state.dns64Label(), client.state.dns64Color())
-                }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val total = client.queriesTotal
+            val blocked = client.queriesBlocked
+            ListGroup {
+                ListRow(
+                    title = client.displayName(),
+                    subtitle = if (client.blockingEnabled == true) "Filtering on" else "Filtering off",
+                    trailing = { StatusChip(client.state.dns64Label(), client.state.dns64Color()) }
+                )
                 if (client.isApplying()) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    Text(
-                        "Changes are being applied. This usually takes a few seconds.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                    GroupText("Changes are being applied. This usually takes a few seconds.")
                 }
-                InfoRow("Client ID", client.clientId, copyable = true, monospace = true)
-                val total = client.queriesTotal
-                val blocked = client.queriesBlocked
-                InfoRow("Queries", total?.toString())
-                if (blocked != null) {
-                    val share = if (total != null && total > 0) " (${blocked * 100 / total} %)" else ""
-                    InfoRow("Blocked queries", "$blocked$share")
-                }
-                InfoRow("Created", client.createdAt?.formatGermanTime())
             }
+            InfoGroup(
+                title = "Details",
+                rows = listOfNotNull(
+                    InfoItem("Client ID", client.clientId, copyable = true, monospace = true),
+                    InfoItem("Queries", total?.toString()),
+                    blocked?.let {
+                        val share = if (total != null && total > 0) " (${it * 100 / total} %)" else ""
+                        InfoItem("Blocked queries", "$it$share")
+                    },
+                    InfoItem("Created", client.createdAt?.formatGermanTime())
+                )
+            )
         }
     }
 }
 
 // Resolver-Endpunkte; [onUsePrivateDns] bekommt den gewählten Server (kopiert DoT-Host und öffnet Einstellungen)
 fun LazyListScope.dns64ResolverItems(client: Dns64Client, onUsePrivateDns: (Dns64Server) -> Unit) {
-    item(key = "resolver_header") { SectionHeader("Resolver endpoints") }
+    item(key = "resolver_header") { SectionHeader("Resolver endpoints", Modifier.padding(start = 4.dp)) }
     if (client.servers.isEmpty()) {
         item(key = "resolver_empty") {
             EmptyState(
@@ -155,16 +121,14 @@ fun LazyListScope.dns64ResolverItems(client: Dns64Client, onUsePrivateDns: (Dns6
     }
     if (client.servers.any { !it.dot.isNullOrBlank() }) {
         item(key = "resolver_hint") {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Use as Android Private DNS", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "Copy the DNS over TLS host below, open Settings > Network & internet > Private DNS, " +
-                                "choose \"Private DNS provider hostname\" and paste it. Needs Android 9 or newer.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            Column(modifier = Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Use as Android Private DNS", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Copy the DNS over TLS host below, open Settings > Network & internet > Private DNS, " +
+                            "choose \"Private DNS provider hostname\" and paste it. Needs Android 9 or newer.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
@@ -176,39 +140,34 @@ fun LazyListScope.dns64ResolverItems(client: Dns64Client, onUsePrivateDns: (Dns6
 @Composable
 private fun ServerCard(server: Dns64Server, index: Int, onUsePrivateDns: (Dns64Server) -> Unit) {
     var stamps by rememberSaveable(index) { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(server.displayName(index), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            server.dot?.takeIf { it.isNotBlank() }?.let { InfoRow("DNS over TLS (Private DNS host)", it, copyable = true, monospace = true) }
-            server.doh?.takeIf { it.isNotBlank() }?.let { InfoRow("DNS over HTTPS", it, copyable = true, monospace = true) }
-            server.doq?.takeIf { it.isNotBlank() }?.let { InfoRow("DNS over QUIC", it, copyable = true, monospace = true) }
-            server.ipv6?.takeIf { it.isNotBlank() }?.let { InfoRow("Personal IPv6", it, copyable = true, monospace = true) }
-            server.ipv4Shared?.takeIf { it.isNotBlank() }?.let { InfoRow("Shared IPv4 (needs source address)", it, copyable = true, monospace = true) }
-            server.ipv6Shared?.takeIf { it.isNotBlank() }?.let { InfoRow("Shared IPv6 (needs source address)", it, copyable = true, monospace = true) }
-            if (!server.dot.isNullOrBlank()) {
-                OutlinedButton(onClick = { onUsePrivateDns(server) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Use as Android Private DNS")
-                }
+    val s = server.stamps
+    val hasStamps = s != null && (!s.doh.isNullOrBlank() || !s.dot.isNullOrBlank() || !s.doq.isNullOrBlank())
+    val facts = listOfNotNull(
+        server.dot?.takeIf { it.isNotBlank() }?.let { InfoItem("DNS over TLS (Private DNS host)", it, copyable = true, monospace = true) },
+        server.doh?.takeIf { it.isNotBlank() }?.let { InfoItem("DNS over HTTPS", it, copyable = true, monospace = true) },
+        server.doq?.takeIf { it.isNotBlank() }?.let { InfoItem("DNS over QUIC", it, copyable = true, monospace = true) },
+        server.ipv6?.takeIf { it.isNotBlank() }?.let { InfoItem("Personal IPv6", it, copyable = true, monospace = true) },
+        server.ipv4Shared?.takeIf { it.isNotBlank() }?.let { InfoItem("Shared IPv4 (needs source address)", it, copyable = true, monospace = true) },
+        server.ipv6Shared?.takeIf { it.isNotBlank() }?.let { InfoItem("Shared IPv6 (needs source address)", it, copyable = true, monospace = true) }
+    ) + if (hasStamps && stamps) listOfNotNull(
+        s?.doh?.takeIf { it.isNotBlank() }?.let { InfoItem("DoH stamp", it, copyable = true, monospace = true) },
+        s?.dot?.takeIf { it.isNotBlank() }?.let { InfoItem("DoT stamp", it, copyable = true, monospace = true) },
+        s?.doq?.takeIf { it.isNotBlank() }?.let { InfoItem("DoQ stamp", it, copyable = true, monospace = true) }
+    ) else emptyList()
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        InfoGroup(title = server.displayName(index), rows = facts)
+        if (!server.dot.isNullOrBlank()) {
+            FilledTonalButton(onClick = { onUsePrivateDns(server) }, modifier = Modifier.fillMaxWidth()) {
+                Text("Use as Android Private DNS")
             }
-            val s = server.stamps
-            if (s != null && (!s.doh.isNullOrBlank() || !s.dot.isNullOrBlank() || !s.doq.isNullOrBlank())) {
-                TextButton(onClick = { stamps = !stamps }) {
-                    Icon(
-                        painter = painterResource(if (stamps) R.drawable.expand_less_24px else R.drawable.expand_more_24px),
-                        contentDescription = null
-                    )
-                    Text(if (stamps) "Hide DNS stamps" else "Show DNS stamps", modifier = Modifier.padding(start = 4.dp))
-                }
-                if (stamps) {
-                    s.doh?.takeIf { it.isNotBlank() }?.let { InfoRow("DoH stamp", it, copyable = true, monospace = true) }
-                    s.dot?.takeIf { it.isNotBlank() }?.let { InfoRow("DoT stamp", it, copyable = true, monospace = true) }
-                    s.doq?.takeIf { it.isNotBlank() }?.let { InfoRow("DoQ stamp", it, copyable = true, monospace = true) }
-                }
+        }
+        if (hasStamps) {
+            TextButton(onClick = { stamps = !stamps }) {
+                Icon(
+                    painter = painterResource(if (stamps) R.drawable.expand_less_24px else R.drawable.expand_more_24px),
+                    contentDescription = null
+                )
+                Text(if (stamps) "Hide DNS stamps" else "Show DNS stamps", modifier = Modifier.padding(start = 4.dp))
             }
         }
     }
@@ -222,40 +181,46 @@ fun LazyListScope.dns64FilteringItems(
     onBlocking: (Boolean) -> Unit,
     onBlocklist: (Dns64Blocklist, Boolean) -> Unit
 ) {
-    item(key = "filter_header") { SectionHeader("Filtering") }
     item(key = "filter_card") {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                FormSwitchRow(
-                    label = "Filtering",
-                    checked = client.blockingEnabled == true,
-                    onChange = onBlocking,
-                    supporting = "Blocks domains from the selected blocklists.",
-                    enabled = enabled
+        ListGroup(title = "Filtering") {
+            SwitchRow(
+                label = "Filtering",
+                checked = client.blockingEnabled == true,
+                onChange = onBlocking,
+                supporting = "Blocks domains from the selected blocklists.",
+                enabled = enabled
+            )
+            Dns64Blocklist.entries.forEach { list ->
+                GroupDivider()
+                val notInPlan = list in unavailable
+                SwitchRow(
+                    label = list.dns64Title(),
+                    checked = list in client.blocklists,
+                    onChange = { onBlocklist(list, it) },
+                    supporting = list.dns64Description() + when {
+                        notInPlan -> " Not in your plan."
+                        list.isPaidOnly() -> " Not available on the free plan."
+                        else -> ""
+                    },
+                    enabled = enabled && !notInPlan
                 )
-                HorizontalDivider()
-                Dns64Blocklist.entries.forEach { list ->
-                    val notInPlan = list in unavailable
-                    FormSwitchRow(
-                        label = list.dns64Title(),
-                        checked = list in client.blocklists,
-                        onChange = { onBlocklist(list, it) },
-                        supporting = list.dns64Description() + when {
-                            notInPlan -> " Not in your plan."
-                            list.isPaidOnly() -> " Not available on the free plan."
-                            else -> ""
-                        },
-                        enabled = enabled && !notInPlan
-                    )
-                }
             }
         }
     }
+}
+
+// Zeile mit Schalter (für eine ListGroup)
+@Composable
+private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit, supporting: String, enabled: Boolean) {
+    ListRow(
+        title = label,
+        subtitle = supporting,
+        subtitleMaxLines = 4,
+        enabled = enabled,
+        showChevron = false,
+        trailing = { Switch(checked = checked, onCheckedChange = onChange, enabled = enabled) },
+        onClick = { onChange(!checked) }
+    )
 }
 
 // Eigene Erlauben-/Sperren-Regeln
@@ -268,33 +233,27 @@ fun LazyListScope.dns64RuleItems(
     item(key = "rules_header") { Dns64SectionRow("Rules", "Add rule", enabled, onAdd) }
     if (client.rules.isEmpty()) {
         item(key = "rules_empty") { EmptyState("No rules. Allow or block single domains.") }
+        return
     }
-    items(client.rules.size, key = { "rule_${client.rules[it].id ?: it}" }) { index ->
-        val rule = client.rules[index]
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp)
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        rule.domain.orEmpty().ifBlank { "Unknown domain" },
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        StatusChip(rule.action.dns64ActionLabel(), rule.action.dns64ActionColor())
-                        if (rule.state == de.sr.ipv64.model.Dns64State.APPLYING) {
-                            StatusChip("Applying", rule.state.dns64Color())
+    item(key = "rules_list") {
+        ListGroup {
+            client.rules.forEachIndexed { index, rule ->
+                if (index > 0) GroupDivider()
+                ListRow(
+                    title = rule.domain.orEmpty().ifBlank { "Unknown domain" },
+                    showChevron = false,
+                    trailing = {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            StatusChip(rule.action.dns64ActionLabel(), rule.action.dns64ActionColor())
+                            if (rule.state == de.sr.ipv64.model.Dns64State.APPLYING) {
+                                StatusChip("Applying", rule.state.dns64Color())
+                            }
+                            IconButton(onClick = { onDelete(rule) }, enabled = enabled && rule.id != null) {
+                                Icon(painter = painterResource(R.drawable.delete_24px), contentDescription = "Delete rule")
+                            }
                         }
                     }
-                }
-                IconButton(onClick = { onDelete(rule) }, enabled = enabled && rule.id != null) {
-                    Icon(painter = painterResource(R.drawable.delete_24px), contentDescription = "Delete rule")
-                }
+                )
             }
         }
     }
@@ -311,13 +270,14 @@ fun LazyListScope.dns64SourceItems(
     val ips = client.sources.ofKind(Dns64SourceKind.IP)
     val records = client.sources.ofKind(Dns64SourceKind.RECORD)
 
-    item(key = "sources_header") { SectionHeader("Source addresses") }
+    item(key = "sources_header") { SectionHeader("Source addresses", Modifier.padding(start = 4.dp)) }
     item(key = "sources_hint") {
         Text(
             "Source addresses let the shared resolver IPs recognize your queries and assign them to this client. " +
                     "Not needed for DNS over TLS/HTTPS/QUIC with your personal address.",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp)
         )
     }
 
@@ -328,7 +288,7 @@ fun LazyListScope.dns64SourceItems(
         )
     }
     if (ips.isEmpty()) item(key = "sources_ip_empty") { EmptyState("No fixed IP addresses.") }
-    items(ips.size, key = { "source_ip_${ips[it].id ?: it}" }) { Dns64SourceRow(ips[it], enabled, onDelete) }
+    else item(key = "sources_ip_list") { Dns64SourceGroup(ips, enabled, onDelete) }
 
     item(key = "sources_record_header") {
         Dns64SectionRow(
@@ -337,31 +297,24 @@ fun LazyListScope.dns64SourceItems(
         )
     }
     if (records.isEmpty()) item(key = "sources_record_empty") { EmptyState("No DynDNS records.") }
-    items(records.size, key = { "source_record_${records[it].id ?: it}" }) { Dns64SourceRow(records[it], enabled, onDelete) }
+    else item(key = "sources_record_list") { Dns64SourceGroup(records, enabled, onDelete) }
 }
 
 @Composable
-private fun Dns64SourceRow(source: Dns64Source, enabled: Boolean, onDelete: (Dns64Source) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(source.displayText(), style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (!source.fqdn.isNullOrBlank() && !source.address.isNullOrBlank()) {
-                    Text(
-                        source.address.orEmpty(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+private fun Dns64SourceGroup(sources: List<Dns64Source>, enabled: Boolean, onDelete: (Dns64Source) -> Unit) {
+    ListGroup {
+        sources.forEachIndexed { index, source ->
+            if (index > 0) GroupDivider()
+            ListRow(
+                title = source.displayText(),
+                subtitle = source.address?.takeIf { !source.fqdn.isNullOrBlank() && it.isNotBlank() },
+                showChevron = false,
+                trailing = {
+                    IconButton(onClick = { onDelete(source) }, enabled = enabled && source.id != null) {
+                        Icon(painter = painterResource(R.drawable.delete_24px), contentDescription = "Delete source")
+                    }
                 }
-            }
-            IconButton(onClick = { onDelete(source) }, enabled = enabled && source.id != null) {
-                Icon(painter = painterResource(R.drawable.delete_24px), contentDescription = "Delete source")
-            }
+            )
         }
     }
 }
@@ -369,7 +322,7 @@ private fun Dns64SourceRow(source: Dns64Source, enabled: Boolean, onDelete: (Dns
 @Composable
 private fun Dns64SectionRow(title: String, addLabel: String, addEnabled: Boolean, onAdd: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        SectionHeader(title, modifier = Modifier.weight(1f))
+        SectionHeader(title, modifier = Modifier.weight(1f).padding(start = 4.dp))
         TextButton(onClick = onAdd, enabled = addEnabled) {
             Icon(painter = painterResource(R.drawable.add_24px), contentDescription = null)
             Text(addLabel, modifier = Modifier.padding(start = 4.dp))

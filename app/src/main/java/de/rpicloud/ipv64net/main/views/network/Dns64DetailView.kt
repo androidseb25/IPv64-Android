@@ -1,6 +1,7 @@
 package de.rpicloud.ipv64net.main.views.network
 
 import android.widget.Toast
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -11,9 +12,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.AccountCache
@@ -197,7 +198,11 @@ fun Dns64DetailView(navController: NavHostController, mainPadding: PaddingValues
             id == null -> EmptyState("Client not found.")
             unavailable != null -> NotAvailableView(PlanFeature.DNS64.label, unavailable)
             c == null -> Unit
-            else -> RefreshableList(refreshing = refreshing, onRefresh = { load(pull = true) }) {
+            else -> RefreshableList(
+                refreshing = refreshing,
+                onRefresh = { load(pull = true) },
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 dns64HeaderItem(c)
                 dns64ResolverItems(c, onUsePrivateDns = ::usePrivateDns)
                 dns64FilteringItems(

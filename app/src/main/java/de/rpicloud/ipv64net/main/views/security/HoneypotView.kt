@@ -1,12 +1,15 @@
 package de.rpicloud.ipv64net.main.views.security
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -17,12 +20,24 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import de.rpicloud.ipv64net.helper.NavKeys
+import de.rpicloud.ipv64net.helper.navigateWithArgs
+import de.rpicloud.ipv64net.main.views.network.NodeListCache
+import de.sr.ipv64.IPv64ApiException
+import de.sr.ipv64.IPv64Exception
+import de.sr.ipv64.model.Hc2Node
+import de.sr.ipv64.model.ThreatFeedAction
+import de.sr.ipv64.model.ThreatFeedChange
+import de.sr.ipv64.model.ThreatStats
+import kotlinx.coroutines.delay
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.IPv64Client
@@ -30,7 +45,10 @@ import de.rpicloud.ipv64net.helper.formatRelative
 import de.rpicloud.ipv64net.helper.ipv64Retrying
 import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
 import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
 import de.rpicloud.ipv64net.main.views.common.InfoRow
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.main.views.common.RefreshableList
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
@@ -38,8 +56,10 @@ import de.rpicloud.ipv64net.main.views.common.SecureWindowEffect
 import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.rpicloud.ipv64net.main.views.common.StatusChip
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
+import de.rpicloud.ipv64net.main.views.common.FormSection
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
+import de.rpicloud.ipv64net.ui.theme.chartPalette
 import de.sr.ipv64.model.HoneypotListToken
 import de.sr.ipv64.model.HoneypotSensor
 import de.sr.ipv64.model.HoneypotStats
@@ -47,7 +67,8 @@ import de.sr.ipv64.model.HoneypotStats
 private const val LIST_FILE = "ipv64_blocklist_v64.txt"
 
 /**
- * Honeypot: eigener Beitrag und Sensoren (stats() und sensors() nacheinander, je 2 min gecacht) sowie der
+ * Honeypot: oben Kennzahlen von ipv64.net (threat.stats() 10 min gecacht), dann der Anteil der Nodes mit Honeypot-Modul
+ * (Node-Liste 30 s gecacht), dann eigener Beitrag und Sensoren (stats() und sensors() je 2 min gecacht) sowie der
  * persönliche Listen-Token. Der Token wird erst nach Bestätigung geladen (der Abruf legt ihn an, falls er fehlt),
  * nur inline angezeigt (maskiert, sensibel kopierbar, Screenshots gesperrt) und nie gecacht.
  */
@@ -59,6 +80,8 @@ fun HoneypotView(navController: NavHostController, mainPadding: PaddingValues) {
 
     var stats by remember { mutableStateOf<HoneypotStats?>(null) }
     var sensors by remember { mutableStateOf<List<HoneypotSensor>>(emptyList()) }
+    var cloud by remember { mutableStateOf<ThreatStats?>(null) }
+    var nodes by remember { mutableStateOf<List<Hc2Node>?>(null) }
     var loaded by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
 
@@ -78,6 +101,9 @@ fun HoneypotView(navController: NavHostController, mainPadding: PaddingValues) {
         ) {
             stats = HoneypotStatsCache.get(ctx, force) { it.honeypot.stats() }
             sensors = HoneypotSensorsCache.get(ctx, force) { it.honeypot.sensors() }
+            // Live-Daten und Node-Liste sind Zusatz: ein Fehler dort blockiert den eigenen Beitrag nicht
+            try { cloud = ThreatStatsCache.get(ctx, force) { it.threat.stats() } } catch (_: IPv64Exception) { }
+            try { nodes = NodeListCache.get(ctx, force) { it.nodes.list() } } catch (_: IPv64Exception) { }
             loaded = true
         }
     }
@@ -98,14 +124,20 @@ fun HoneypotView(navController: NavHostController, mainPadding: PaddingValues) {
     ClearOnStop { tokenGen[0]++; token = null }
 
     ScreenScaffold(Tabs.getLabel(Tab.honeypot), navController, mainPadding) {
-        RefreshableList(refreshing = refreshing, onRefresh = { load(force = true, pull = true) }) {
+        RefreshableList(
+            refreshing = refreshing,
+            onRefresh = { load(force = true, pull = true) },
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            networkContent(cloud)
+            cloud?.let { statsContent(it, withOverview = false) }
+            nodes?.let { nodeShareContent(it) }
             if (!loaded) {
                 item(key = "loading") { EmptyState(if (req.isBusy) "Loading..." else "No data.") }
             } else {
                 stats?.let { honeypotContent(it, sensors) }
             }
 
-            item(key = "token_header") { SectionHeader("Blocklist token") }
             item(key = "token") {
                 TokenCard(
                     token = token,
@@ -132,7 +164,7 @@ fun HoneypotView(navController: NavHostController, mainPadding: PaddingValues) {
 
 @Composable
 private fun TokenCard(token: HoneypotListToken?, busy: Boolean, onShow: () -> Unit, onHide: () -> Unit) {
-    SecurityCard {
+    FormSection(title = "Blocklist token") {
         if (token == null) {
             Text(
                 "Your personal token gives access to the live v64 blocklist.",
@@ -168,13 +200,13 @@ private fun TokenCard(token: HoneypotListToken?, busy: Boolean, onShow: () -> Un
 
 private fun LazyListScope.honeypotContent(s: HoneypotStats, sensors: List<HoneypotSensor>) {
     item(key = "overview") {
-        SecurityCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(start = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Your contribution", style = MaterialTheme.typography.titleMedium)
+                SectionHeader("Your contribution")
                 if (s.contributor == true) StatusChip("Contributor", colorResource(R.color.ipv64_green))
                 else StatusChip("Not contributing", colorResource(R.color.ipv64_gray))
             }
@@ -191,80 +223,96 @@ private fun LazyListScope.honeypotContent(s: HoneypotStats, sensors: List<Honeyp
                 Text(
                     "Last report ${it.formatRelative()}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp)
                 )
             }
         }
     }
 
     if (s.timeline.isNotEmpty()) {
-        item(key = "timeline") {
-            SecurityCard {
-                Text("Events per day (7 days)", style = MaterialTheme.typography.titleSmall)
+        item(key = "hp_timeline") {
+            FormSection(title = "Events per day (7 days)") {
                 SimpleBarChart(
                     values = s.timeline.map { it.events ?: 0L },
                     firstLabel = shortDay(s.timeline.first().day),
-                    lastLabel = shortDay(s.timeline.last().day)
+                    lastLabel = shortDay(s.timeline.last().day),
+                    color = chartPalette().categorical(1),
+                    labels = s.timeline.map { shortDay(it.day) }
                 )
             }
         }
     }
-    if (s.topKinds.isNotEmpty()) {
-        item(key = "kinds") {
-            RankingCard(
-                "Top attack kinds (7 days)",
-                s.topKinds.map { RankRow(it.kind ?: "–", it.events ?: 0L, "${(it.events ?: 0L).formatCount()} · ${(it.sources ?: 0L).formatCount()} IPs") }
-            )
-        }
-    }
-    if (s.topPorts.isNotEmpty()) {
-        item(key = "ports") {
-            RankingCard(
-                "Top ports (7 days)",
-                s.topPorts.map {
-                    RankRow("${it.service ?: "–"} · ${it.port ?: "–"}", it.events ?: 0L, "${(it.events ?: 0L).formatCount()} · ${(it.sources ?: 0L).formatCount()} IPs")
+    item(key = "sensors") {
+        ListGroup("Sensors") {
+            if (sensors.isEmpty()) {
+                EmptyState("You have no sensors yet. Sensors are provided by the Node64 honeypot module.")
+            } else {
+                sensors.forEachIndexed { i, sensor ->
+                    if (i > 0) GroupDivider()
+                    SensorRow(sensor)
                 }
-            )
-        }
-    }
-
-    item(key = "sensors_header") { SectionHeader("Sensors") }
-    if (sensors.isEmpty()) {
-        item(key = "sensors_empty") {
-            EmptyState("You have no sensors yet. Sensors are provided by the Node64 honeypot module.")
-        }
-    } else {
-        itemsIndexed(sensors, key = { i, sensor -> sensor.id ?: "sensor_$i" }) { _, sensor ->
-            SensorCard(sensor)
+            }
         }
     }
 }
 
 @Composable
-private fun SensorCard(sensor: HoneypotSensor) {
-    SecurityCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Nur der Anfang der UUID, die Karte bleibt übersichtlich
-            Text(
-                (sensor.id ?: "–").take(8) + if ((sensor.id?.length ?: 0) > 8) "…" else "",
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
+private fun SensorRow(sensor: HoneypotSensor) {
+    val meta = listOfNotNull(sensor.profile, sensor.mode, sensor.version?.let { "v$it" }).joinToString(" · ")
+    val subtitle = listOfNotNull(
+        meta.takeIf { it.isNotEmpty() }?.let { "Profile: $it" },
+        sensor.lastSeen?.let { "Last report ${it.formatRelative()}" },
+        sensor.reports?.let { "Reports: ${it.formatCount()}" },
+        "Events (24 h / 7 d): ${(sensor.events24h ?: 0L).formatCount()} / ${(sensor.events7d ?: 0L).formatCount()}",
+        "Sources (24 h / 7 d): ${(sensor.sources24h ?: 0L).formatCount()} / ${(sensor.sources7d ?: 0L).formatCount()}"
+    ).joinToString("\n")
+    ListRow(
+        // Nur der Anfang der UUID, die Zeile bleibt übersichtlich
+        title = (sensor.id ?: "–").take(8) + if ((sensor.id?.length ?: 0) > 8) "…" else "",
+        subtitle = subtitle,
+        subtitleMaxLines = 5,
+        trailing = {
             when {
                 sensor.disabled == true -> StatusChip("Disabled", colorResource(R.color.ipv64_gray))
                 sensor.online == true -> StatusChip("Online", colorResource(R.color.ipv64_green))
                 else -> StatusChip("Offline", colorResource(R.color.ipv64_red))
             }
         }
-        val meta = listOfNotNull(sensor.profile, sensor.mode, sensor.version?.let { "v$it" }).joinToString(" · ")
-        if (meta.isNotEmpty()) KeyValueLine("Profile", meta)
-        sensor.lastSeen?.let { KeyValueLine("Last report", it.formatRelative()) }
-        sensor.reports?.let { KeyValueLine("Reports", it.formatCount()) }
-        KeyValueLine("Events (24 h / 7 d)", "${(sensor.events24h ?: 0L).formatCount()} / ${(sensor.events7d ?: 0L).formatCount()}")
-        KeyValueLine("Sources (24 h / 7 d)", "${(sensor.sources24h ?: 0L).formatCount()} / ${(sensor.sources7d ?: 0L).formatCount()}")
+    )
+}
+
+private fun LazyListScope.networkContent(c: ThreatStats?) {
+    item(key = "network") {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionHeader("ipv64.net network", Modifier.padding(start = 4.dp))
+            c?.let {
+                StatTiles(
+                    listOf(
+                        "Sensors online" to (it.sensors?.online ?: 0L).formatCount(),
+                        "Attacks (24 h)" to (it.attacks24h?.events ?: 0L).formatCount(),
+                        "Attacker IPs (24 h)" to (it.attacks24h?.sources ?: 0L).formatCount(),
+                        "Blocklist size" to (it.lists["v64"] ?: 0L).formatCount()
+                    )
+                )
+            }
+        }
+    }
+}
+
+private fun LazyListScope.nodeShareContent(nodes: List<Hc2Node>) {
+    item(key = "nodeshare") {
+        val active = nodes.count { n -> n.modules.any { it.equals("honeypot", ignoreCase = true) } }
+        FormSection(title = "Your nodes") {
+            if (nodes.isEmpty()) {
+                Text("No nodes linked yet.", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                Text(
+                    "$active of ${nodes.size} nodes run the honeypot",
+                    style = MaterialTheme.typography.titleSmall
+                )
+                LinearProgressIndicator(progress = { active / nodes.size.toFloat() }, modifier = Modifier.fillMaxWidth())
+            }
+        }
     }
 }

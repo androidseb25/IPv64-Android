@@ -21,9 +21,9 @@ interface ClearableCache {
 }
 
 /**
- * Zentrale Liste aller Caches, die beim API-Key-Wechsel geleert werden.
- * [IPv64Client.get] ruft [clearAll] auf, sobald sich der API-Key ändert (zusätzlich zu den älteren Caches
- * DomainCache, Hc2ChannelCache, Hc2ChannelTypeCache und Hc2CheckListCache, die es weiterhin direkt leert).
+ * Zentrale Liste aller Caches, die beim API-Key-Wechsel geleert werden (TimedCache, DomainCache und die
+ * hc2-Caches). [IPv64Client.get] ruft [clearAll] auf, sobald sich der API-Key ändert; Logout und Account-Entfernen
+ * rufen es ebenfalls auf. Ein weiterer Aufruf einzelner clear()-Methoden ist nicht nötig.
  */
 object CacheRegistry {
     private val caches = mutableListOf<ClearableCache>()
@@ -42,7 +42,7 @@ object CacheRegistry {
 }
 
 /**
- * Wert mit Ablaufzeit, nach dem Muster von [Hc2ChannelCache]. Meldet sich selbst bei [CacheRegistry] an.
+ * Wert mit Ablaufzeit. Meldet sich selbst bei [CacheRegistry] an.
  *
  * - [get] liefert den gecachten Wert oder lädt ihn (ein Ladevorgang gleichzeitig, Mutex). Zuerst wird
  *   [IPv64Client.get] aufgerufen, damit ein API-Key-Wechsel die Caches leert, bevor der alte Wert gelesen wird.
@@ -161,39 +161,11 @@ suspend fun loadHc2Account(ctx: Context, force: Boolean = false): Hc2Account =
 suspend fun loadDomains(ctx: Context, force: Boolean = false): List<Domain> =
     DomainListCache.get(ctx, force) { it.domains.list() }
 
-private val hc2ChecksMutex = Mutex()
-
-// Generationszähler für loadHc2Checks: wird beim Account-Wechsel (CacheRegistry.clearAll) erhöht, damit ein
-// laufender Abruf mit altem API-Key seine Liste nicht mehr in Hc2CheckListCache speichert
-private object Hc2ChecksGeneration : ClearableCache {
-    private var generation = 0L
-
-    init {
-        CacheRegistry.register(this)
-    }
-
-    @Synchronized
-    fun current(): Long = generation
-
-    @Synchronized
-    override fun clear() {
-        generation++
-    }
-}
-
 /**
- * hc2-Checkliste laden; nutzt den bestehenden [Hc2CheckListCache] (20 s), damit Healthcheck-Tab, Pickers und
+ * hc2-Checkliste laden; nutzt [Hc2CheckListCache] (20 s), damit Healthcheck-Tab, Pickers und
  * Monitoring-Hub dieselbe Liste teilen. force = true lädt immer neu. Wirft IPv64Exception.
- * Ein Abruf, während dessen der Account gewechselt wurde, wird zurückgegeben, aber nicht gespeichert.
+ * Ein Abruf, während dessen der Account gewechselt oder die Liste invalidiert wurde, wird zurückgegeben,
+ * aber nicht gespeichert.
  */
-suspend fun loadHc2Checks(ctx: Context, force: Boolean = false): List<Hc2Check> = hc2ChecksMutex.withLock {
-    // Generationsobjekt vor dem Client initialisieren, damit es beim Account-Wechsel bereits angemeldet ist
-    val guard = Hc2ChecksGeneration
-    // Zuerst den Client holen: bei geändertem API-Key leert IPv64Client.get() die Caches
-    val client = IPv64Client.get(ctx)
-    if (!force) Hc2CheckListCache.get()?.let { return@withLock it }
-    val gen = guard.current()
-    val list = ipv64Retrying { client.hc2.checks.list() }
-    if (gen == guard.current()) Hc2CheckListCache.put(list)
-    list
-}
+suspend fun loadHc2Checks(ctx: Context, force: Boolean = false): List<Hc2Check> =
+    Hc2CheckListCache.get(ctx, force)

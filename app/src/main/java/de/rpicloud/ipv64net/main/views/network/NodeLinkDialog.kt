@@ -32,6 +32,9 @@ import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.main.views.FormDropdown
 import de.rpicloud.ipv64net.main.views.FormSwitchRow
 import de.rpicloud.ipv64net.main.views.FormTextField
+import de.rpicloud.ipv64net.main.views.common.ActionSheet
+import de.rpicloud.ipv64net.main.views.common.ListRow
+import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.sr.ipv64.model.Hc2RemoteMgmt
 
 private val remoteMgmtOptions = listOf(Hc2RemoteMgmt.FULL, Hc2RemoteMgmt.READ, Hc2RemoteMgmt.OFF)
@@ -70,66 +73,59 @@ fun LinkNodeDialog(
     var mgmt by remember { mutableStateOf(Hc2RemoteMgmt.FULL) }
     val valid = code.length == 8
 
-    AlertDialog(
-        onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text("Link node") },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    "Open \"ipv64 link\" on your Node64 to get an 8-character code. After linking, the node fetches its access token by itself.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                OutlinedTextField(
-                    value = code,
-                    onValueChange = { code = it.normalizeLinkCode() },
-                    label = { Text("Code") },
-                    placeholder = { Text("ABCD-EFGH") },
-                    singleLine = true,
-                    enabled = !busy,
-                    isError = error != null,
-                    visualTransformation = LinkCodeTransformation,
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Characters,
-                        autoCorrectEnabled = false
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                FormTextField(
-                    label = "Location (optional)",
-                    value = location,
-                    onValue = { location = it },
-                    enabled = !busy
-                )
-                FormDropdown(
-                    label = "Remote management",
-                    value = mgmt,
-                    options = remoteMgmtOptions,
-                    labelOf = { it.label() },
-                    onSelect = { mgmt = it },
-                    enabled = !busy
-                )
-                Text(
-                    mgmt.description(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                if (error != null) {
-                    Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = valid && !busy,
-                onClick = { onConfirm(code.formatLinkCode(), location.trim().takeIf { it.isNotEmpty() }, mgmt) }
-            ) { Text("Link") }
-        },
-        dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text("Cancel") } }
-    )
+    ActionSheet(
+        title = "Link node",
+        onDismiss = onDismiss,
+        dismissible = !busy,
+        confirmLabel = "Link",
+        confirmEnabled = valid && !busy,
+        onConfirm = { onConfirm(code.formatLinkCode(), location.trim().takeIf { it.isNotEmpty() }, mgmt) }
+    ) {
+        Text(
+            "Open \"ipv64 link\" on your Node64 to get an 8-character code. After linking, the node fetches its access token by itself.",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        SectionHeader("Node")
+        OutlinedTextField(
+            value = code,
+            onValueChange = { code = it.normalizeLinkCode() },
+            label = { Text("Code") },
+            placeholder = { Text("ABCD-EFGH") },
+            singleLine = true,
+            enabled = !busy,
+            isError = error != null,
+            visualTransformation = LinkCodeTransformation,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                capitalization = KeyboardCapitalization.Characters,
+                autoCorrectEnabled = false
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
+        SectionHeader("Options")
+        FormTextField(
+            label = "Location (optional)",
+            value = location,
+            onValue = { location = it },
+            enabled = !busy
+        )
+        FormDropdown(
+            label = "Remote management",
+            value = mgmt,
+            options = remoteMgmtOptions,
+            labelOf = { it.label() },
+            onSelect = { mgmt = it },
+            enabled = !busy
+        )
+        Text(
+            mgmt.description(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        if (error != null) {
+            Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+    }
 }
 
 /**
@@ -148,44 +144,36 @@ fun NodeEditDialog(
     var newMgmt by remember { mutableStateOf(remoteMgmt) }
     val changed = newName.trim() != name || newLocation.trim() != location || newMgmt != remoteMgmt
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Edit node") },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                FormTextField(label = "Name", value = newName, onValue = { newName = it })
-                FormTextField(label = "Location", value = newLocation, onValue = { newLocation = it })
-                FormDropdown(
-                    label = "Remote management",
-                    value = newMgmt,
-                    options = remoteMgmtOptions,
-                    labelOf = { it.label() },
-                    onSelect = { newMgmt = it }
-                )
-                Text(
-                    newMgmt.description(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = changed && newName.isNotBlank(),
-                onClick = {
-                    onSave(
-                        newName.trim().takeIf { it != name },
-                        newLocation.trim().takeIf { it != location },
-                        newMgmt.takeIf { it != remoteMgmt }
-                    )
-                }
-            ) { Text("Save") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+    ActionSheet(
+        title = "Edit node",
+        onDismiss = onDismiss,
+        confirmLabel = "Save",
+        confirmEnabled = changed && newName.isNotBlank(),
+        onConfirm = {
+            onSave(
+                newName.trim().takeIf { it != name },
+                newLocation.trim().takeIf { it != location },
+                newMgmt.takeIf { it != remoteMgmt }
+            )
+        }
+    ) {
+        SectionHeader("Node")
+        FormTextField(label = "Name", value = newName, onValue = { newName = it })
+        FormTextField(label = "Location", value = newLocation, onValue = { newLocation = it })
+        SectionHeader("Remote management")
+        FormDropdown(
+            label = "Remote management",
+            value = newMgmt,
+            options = remoteMgmtOptions,
+            labelOf = { it.label() },
+            onSelect = { newMgmt = it }
+        )
+        Text(
+            newMgmt.description(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 /**
@@ -240,4 +228,26 @@ fun NodeUnlinkDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
+}
+
+/** Auswahl hinter dem + der Node-Liste: per Code mit dem Account verknüpfen oder direkt (Adresse + API-Key) verbinden. */
+@Composable
+fun AddNodeDialog(canLink: Boolean, onLink: () -> Unit, onDirect: () -> Unit, onDismiss: () -> Unit) {
+    ActionSheet(title = "Add node", onDismiss = onDismiss) {
+        ListRow(
+            title = "Link node",
+            subtitle = if (canLink) "Link it to your account with the code from \"ipv64 link\"" else "Not available on your plan",
+            icon = R.drawable.link_24px,
+            enabled = canLink,
+            showChevron = false,
+            onClick = onLink
+        )
+        ListRow(
+            title = "Connect directly",
+            subtitle = "By IP or link and API key, without linking",
+            icon = R.drawable.lan_24px,
+            showChevron = false,
+            onClick = onDirect
+        )
+    }
 }

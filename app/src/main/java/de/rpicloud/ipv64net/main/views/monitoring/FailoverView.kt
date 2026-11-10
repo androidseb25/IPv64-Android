@@ -1,5 +1,7 @@
 package de.rpicloud.ipv64net.main.views.monitoring
 
+import de.rpicloud.ipv64net.main.views.common.GroupGap
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,8 +36,8 @@ import de.rpicloud.ipv64net.main.views.common.NotAvailableView
 import de.rpicloud.ipv64net.main.views.common.RefreshableList
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
-import de.rpicloud.ipv64net.main.views.common.itemsOrEmpty
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
+import de.rpicloud.ipv64net.main.views.common.groupedItemsOrEmpty
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.sr.ipv64.IPv64Exception
@@ -112,11 +114,11 @@ fun FailoverView(navController: NavHostController, mainPadding: PaddingValues) {
         if (unavailable != null) {
             NotAvailableView(PlanFeature.FAILOVER.label, unavailable)
         } else {
-            RefreshableList(refreshing = refreshing, onRefresh = { load(true, true) }) {
+            RefreshableList(refreshing = refreshing, onRefresh = { load(true, true) }, verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 val limit = availability as? FeatureAvailability.LimitReached
                 if (limit != null) {
                     item(key = "limit") {
-                        Card(modifier = Modifier.fillMaxWidth()) {
+                        Card(modifier = Modifier.fillMaxWidth().padding(bottom = GroupGap)) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
                                     "Plan limit reached (${limit.used} of ${limit.limit} policies)",
@@ -130,11 +132,11 @@ fun FailoverView(navController: NavHostController, mainPadding: PaddingValues) {
                         }
                     }
                 }
-                itemsOrEmpty(
+                groupedItemsOrEmpty(
                     items = policies.orEmpty(),
                     loaded = policies != null,
                     emptyText = "No failover policies yet.",
-                    key = { it.id ?: it.hashCode() }
+                    key = "policies"
                 ) { policy ->
                     FailoverItemView(policy) {
                         navController.navigateWithArgs(Tab.failover_details, NavKeys.SELECTED_FAILOVER_ID to it.id)

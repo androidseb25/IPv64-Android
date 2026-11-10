@@ -16,6 +16,7 @@ android {
         targetSdk = 36
         versionCode = 21
         versionName = "2.0.1"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -23,7 +24,12 @@ android {
     }
 
     buildTypes {
+        // -PmockApi=http://10.0.2.2:8064 leitet alle Cloud-Anfragen an tools/mockapi (nur Debug; Release bleibt leer)
+        debug {
+            buildConfigField("String", "MOCK_API", "\"${(project.findProperty("mockApi") as String? ?: "").trim().trimEnd('/')}\"")
+        }
         release {
+            buildConfigField("String", "MOCK_API", "\"\"")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -78,12 +84,9 @@ dependencies {
     implementation(libs.androidx.camera.view)
     implementation(libs.accompanist.permissions)
     implementation(libs.androidx.biometric)
-    implementation(libs.androidx.datastore.preferences)
-    implementation(libs.androidx.lifecycle.process)
     implementation(libs.secntfy.android)
     implementation(libs.ipv64)
     implementation(libs.firebase.messaging)
-    implementation(libs.androidx.work.runtime.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

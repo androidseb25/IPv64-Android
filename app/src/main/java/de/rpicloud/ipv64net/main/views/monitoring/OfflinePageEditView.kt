@@ -44,7 +44,7 @@ import de.rpicloud.ipv64net.helper.formatBytes
 import de.rpicloud.ipv64net.helper.ipv64Retrying
 import de.rpicloud.ipv64net.helper.openUrl
 import de.rpicloud.ipv64net.helper.rememberNavArg
-import de.rpicloud.ipv64net.main.views.ChannelFormSection
+import de.rpicloud.ipv64net.main.views.common.FormSection
 import de.rpicloud.ipv64net.main.views.FormTextField
 import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
 import de.rpicloud.ipv64net.main.views.common.NotAvailableView
@@ -250,7 +250,7 @@ fun OfflinePageEditView(navController: NavHostController, mainPadding: PaddingVa
                 modifier = Modifier
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 if (inUse) {
                     Text(
@@ -259,7 +259,7 @@ fun OfflinePageEditView(navController: NavHostController, mainPadding: PaddingVa
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                ChannelFormSection("Content") {
+                FormSection("Content") {
                     FormTextField("Heading", name, { name = it; errors = errors - "name" }, supporting = errors["name"])
                     FormTextField(
                         "Domain", domain, { domain = it; errors = errors - "domain" },
@@ -272,7 +272,7 @@ fun OfflinePageEditView(navController: NavHostController, mainPadding: PaddingVa
                         singleLine = false, minLines = 3
                     )
                 }
-                ChannelFormSection("Contact (optional)") {
+                FormSection("Contact (optional)") {
                     FormTextField("E-mail", email, { email = it; errors = errors - "email" },
                         supporting = errors["email"], keyboardType = KeyboardType.Email)
                     FormTextField("Phone", phone, { phone = it; errors = errors - "phone" },
@@ -281,7 +281,7 @@ fun OfflinePageEditView(navController: NavHostController, mainPadding: PaddingVa
                         supporting = errors["alternative_url"] ?: "Shown as a link, e.g. https://status.example.com.",
                         keyboardType = KeyboardType.Uri)
                 }
-                ChannelFormSection("Logo") {
+                FormSection("Logo") {
                     val staged = pendingLogo
                     if (staged != null) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

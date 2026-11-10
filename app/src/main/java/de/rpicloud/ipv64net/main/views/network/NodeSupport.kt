@@ -1,27 +1,23 @@
 package de.rpicloud.ipv64net.main.views.network
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.helper.IPv64Client
 import de.rpicloud.ipv64net.helper.TimedCache
 import de.rpicloud.ipv64net.helper.formatRelative
+import de.rpicloud.ipv64net.helper.pollUntil
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.main.views.common.StatusChip
+import de.sr.ipv64.model.Hc2Command
 import de.sr.ipv64.model.Hc2Node
 import de.sr.ipv64.model.Hc2NodeDetail
 import de.sr.ipv64.model.Hc2RemoteMgmt
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 // =============================================================================================
 // Cache
@@ -94,60 +90,60 @@ fun Hc2RemoteMgmt.description(): String = when (this) {
 // Befehle sind nur mit "full" erlaubt
 fun Hc2RemoteMgmt?.allowsCommands(): Boolean = this == Hc2RemoteMgmt.FULL
 
+// Wartet (3 s Takt, höchstens 60 s), bis die Node den Befehl abgeschlossen hat; null bei Zeitüberschreitung.
+// [onEach] erhält nach jeder Abfrage die aktuelle Befehlsliste (z. B. für den Verlauf).
+suspend fun awaitNodeCommand(
+    ctx: Context,
+    nodeId: String,
+    commandId: Long,
+    onEach: (List<Hc2Command>) -> Unit = {}
+): Hc2Command? = pollUntil(
+    intervalMs = 3_000,
+    maxMs = 60_000,
+    onEach = onEach,
+    fetch = { IPv64Client.get(ctx).nodes.commands(nodeId, 20) },
+    done = { l: List<Hc2Command> -> l.any { it.commandId == commandId && it.doneAt != null } }
+)?.firstOrNull { it.commandId == commandId }
+
 // =============================================================================================
 // Listenzeile
 // =============================================================================================
 
-// Zeile der Node-Liste: nur Daten aus der Liste, keine Einzelabfragen
+// Zeile der Node-Liste (für eine ListGroup): nur Daten aus der Liste, keine Einzelabfragen
 @Composable
-fun NodeItemView(node: Hc2Node, onClick: (Hc2Node) -> Unit) {
+fun NodeRow(node: Hc2Node, onClick: (Hc2Node) -> Unit) {
     val online = node.online == true
-    Card(modifier = Modifier.fillMaxWidth(), onClick = { onClick(node) }) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = node.displayName(),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                StatusChip(
-                    if (online) "Online" else "Offline",
-                    colorResource(if (online) R.color.ipv64_green else R.color.ipv64_gray)
-                )
-            }
-            val line = listOfNotNull(
-                node.location?.takeIf { it.isNotBlank() },
-                node.version?.takeIf { it.isNotBlank() }?.let { "v$it" },
-                node.lastSeen?.let { "seen ${it.formatRelative()}" }
-            ).joinToString(" · ")
-            if (line.isNotEmpty()) {
-                Text(
-                    text = line,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                StatusChip("Remote: " + node.remoteMgmt.label(), colorResource(R.color.ipv64_teal))
-                val conflicts = node.conflicts ?: 0
-                if (conflicts > 0) {
-                    StatusChip("$conflicts conflict" + if (conflicts == 1) "" else "s", colorResource(R.color.ipv64_orange))
-                }
-            }
-        }
-    }
+    val meta = listOfNotNull(
+        node.location?.takeIf { it.isNotBlank() },
+        node.version?.takeIf { it.isNotBlank() }?.let { "v$it" },
+        node.lastSeen?.let { "seen ${it.formatRelative()}" }
+    ).joinToString(" · ")
+    val conflicts = node.conflicts ?: 0
+    val remote = "Remote: " + node.remoteMgmt.label() +
+            if (conflicts > 0) " · $conflicts conflict" + (if (conflicts == 1) "" else "s") else ""
+    ListRow(
+        title = node.displayName(),
+        subtitle = if (meta.isNotEmpty()) "$meta\n$remote" else remote,
+        trailing = {
+            StatusChip(
+                if (online) "Online" else "Offline",
+                colorResource(if (online) R.color.ipv64_green else R.color.ipv64_gray)
+            )
+        },
+        onClick = { onClick(node) }
+    )
+}
+
+// Zeile einer direkt verbundenen Node (ohne Cloud): Name aus dem gespeicherten Status, Untertitel = Host der Adresse
+@Composable
+fun DirectNodeRow(nodeId: String, onClick: () -> Unit) {
+    val ctx = LocalContext.current
+    val url = LocalNodeStore.get(ctx, nodeId)?.first
+    val name = LocalNodeStore.name(ctx, nodeId)
+    ListRow(
+        title = name?.takeIf { it.isNotBlank() } ?: ("Node …" + nodeId.takeLast(4)),
+        subtitle = url?.let { it.toHttpUrlOrNull()?.host ?: it },
+        trailing = { StatusChip("Direct", colorResource(R.color.ipv64_blue)) },
+        onClick = onClick
+    )
 }

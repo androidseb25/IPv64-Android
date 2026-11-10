@@ -1,7 +1,6 @@
 package de.rpicloud.ipv64net.main.views
 
 import android.annotation.SuppressLint
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,10 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,16 +36,13 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
-import de.rpicloud.ipv64net.helper.v64domains
+import de.rpicloud.ipv64net.helper.PreferencesManager
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
-import de.rpicloud.ipv64net.helper.views.RequestDialogs
-import de.rpicloud.ipv64net.helper.views.SpinnerDialog
-import de.rpicloud.ipv64net.models.RequestTyp
+import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
+import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.rpicloud.ipv64net.models.User
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 @SuppressLint("UnrememberedGetBackStackEntry")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,6 +61,7 @@ fun AccountEditView(navController: NavHostController, mainPadding: PaddingValues
     var errorDialogTitle by remember { mutableStateOf("") }
     var errorDialogText by remember { mutableStateOf("") }
     var errorDialogButtonText by remember { mutableIntStateOf(android.R.string.ok) }
+    var userToRemove by remember { mutableStateOf<User?>(null) }
 
     val accountDetailsRoute = Tabs.getRoute(Tab.account_details)
     val accountDetailsBackStackEntry = remember(accountDetailsRoute) {
@@ -98,6 +92,16 @@ fun AccountEditView(navController: NavHostController, mainPadding: PaddingValues
         navController.popBackStack()
     }
 
+    // Eintrag nur lokal entfernen (keine Server-API); bei Logout direkt zum Login, sonst zurück zur Liste
+    fun onRemove(user: User) {
+        removeAccount(ctx, user) { message ->
+            if (message != null) {
+                accountDetailsBackStackEntry.savedStateHandle[ACCOUNT_REMOVED_MESSAGE] = message
+            }
+            navController.popBackStack()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -113,6 +117,15 @@ fun AccountEditView(navController: NavHostController, mainPadding: PaddingValues
                     Text("Edit User")
                 }, modifier = Modifier.statusBarsPadding(),
                 actions = {
+                    IconButton(
+                        onClick = { userToRemove = User.list.firstOrNull { it.ApiKey == apikey } },
+                        enabled = apikey.isNotEmpty()
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.delete_24px),
+                            contentDescription = "Remove account from this app"
+                        )
+                    }
                     IconButton(onClick = { onSave() }) {
                         Icon(
                             painter = painterResource(id = R.drawable.save_24px),
@@ -138,33 +151,36 @@ fun AccountEditView(navController: NavHostController, mainPadding: PaddingValues
                     .fillMaxWidth()
                     .weight(1f),
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                item {
+                item(key = "details_header") { SectionHeader("Account") }
+                item(key = "username") {
                     OutlinedTextField(
                         value = username,
                         singleLine = true,
                         label = { Text("Username") },
                         textStyle = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 25.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         onValueChange = { newText -> username = newText },
                     )
                 }
-                item {
+                item(key = "information") {
                     OutlinedTextField(
                         value = information,
                         singleLine = true,
                         label = { Text("Information") },
                         textStyle = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 25.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         onValueChange = { newText -> information = newText },
                     )
                 }
-
+                item(key = "remove_hint") {
+                    Text(
+                        "Removes this entry from this device only. The account and its API key stay valid on ipv64.net.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
@@ -176,6 +192,24 @@ fun AccountEditView(navController: NavHostController, mainPadding: PaddingValues
             username = user.Username
             information = user.Information
         }
+    }
+
+    userToRemove?.let { user ->
+        ConfirmDialog(
+            title = "Remove account from this app?",
+            text = accountRemovalConfirmText(
+                user,
+                isActive = PreferencesManager.loadString(ctx, "APIKEY") == user.ApiKey,
+                remaining = User.list
+            ),
+            confirmLabel = "Remove",
+            destructive = true,
+            onConfirm = {
+                userToRemove = null
+                onRemove(user)
+            },
+            onDismiss = { userToRemove = null }
+        )
     }
 
     if (showDialog) {

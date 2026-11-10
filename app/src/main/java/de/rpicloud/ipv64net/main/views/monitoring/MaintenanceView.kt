@@ -1,5 +1,8 @@
 package de.rpicloud.ipv64net.main.views.monitoring
 
+import de.rpicloud.ipv64net.main.views.common.GroupGap
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -20,8 +23,8 @@ import de.rpicloud.ipv64net.main.views.common.NotAvailableView
 import de.rpicloud.ipv64net.main.views.common.RefreshableList
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
-import de.rpicloud.ipv64net.main.views.common.itemsOrEmpty
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
+import de.rpicloud.ipv64net.main.views.common.groupedItemsOrEmpty
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.sr.ipv64.model.Hc2Maintenance
@@ -83,8 +86,8 @@ fun MaintenanceView(navController: NavHostController, mainPadding: PaddingValues
                     if (it.phase() == MaintenancePhase.ENDED) -start else start
                 }
             )
-            RefreshableList(refreshing, { load(force = true, pull = true) }) {
-                itemsOrEmpty(list, items != null, "No maintenance windows yet.", key = { "m_" + (it.id ?: it.hashCode()) }) { item ->
+            RefreshableList(refreshing, { load(force = true, pull = true) }, verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                groupedItemsOrEmpty(list, items != null, "No maintenance windows yet.", key = "maintenance") { item ->
                     MaintenanceItemView(item) { open(item) }
                 }
             }

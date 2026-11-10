@@ -6,18 +6,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -148,97 +151,92 @@ fun Hc2CheckPickerDialog(
         c.token != null && (q.isEmpty() || c.name.orEmpty().lowercase().contains(q) || c.target.orEmpty().lowercase().contains(q))
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    singleLine = true,
-                    label = { Text("Search") },
-                    leadingIcon = { Icon(painterResource(R.drawable.search_24px), null) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Box(modifier = Modifier.heightIn(min = 80.dp, max = 320.dp)) {
-                    when {
-                        loading && checks == null -> PickerLoading()
-                        error != null && checks == null -> PickerError(error.orEmpty()) { load(true) }
-                        else -> LazyColumn {
-                            items(extraTokens.toList(), key = { "x_$it" }) { token ->
-                                PickerRow(
-                                    selected = token in selected,
-                                    multi = multi,
-                                    title = unknownCheckLabel(token),
-                                    subtitle = "Not found in your healthchecks",
-                                    onClick = { toggle(token) }
-                                )
-                            }
-                            items(visible, key = { "c_" + it.token.orEmpty() }) { c ->
-                                val token = c.token.orEmpty()
-                                PickerRow(
-                                    selected = token in selected,
-                                    multi = multi,
-                                    title = c.name?.takeIf { it.isNotBlank() } ?: unknownCheckLabel(token),
-                                    subtitle = listOfNotNull(c.type.label, c.target?.takeIf { it.isNotBlank() })
-                                        .joinToString(" · "),
-                                    trailing = { Hc2StateBadge(Hc2StateUi.from(c.state?.state, c.paused)) },
-                                    onClick = { toggle(token) }
-                                )
-                            }
-                            if (checks != null && visible.isEmpty() && extraTokens.isEmpty()) {
-                                item {
-                                    Text(
-                                        if (known.isEmpty()) "No healthchecks yet." else "No healthchecks match.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(8.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                if (allowManualToken) {
-                    HorizontalDivider()
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = manual,
-                            onValueChange = { manual = it.trim() },
-                            singleLine = true,
-                            label = { Text("Enter token manually") },
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                            modifier = Modifier.weight(1f)
+    ActionSheet(
+        title = title,
+        onDismiss = onDismiss,
+        confirmLabel = "OK",
+        onConfirm = {
+            val ordered = initial.filter { it in selected } + selected.filter { it !in initial }
+            onConfirm(ordered.distinct())
+        }
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            singleLine = true,
+            label = { Text("Search") },
+            leadingIcon = { Icon(painterResource(R.drawable.search_24px), null) },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Box(modifier = Modifier.heightIn(min = 80.dp, max = 320.dp)) {
+            when {
+                loading && checks == null -> PickerLoading()
+                error != null && checks == null -> PickerError(error.orEmpty()) { load(true) }
+                else -> LazyColumn {
+                    items(extraTokens.toList(), key = { "x_$it" }) { token ->
+                        PickerRow(
+                            selected = token in selected,
+                            multi = multi,
+                            title = unknownCheckLabel(token),
+                            subtitle = "Not found in your healthchecks",
+                            onClick = { toggle(token) }
                         )
-                        IconButton(
-                            enabled = manual.isNotBlank(),
-                            onClick = {
-                                val token = manual.trim()
-                                if (token !in knownTokens && token !in extraTokens) extraTokens.add(token)
-                                if (multi) {
-                                    if (token !in selected) selected.add(token)
-                                } else {
-                                    selected.clear()
-                                    selected.add(token)
-                                }
-                                manual = ""
-                            }
-                        ) {
-                            Icon(painterResource(R.drawable.add_24px), contentDescription = "Add token")
+                    }
+                    items(visible, key = { "c_" + it.token.orEmpty() }) { c ->
+                        val token = c.token.orEmpty()
+                        PickerRow(
+                            selected = token in selected,
+                            multi = multi,
+                            title = c.name?.takeIf { it.isNotBlank() } ?: unknownCheckLabel(token),
+                            subtitle = listOfNotNull(c.type.label, c.target?.takeIf { it.isNotBlank() })
+                                .joinToString(" · "),
+                            trailing = { Hc2StateBadge(Hc2StateUi.from(c.state?.state, c.paused)) },
+                            onClick = { toggle(token) }
+                        )
+                    }
+                    if (checks != null && visible.isEmpty() && extraTokens.isEmpty()) {
+                        item {
+                            Text(
+                                if (known.isEmpty()) "No healthchecks yet." else "No healthchecks match.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(8.dp)
+                            )
                         }
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val ordered = initial.filter { it in selected } + selected.filter { it !in initial }
-                onConfirm(ordered.distinct())
-            }) { Text("OK") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+        }
+        if (allowManualToken) {
+            HorizontalDivider()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = manual,
+                    onValueChange = { manual = it.trim() },
+                    singleLine = true,
+                    label = { Text("Enter token manually") },
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                    enabled = manual.isNotBlank(),
+                    onClick = {
+                        val token = manual.trim()
+                        if (token !in knownTokens && token !in extraTokens) extraTokens.add(token)
+                        if (multi) {
+                            if (token !in selected) selected.add(token)
+                        } else {
+                            selected.clear()
+                            selected.add(token)
+                        }
+                        manual = ""
+                    }
+                ) {
+                    Icon(painterResource(R.drawable.add_24px), contentDescription = "Add token")
+                }
+            }
+        }
+    }
 }
 
 // =============================================================================================
@@ -250,6 +248,7 @@ fun Hc2CheckPickerDialog(
  * @param exclude Domainnamen, die nicht angeboten werden (z. B. bereits im CDN).
  * @param kind nur Domains dieser Art (null = alle).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DomainPickerDialog(
     exclude: Set<String> = emptySet(),
@@ -287,46 +286,45 @@ fun DomainPickerDialog(
             (q.isEmpty() || name.lowercase().contains(q))
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    singleLine = true,
-                    label = { Text("Search") },
-                    leadingIcon = { Icon(painterResource(R.drawable.search_24px), null) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Box(modifier = Modifier.heightIn(min = 80.dp, max = 360.dp)) {
-                    when {
-                        loading && domains == null -> PickerLoading()
-                        error != null && domains == null -> PickerError(error.orEmpty()) { load(true) }
-                        visible.isEmpty() -> Text(
-                            if (domains.isNullOrEmpty()) "No domains yet." else "No domains available.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(8.dp)
-                        )
+    // Sheet statt Dialog: volle Höhe für die Liste
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f).padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleLarge)
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                label = { Text("Search") },
+                leadingIcon = { Icon(painterResource(R.drawable.search_24px), null) },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Box(modifier = Modifier.weight(1f)) {
+                when {
+                    loading && domains == null -> PickerLoading()
+                    error != null && domains == null -> PickerError(error.orEmpty()) { load(true) }
+                    visible.isEmpty() -> Text(
+                        if (domains.isNullOrEmpty()) "No domains yet." else "No domains available.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(8.dp)
+                    )
 
-                        else -> LazyColumn {
-                            items(visible, key = { it.name.orEmpty() }) { d ->
-                                PickerRow(
-                                    title = d.name.orEmpty(),
-                                    subtitle = if (d.effectiveKind == DomainKind.OWN) "Own domain" else "DynDNS",
-                                    onClick = { onPick(d.name.orEmpty()) }
-                                )
-                            }
+                    else -> LazyColumn {
+                        items(visible, key = { it.name.orEmpty() }) { d ->
+                            PickerRow(
+                                title = d.name.orEmpty(),
+                                subtitle = if (d.effectiveKind == DomainKind.OWN) "Own domain" else "DynDNS",
+                                onClick = { onPick(d.name.orEmpty()) }
+                            )
                         }
                     }
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+        }
+    }
 }
 
 // =============================================================================================
@@ -408,41 +406,31 @@ fun RecordPickerDialog(
     }
 
     val visible = records.orEmpty().filter { r -> r.type in types && r.id != null && filter(r) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(current, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        text = {
-            Box(modifier = Modifier.heightIn(min = 80.dp, max = 400.dp)) {
-                when {
-                    loading && records == null -> PickerLoading()
-                    error != null && records == null -> PickerError(error.orEmpty()) { loadRecords(current) }
-                    visible.isEmpty() -> Text(
-                        "No matching records (${types.joinToString("/") { it.value }}) in this domain.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(8.dp)
-                    )
+    ActionSheet(title = current, onDismiss = onDismiss) {
+        Box(modifier = Modifier.heightIn(min = 80.dp, max = 400.dp)) {
+            when {
+                loading && records == null -> PickerLoading()
+                error != null && records == null -> PickerError(error.orEmpty()) { loadRecords(current) }
+                visible.isEmpty() -> Text(
+                    "No matching records (${types.joinToString("/") { it.value }}) in this domain.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(8.dp)
+                )
 
-                    else -> LazyColumn {
-                        items(visible, key = { it.id ?: 0L }) { r ->
-                            PickerRow(
-                                title = r.displayName(current),
-                                subtitle = "${r.type?.value.orEmpty()} · ${r.content.orEmpty()}",
-                                onClick = { onPick(current, r) }
-                            )
-                        }
+                else -> LazyColumn {
+                    items(visible, key = { it.id ?: 0L }) { r ->
+                        PickerRow(
+                            title = r.displayName(current),
+                            subtitle = "${r.type?.value.orEmpty()} · ${r.content.orEmpty()}",
+                            onClick = { onPick(current, r) }
+                        )
                     }
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            Row {
-                TextButton(onClick = { resetSelection() }) { Text("Back") }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-            }
         }
-    )
+        TextButton(onClick = { resetSelection() }, modifier = Modifier.fillMaxWidth()) { Text("Back") }
+    }
 }
 
 // =============================================================================================

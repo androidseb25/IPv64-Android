@@ -33,7 +33,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -59,7 +58,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
@@ -69,6 +67,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.main.views.common.ActionSheet
+import de.rpicloud.ipv64net.main.views.common.ListGroup
 import de.rpicloud.ipv64net.helper.DeviceChannelSettings
 import de.rpicloud.ipv64net.helper.HC2_CHANNEL_TYPE_APP
 import de.rpicloud.ipv64net.helper.DeviceRegistration
@@ -372,47 +372,33 @@ fun PushSetupView(navController: NavHostController, mainPadding: PaddingValues) 
 
     // Es gibt App-Kanäle, die nicht als dieses Gerät erkannt wurden: übernehmen statt doppelt anlegen
     candidates?.let { list ->
-        AlertDialog(
-            icon = { Icon(painter = painterResource(id = R.drawable.mobile_24px), contentDescription = null) },
-            title = { Text("Existing app channels") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        "This account already has app channels. If one of them is this device (for example after " +
-                                "reinstalling the app or using a new API key), use it to avoid duplicate notifications.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = 240.dp)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        list.forEach { ch ->
-                            TextButton(onClick = {
-                                candidates = null
-                                ch.id?.let { register(adoptChannelId = it) }
-                            }) {
-                                Text(
-                                    "Use existing channel “${ch.displayName}”",
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            onDismissRequest = { candidates = null },
-            confirmButton = {
-                TextButton(onClick = {
-                    candidates = null
-                    register(createNew = true)
-                }) { Text("Create new") }
-            },
-            dismissButton = {
-                TextButton(onClick = { candidates = null }) { Text("Cancel") }
+        ActionSheet(
+            title = "Existing app channels",
+            onDismiss = { candidates = null },
+            subtitle = "This account already has app channels. If one of them is this device (for example after " +
+                    "reinstalling the app or using a new API key), use it to avoid duplicate notifications.",
+            confirmLabel = "Create new",
+            onConfirm = {
+                candidates = null
+                register(createNew = true)
             }
-        )
+        ) {
+            list.forEach { ch ->
+                OutlinedButton(
+                    onClick = {
+                        candidates = null
+                        ch.id?.let { register(adoptChannelId = it) }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "Use existing channel “${ch.displayName}”",
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
     }
 
     spinnerText?.let { SpinnerDialog(spinnerText = it) }
@@ -435,7 +421,7 @@ private fun PushSetupStepCard(
         enabled -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.outline
     }
-    Card(modifier = Modifier.fillMaxWidth()) {
+    ListGroup {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -457,13 +443,12 @@ private fun PushSetupStepCard(
                             modifier = Modifier.size(18.dp)
                         )
                     } else {
-                        Text(number.toString(), color = accent, fontWeight = FontWeight.Bold)
+                        Text(number.toString(), color = accent, style = MaterialTheme.typography.labelLarge)
                     }
                 }
                 Text(
                     title,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
                     color = if (enabled || done) Color.Unspecified else MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(start = 12.dp)
                 )

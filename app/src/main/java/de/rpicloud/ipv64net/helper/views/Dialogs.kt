@@ -29,11 +29,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme.colorScheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,13 +51,12 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionState
 import de.rpicloud.ipv64net.helper.QrCodeAnalyzer
 import de.rpicloud.ipv64net.models.RequestTyp
+import java.util.concurrent.Executors
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun ShowPermissionDialog(
     currentPermissionRequest: String,
-    vpnPermissionPermissionState: PermissionState? = null,
-    readExternalStoragePermissionState: PermissionState? = null,
     cameraPermissionState: PermissionState? = null,
     onDismissRequest: () -> Unit
 ) {
@@ -73,9 +70,7 @@ fun ShowPermissionDialog(
         title = { Text("Berechtigung benötigt!") },
         text = {
             val message = when (currentPermissionRequest) {
-                Manifest.permission.BIND_VPN_SERVICE -> "Diese App benötigt die VPN Berechtigung, um eine VPN Verbindung zu IPv64.net aufzubauen."
-                Manifest.permission.READ_EXTERNAL_STORAGE -> "Diese App benötigt die Speicherberechtigung, um deine Config Dateien lesen zu können."
-                Manifest.permission.CAMERA -> "Diese App benötigt die Kamera Berechtigung, um Wireguard Konfigurationscodes zu lesen."
+                Manifest.permission.CAMERA -> "Diese App benötigt die Kamera Berechtigung, um den QR-Code deines API-Keys zu scannen."
                 else -> ""
             }
             Text(message)
@@ -84,8 +79,6 @@ fun ShowPermissionDialog(
         confirmButton = {
             TextButton(onClick = {
                 when (currentPermissionRequest) {
-                    Manifest.permission.BIND_VPN_SERVICE -> vpnPermissionPermissionState?.launchPermissionRequest()
-                    Manifest.permission.READ_EXTERNAL_STORAGE -> readExternalStoragePermissionState?.launchPermissionRequest()
                     Manifest.permission.CAMERA -> cameraPermissionState?.launchPermissionRequest()
                 }
                 onDismissRequest()
@@ -263,19 +256,58 @@ fun SpinnerDialog(
 fun QRCodeDialogView(onDismissRequest: (String) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+    val currentOnDismissRequest by rememberUpdatedState(onDismissRequest)
+    val previewView = remember { PreviewView(context) }
 
-    var cameraProvider: ProcessCameraProvider? by remember { mutableStateOf(null) }
-    var scannedText by remember { mutableStateOf("") }
+    DisposableEffect(lifecycleOwner) {
+        val mainExecutor = ContextCompat.getMainExecutor(context)
+        // Eigener Hintergrund-Thread für die Bildanalyse, damit der Main-Thread nicht blockiert
+        val analysisExecutor = Executors.newSingleThreadExecutor()
+        // Wird nur auf dem Main-Thread gelesen/geschrieben
+        var disposed = false
+        var handled = false
 
-    DisposableEffect(Unit) {
+        val preview = Preview.Builder().build()
+        preview.surfaceProvider = previewView.surfaceProvider
+
+        val imageAnalysis = ImageAnalysis.Builder()
+            .setBackpressureStrategy(STRATEGY_KEEP_ONLY_LATEST)
+            .build()
+
+        imageAnalysis.setAnalyzer(
+            analysisExecutor,
+            QrCodeAnalyzer { result ->
+                // Ergebnis auf dem Main-Thread an den Compose-State übergeben
+                mainExecutor.execute {
+                    if (!disposed && !handled) {
+                        handled = true
+                        currentOnDismissRequest(result)
+                    }
+                }
+            }
+        )
+
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+        // Nicht mit get() auf dem Main-Thread warten, sondern binden, sobald der Provider bereit ist
+        cameraProviderFuture.addListener({
+            if (disposed) return@addListener
+            try {
+                cameraProviderFuture.get().bindToLifecycle(
+                    lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageAnalysis
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }, mainExecutor)
+
         onDispose {
-            cameraProvider?.unbindAll()
+            disposed = true
+            imageAnalysis.clearAnalyzer()
+            if (cameraProviderFuture.isDone) {
+                runCatching { cameraProviderFuture.get().unbind(preview, imageAnalysis) }
+            }
+            analysisExecutor.shutdown()
         }
-    }
-
-    LaunchedEffect(cameraProviderFuture) {
-        cameraProvider = cameraProviderFuture.get()
     }
 
     Dialog(
@@ -286,37 +318,7 @@ fun QRCodeDialogView(onDismissRequest: (String) -> Unit) {
             modifier = Modifier.fillMaxSize()
         ) {
             AndroidView(
-                factory = { ctx ->
-                    val previewView = PreviewView(ctx)
-
-                    val preview = Preview.Builder().build()
-                    val selector = CameraSelector.DEFAULT_BACK_CAMERA
-                    preview.surfaceProvider = previewView.surfaceProvider
-
-                    val imageAnalysis = ImageAnalysis.Builder()
-                        .setBackpressureStrategy(STRATEGY_KEEP_ONLY_LATEST)
-                        .build()
-
-                    imageAnalysis.setAnalyzer(
-                        ContextCompat.getMainExecutor(ctx),
-                        QrCodeAnalyzer { result ->
-                            if (scannedText.isEmpty()) {
-                                scannedText = result
-                                onDismissRequest(result)
-                            }
-                        }
-                    )
-
-                    try {
-                        val provider = cameraProviderFuture.get()
-                        provider.bindToLifecycle(lifecycleOwner, selector, preview, imageAnalysis)
-                        cameraProvider = provider
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-
-                    previewView
-                },
+                factory = { previewView },
                 modifier = Modifier.fillMaxSize()
             )
         }

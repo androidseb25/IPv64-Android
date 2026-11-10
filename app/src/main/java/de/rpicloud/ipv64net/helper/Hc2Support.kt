@@ -1,14 +1,11 @@
 package de.rpicloud.ipv64net.helper
 
 import android.content.Context
-import android.os.SystemClock
 import androidx.annotation.DrawableRes
 import de.rpicloud.ipv64net.R
 import de.sr.ipv64.model.Hc2Channel
 import de.sr.ipv64.model.Hc2ChannelType
 import de.sr.ipv64.model.Hc2Check
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 // Schlüssel für Werte, die per previousBackStackEntry.savedStateHandle zwischen Screens übergeben werden
 object Hc2NavKeys {
@@ -28,152 +25,46 @@ const val HC2_CHANNEL_TYPE_APP = "app"
 // Kanaltypen, die per Code bestätigt werden müssen, falls die Kanaltypen nicht geladen werden konnten
 val HC2_VERIFICATION_FALLBACK_TYPES: Set<String> = setOf("ipv64_mail", "ipv64_sms")
 
-// Kanalliste zwischenspeichern (Rate-Limit ~5 Anfragen / 5 s); Benachrichtigungs-Tab, Kanalauswahl und Detailansicht teilen sich die Liste
+// Kanalliste zwischenspeichern (Rate-Limit ~5 Anfragen / 5 s); Benachrichtigungs-Tab, Kanalauswahl und Detailansicht teilen sich die Liste.
+// Hülle um [TimedCache] (meldet sich bei CacheRegistry an, Generationszähler gegen veraltete Abrufe)
 object Hc2ChannelCache {
-    private const val TTL_MS = 5 * 60 * 1000L
-    private val loadMutex = Mutex()
-
-    private var channels: List<Hc2Channel>? = null
-    private var time = 0L
-
-    // Wird bei clear() erhöht, damit ein laufender Abruf mit altem API-Key nichts mehr speichert
-    private var generation = 0L
+    private val cache = TimedCache<List<Hc2Channel>>(5 * 60 * 1000L)
 
     // Liefert die gecachte Liste oder lädt sie (force = true lädt immer neu); wirft IPv64Exception
-    suspend fun get(ctx: Context, force: Boolean = false): List<Hc2Channel> = loadMutex.withLock {
-        // Zuerst den Client holen: bei geändertem API-Key leert IPv64Client.get() die Caches, bevor fresh() greift
-        val client = IPv64Client.get(ctx)
-        if (!force) fresh()?.let { return@withLock it }
-        val gen = currentGeneration()
-        val list = ipv64Retrying { client.hc2.channels.list() }
-        store(list, gen)
-        list
-    }
+    suspend fun get(ctx: Context, force: Boolean = false): List<Hc2Channel> =
+        cache.get(ctx, force) { it.hc2.channels.list() }
 
     // Gecachte Liste ohne Netzwerkzugriff (null, wenn nicht geladen oder abgelaufen)
-    @Synchronized
-    fun peek(): List<Hc2Channel>? = fresh()
+    fun peek(): List<Hc2Channel>? = cache.peek()
 
     // Nach jeder Änderung an Kanälen aufrufen; ein bereits laufender Abruf speichert seine (veraltete) Liste nicht mehr
-    @Synchronized
-    fun invalidate() {
-        channels = null
-        generation++
-    }
-
-    // Beim Account-Wechsel/Logout (aus IPv64Client.get)
-    @Synchronized
-    fun clear() {
-        channels = null
-        generation++
-    }
-
-    @Synchronized
-    private fun fresh(): List<Hc2Channel>? {
-        val list = channels ?: return null
-        if (SystemClock.elapsedRealtime() - time > TTL_MS) {
-            channels = null
-            return null
-        }
-        return list
-    }
-
-    @Synchronized
-    private fun currentGeneration(): Long = generation
-
-    @Synchronized
-    private fun store(list: List<Hc2Channel>, gen: Long) {
-        if (gen != generation) return
-        channels = list
-        time = SystemClock.elapsedRealtime()
-    }
+    fun invalidate() = cache.invalidate()
 }
 
 // Kanaltypen (Formularfelder) ändern sich selten, daher längere Lebensdauer
 object Hc2ChannelTypeCache {
-    private const val TTL_MS = 30 * 60 * 1000L
-    private val loadMutex = Mutex()
-
-    private var types: List<Hc2ChannelType>? = null
-    private var time = 0L
-    private var generation = 0L
+    private val cache = TimedCache<List<Hc2ChannelType>>(30 * 60 * 1000L)
 
     // Liefert die gecachten Kanaltypen oder lädt sie; wirft IPv64Exception
-    suspend fun get(ctx: Context): List<Hc2ChannelType> = loadMutex.withLock {
-        // Zuerst den Client holen: bei geändertem API-Key leert IPv64Client.get() die Caches, bevor fresh() greift
-        val client = IPv64Client.get(ctx)
-        fresh()?.let { return@withLock it }
-        val gen = currentGeneration()
-        val list = ipv64Retrying { client.hc2.channelTypes() }
-        store(list, gen)
-        list
-    }
+    suspend fun get(ctx: Context): List<Hc2ChannelType> = cache.get(ctx) { it.hc2.channelTypes() }
 
     // Gecachte Kanaltypen ohne Netzwerkzugriff (null, wenn nicht geladen oder abgelaufen)
-    @Synchronized
-    fun peek(): List<Hc2ChannelType>? = fresh()
-
-    @Synchronized
-    fun clear() {
-        types = null
-        generation++
-    }
-
-    @Synchronized
-    private fun fresh(): List<Hc2ChannelType>? {
-        val list = types ?: return null
-        if (SystemClock.elapsedRealtime() - time > TTL_MS) {
-            types = null
-            return null
-        }
-        return list
-    }
-
-    @Synchronized
-    private fun currentGeneration(): Long = generation
-
-    @Synchronized
-    private fun store(list: List<Hc2ChannelType>, gen: Long) {
-        if (gen != generation) return
-        types = list
-        time = SystemClock.elapsedRealtime()
-    }
+    fun peek(): List<Hc2ChannelType>? = cache.peek()
 }
 
-// Check-Liste nur kurz zwischenspeichern (Tab-Wechsel, Zurück aus der Detailansicht); laden muss der Aufrufer selbst
+// Check-Liste nur kurz zwischenspeichern (Tab-Wechsel, Zurück aus der Detailansicht); laden über [loadHc2Checks]
 object Hc2CheckListCache {
-    private const val TTL_MS = 20 * 1000L
-
-    private var checks: List<Hc2Check>? = null
-    private var time = 0L
+    private val cache = TimedCache<List<Hc2Check>>(20 * 1000L)
 
     // Gecachte Liste oder null, wenn nicht vorhanden/abgelaufen
-    @Synchronized
-    fun get(): List<Hc2Check>? {
-        val list = checks ?: return null
-        if (SystemClock.elapsedRealtime() - time > TTL_MS) {
-            checks = null
-            return null
-        }
-        return list
-    }
+    fun get(): List<Hc2Check>? = cache.peek()
 
-    @Synchronized
-    fun put(list: List<Hc2Check>) {
-        checks = list
-        time = SystemClock.elapsedRealtime()
-    }
+    // Gecachte Liste oder neu geladen (force = true lädt immer neu); wirft IPv64Exception
+    suspend fun get(ctx: Context, force: Boolean = false): List<Hc2Check> =
+        cache.get(ctx, force) { it.hc2.checks.list() }
 
-    // Nach Anlegen/Ändern/Löschen/Pausieren eines Checks aufrufen
-    @Synchronized
-    fun invalidate() {
-        checks = null
-    }
-
-    @Synchronized
-    fun clear() {
-        checks = null
-    }
+    // Nach Anlegen/Ändern/Löschen/Pausieren eines Checks aufrufen; ein laufender Abruf speichert danach nicht mehr
+    fun invalidate() = cache.invalidate()
 }
 
 // Icon je Kanaltyp; unbekannte Typen bekommen ein neutrales Glocken-Icon

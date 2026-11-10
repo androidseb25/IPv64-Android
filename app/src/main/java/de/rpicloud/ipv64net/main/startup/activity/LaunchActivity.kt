@@ -1,6 +1,7 @@
 package de.rpicloud.ipv64net.main.startup.activity
 
 import android.annotation.SuppressLint
+import de.rpicloud.ipv64net.BuildConfig
 import android.content.Intent
 import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
 import android.os.Bundle
@@ -25,6 +26,11 @@ class LaunchActivity : AppCompatActivity() {
         if (secntfyUrl.isEmpty() || secntfyAppKey.isEmpty()) {
             PreferencesManager.saveString(applicationContext, "SECNTFY_API_URL", "https://api.secntfy.app")
             PreferencesManager.saveString(applicationContext, "SECNTFY_APP_KEY", "NTFY-APP-Mx0Ggr0DsWozTxVwGFfUj9uaAdkC7eVGR4u8wSYLDNw")
+        }
+
+        // Debug mit -PmockApi: Push-Registrierung an den Mock-Server statt api.secntfy.app
+        if (BuildConfig.MOCK_API.isNotEmpty()) {
+            PreferencesManager.saveString(applicationContext, "SECNTFY_API_URL", BuildConfig.MOCK_API + "/secntfy")
         }
 
         // Register FCM token with SecNtfy on app launch

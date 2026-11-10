@@ -31,6 +31,7 @@ import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.helper.NavKeys
 import de.rpicloud.ipv64net.helper.loadHc2Checks
 import de.rpicloud.ipv64net.helper.rememberNavArg
+import de.rpicloud.ipv64net.main.views.common.FormSection
 import de.rpicloud.ipv64net.main.views.FormDropdown
 import de.rpicloud.ipv64net.main.views.FormSwitchRow
 import de.rpicloud.ipv64net.main.views.FormTextField
@@ -38,7 +39,6 @@ import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
 import de.rpicloud.ipv64net.main.views.common.Hc2CheckPickerDialog
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
-import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
 import de.rpicloud.ipv64net.main.views.common.unknownCheckLabel
 import de.rpicloud.ipv64net.models.Tab
@@ -203,7 +203,7 @@ fun MaintenanceEditView(navController: NavHostController, mainPadding: PaddingVa
                 .verticalScroll(rememberScrollState())
                 .imePadding()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (nodeManaged) {
                 Card(modifier = Modifier.fillMaxWidth()) {
@@ -214,73 +214,75 @@ fun MaintenanceEditView(navController: NavHostController, mainPadding: PaddingVa
                     )
                 }
             }
-            FormTextField(
-                "Name", name, { name = it; errors.remove("name") },
-                enabled = !nodeManaged,
-                supporting = errors["name"]
-            )
-            DateTimeField(
-                "Start", start, { start = it; errors.remove("start_at") },
-                enabled = !nodeManaged, error = errors["start_at"],
-                supporting = "Times use your device time zone."
-            )
-            DateTimeField(
-                "End", end, { end = it; errors.remove("end_at") },
-                enabled = !nodeManaged, error = errors["end_at"]
-            )
-            FormDropdown(
-                label = "Repeat",
-                value = repeat,
-                options = Hc2MaintenanceRepeat.entries,
-                labelOf = { it.label() },
-                onSelect = { repeat = it },
-                enabled = !nodeManaged
-            )
-            if (repeat != Hc2MaintenanceRepeat.NONE) {
-                val locked = original?.repeatUntil != null
-                DateTimeField(
-                    "Repeat until", repeatUntil, { repeatUntil = it; errors.remove("repeat_until") },
+            FormSection("General") {
+                FormTextField(
+                    "Name", name, { name = it; errors.remove("name") },
                     enabled = !nodeManaged,
-                    clearable = !locked,
-                    error = errors["repeat_until"],
-                    supporting = if (locked) "A repeat limit can be changed but not removed." else "Optional."
+                    supporting = errors["name"]
+                )
+                FormSwitchRow(
+                    "Active", active, { active = it },
+                    supporting = "Inactive windows do not pause any alerts.",
+                    enabled = !nodeManaged
                 )
             }
-            FormSwitchRow(
-                "Active", active, { active = it },
-                supporting = "Inactive windows do not pause any alerts.",
-                enabled = !nodeManaged
-            )
 
-            SectionHeader("Scope")
-            FormSwitchRow(
-                "Only selected checks", limitToChecks, { limitToChecks = it; errors.remove("tokens") },
-                supporting = if (limitToChecks) "Only the selected checks are paused." else "All checks are paused.",
-                enabled = !nodeManaged
-            )
-            if (limitToChecks) {
-                if (tokens.isEmpty()) {
-                    Text("No checks selected.", style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            tokens.forEach { t ->
-                                Text(
-                                    checkNames[t]?.takeIf { it.isNotBlank() } ?: unknownCheckLabel(t),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
+            FormSection("Schedule") {
+                DateTimeField(
+                    "Start", start, { start = it; errors.remove("start_at") },
+                    enabled = !nodeManaged, error = errors["start_at"],
+                    supporting = "Times use your device time zone."
+                )
+                DateTimeField(
+                    "End", end, { end = it; errors.remove("end_at") },
+                    enabled = !nodeManaged, error = errors["end_at"]
+                )
+                FormDropdown(
+                    label = "Repeat",
+                    value = repeat,
+                    options = Hc2MaintenanceRepeat.entries,
+                    labelOf = { it.label() },
+                    onSelect = { repeat = it },
+                    enabled = !nodeManaged
+                )
+                if (repeat != Hc2MaintenanceRepeat.NONE) {
+                    val locked = original?.repeatUntil != null
+                    DateTimeField(
+                        "Repeat until", repeatUntil, { repeatUntil = it; errors.remove("repeat_until") },
+                        enabled = !nodeManaged,
+                        clearable = !locked,
+                        error = errors["repeat_until"],
+                        supporting = if (locked) "A repeat limit can be changed but not removed." else "Optional."
+                    )
+                }
+            }
+
+            FormSection("Scope") {
+                FormSwitchRow(
+                    "Only selected checks", limitToChecks, { limitToChecks = it; errors.remove("tokens") },
+                    supporting = if (limitToChecks) "Only the selected checks are paused." else "All checks are paused.",
+                    enabled = !nodeManaged
+                )
+                if (limitToChecks) {
+                    if (tokens.isEmpty()) {
+                        Text("No checks selected.", style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        tokens.forEach { t ->
+                            Text(
+                                checkNames[t]?.takeIf { it.isNotBlank() } ?: unknownCheckLabel(t),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
                         }
                     }
+                    errors["tokens"]?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                    OutlinedButton(
+                        onClick = { showPicker = true },
+                        enabled = !nodeManaged,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (tokens.isEmpty()) "Select checks" else "Change selection") }
                 }
-                errors["tokens"]?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                }
-                OutlinedButton(
-                    onClick = { showPicker = true },
-                    enabled = !nodeManaged,
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text(if (tokens.isEmpty()) "Select checks" else "Change selection") }
             }
 
             if (!nodeManaged) {

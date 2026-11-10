@@ -5,15 +5,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,11 +30,13 @@ import de.rpicloud.ipv64net.helper.IPv64Client
 import de.rpicloud.ipv64net.helper.IPv64Context
 import de.rpicloud.ipv64net.helper.ipv64Request
 import de.rpicloud.ipv64net.helper.myIp
+import de.rpicloud.ipv64net.main.views.common.ActionSheet
 import de.rpicloud.ipv64net.main.views.common.RequestState
+import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.rpicloud.ipv64net.models.isFailure
 import de.rpicloud.ipv64net.models.label
-import de.rpicloud.ipv64net.models.looksLikeIpv4
-import de.rpicloud.ipv64net.models.looksLikeIpv6
+import de.rpicloud.ipv64net.models.isIpv4
+import de.rpicloud.ipv64net.models.isIpv6
 import de.sr.ipv64.model.DynDnsResult
 import de.sr.ipv64.model.IpFamily
 import kotlinx.coroutines.launch
@@ -63,8 +61,8 @@ fun DomainDynDnsDialog(domain: String, req: RequestState, onClose: (updated: Boo
     var myIpHint by remember { mutableStateOf<String?>(null) }
     var result by remember { mutableStateOf<DynDnsResult?>(null) }
 
-    val v4Error = ipv4.isNotBlank() && !looksLikeIpv4(ipv4)
-    val v6Error = ipv6.isNotBlank() && !looksLikeIpv6(ipv6)
+    val v4Error = ipv4.isNotBlank() && !isIpv4(ipv4.trim())
+    val v6Error = ipv6.isNotBlank() && !isIpv6(ipv6.trim())
     val busy = req.isBusy
 
     fun useMyIp(family: IpFamily) {
@@ -100,110 +98,93 @@ fun DomainDynDnsDialog(domain: String, req: RequestState, onClose: (updated: Boo
     val done = result
     if (done != null) {
         // Ergebnisansicht
-        AlertDialog(
-            onDismissRequest = { onClose(true) },
-            icon = { Icon(painter = painterResource(id = R.drawable.autorenew_24px), contentDescription = null) },
-            title = { Text("DynDNS update") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ActionSheet(title = "DynDNS update", onDismiss = { onClose(true) }, confirmLabel = "Done", onConfirm = { onClose(true) }) {
+            Text(
+                if (done.changed == true) "At least one record was changed." else "No record was changed.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            if (done.results.isEmpty()) {
+                Text("The server returned no results per IP.", style = MaterialTheme.typography.bodySmall)
+            }
+            done.results.forEach { r ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (done.changed == true) "At least one record was changed." else "No record was changed.",
-                        style = MaterialTheme.typography.bodyMedium
+                        (r.type ?: "?") + "  ",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
                     )
-                    if (done.results.isEmpty()) {
-                        Text("The server returned no results per IP.", style = MaterialTheme.typography.bodySmall)
-                    }
-                    done.results.forEach { r ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                (r.type ?: "?") + "  ",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(r.ip ?: "–", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    r.result.label,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (r.result.isFailure) colorResource(R.color.ipv64_red)
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(r.ip ?: "–", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            r.result.label,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (r.result.isFailure) colorResource(R.color.ipv64_red)
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
-            },
-            confirmButton = { TextButton(onClick = { onClose(true) }) { Text("Done") } }
-        )
+            }
+        }
         return
     }
 
-    AlertDialog(
-        onDismissRequest = { if (!busy) onClose(false) },
-        icon = { Icon(painter = painterResource(id = R.drawable.autorenew_24px), contentDescription = null) },
-        title = { Text("Manual DynDNS update") },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
-                Text(
-                    "Sets the A/AAAA records of $domain. Leave both addresses empty to use the address the request " +
-                            "comes from. Only public addresses are accepted; missing records are created.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                FormTextField(
-                    label = "IPv4 address",
-                    value = ipv4,
-                    onValue = { ipv4 = it.trim() },
-                    placeholder = "e.g. 203.0.113.10",
-                    supporting = if (v4Error) "Not a valid IPv4 address" else null,
-                    keyboardType = KeyboardType.Uri
-                )
-                FormTextField(
-                    label = "IPv6 address",
-                    value = ipv6,
-                    onValue = { ipv6 = it.trim() },
-                    placeholder = "e.g. 2001:db8::10",
-                    supporting = if (v6Error) "Not a valid IPv6 address" else null,
-                    keyboardType = KeyboardType.Uri
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AssistChip(
-                        onClick = { useMyIp(IpFamily.IPV4) },
-                        enabled = !loadingV4,
-                        label = { Text("My IPv4") },
-                        leadingIcon = {
-                            if (loadingV4) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        }
-                    )
-                    AssistChip(
-                        onClick = { useMyIp(IpFamily.IPV6) },
-                        enabled = !loadingV6,
-                        label = { Text("My IPv6") },
-                        leadingIcon = {
-                            if (loadingV6) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        }
-                    )
+    ActionSheet(
+        title = "Manual DynDNS update",
+        onDismiss = { if (!busy) onClose(false) },
+        confirmLabel = "Update",
+        confirmEnabled = !busy && !v4Error && !v6Error,
+        onConfirm = { submit() }
+    ) {
+        Text(
+            "Sets the A/AAAA records of $domain. Leave both addresses empty to use the address the request " +
+                    "comes from. Only public addresses are accepted; missing records are created.",
+            style = MaterialTheme.typography.bodySmall
+        )
+        SectionHeader("Addresses")
+        FormTextField(
+            label = "IPv4 address",
+            value = ipv4,
+            onValue = { ipv4 = it.trim() },
+            placeholder = "e.g. 203.0.113.10",
+            supporting = if (v4Error) "Not a valid IPv4 address" else null,
+            keyboardType = KeyboardType.Uri
+        )
+        FormTextField(
+            label = "IPv6 address",
+            value = ipv6,
+            onValue = { ipv6 = it.trim() },
+            placeholder = "e.g. 2001:db8::10",
+            supporting = if (v6Error) "Not a valid IPv6 address" else null,
+            keyboardType = KeyboardType.Uri
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AssistChip(
+                onClick = { useMyIp(IpFamily.IPV4) },
+                enabled = !loadingV4,
+                label = { Text("My IPv4") },
+                leadingIcon = {
+                    if (loadingV4) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                 }
-                myIpHint?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = colorResource(R.color.ipv64_orange))
+            )
+            AssistChip(
+                onClick = { useMyIp(IpFamily.IPV6) },
+                enabled = !loadingV6,
+                label = { Text("My IPv6") },
+                leadingIcon = {
+                    if (loadingV6) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                 }
-                FormTextField(
-                    label = "Prefix (optional)",
-                    value = prefix,
-                    onValue = { prefix = it.trim() },
-                    placeholder = "e.g. nas",
-                    supporting = "Empty = the domain itself"
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { submit() }, enabled = !busy && !v4Error && !v6Error) { Text("Update") }
-        },
-        dismissButton = {
-            TextButton(onClick = { onClose(false) }, enabled = !busy) { Text("Cancel") }
-        },
-        modifier = Modifier.fillMaxWidth()
-    )
+            )
+        }
+        myIpHint?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = colorResource(R.color.ipv64_orange))
+        }
+        SectionHeader("Record")
+        FormTextField(
+            label = "Prefix (optional)",
+            value = prefix,
+            onValue = { prefix = it.trim() },
+            placeholder = "e.g. nas",
+            supporting = "Empty = the domain itself"
+        )
+    }
 }

@@ -51,6 +51,15 @@ object NavKeys {
     /** String: Node-ID (Hc2Node.nodeId, 32 Zeichen), Liste → node_details. */
     const val SELECTED_NODE_ID = "SELECTED_NODE_ID"
 
+    /** String: Token eines lokalen Checks der Node (Check.token), Healthchecks → node_check_edit (mit SELECTED_NODE_ID). Fehlt = neuer Check. */
+    const val NODE_CHECK_TOKEN = "NODE_CHECK_TOKEN"
+
+    /** Long: Proxy64-Host-ID (ProxyHost.id), Proxy64 → proxy_host_edit (mit SELECTED_NODE_ID). Fehlt = neuer Host. */
+    const val PROXY_HOST_ID = "PROXY_HOST_ID"
+
+    /** String: Modulname (z. B. "honeypot"), node_details → node_module (zusammen mit SELECTED_NODE_ID). */
+    const val NODE_MODULE = "NODE_MODULE"
+
     /** String: IP-Adresse, die threat_lookup sofort abfragen soll (z. B. aus dem Security-Hub oder einem Alarm). */
     const val THREAT_LOOKUP_IP = "THREAT_LOOKUP_IP"
 

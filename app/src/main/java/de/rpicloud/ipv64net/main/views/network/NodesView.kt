@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -31,15 +30,20 @@ import de.rpicloud.ipv64net.helper.ipv64Retrying
 import de.rpicloud.ipv64net.helper.navigateWithArgs
 import de.rpicloud.ipv64net.helper.pollUntil
 import de.rpicloud.ipv64net.helper.toError
+import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListGroup
 import de.rpicloud.ipv64net.main.views.common.NotAvailableView
 import de.rpicloud.ipv64net.main.views.common.RefreshableList
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
-import de.rpicloud.ipv64net.main.views.common.itemsOrEmpty
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
 import de.rpicloud.ipv64net.main.views.inlineText
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
+import de.rpicloud.ipv64net.models.User
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import de.sr.ipv64.model.Hc2Node
 import de.sr.ipv64.model.Hc2RemoteMgmt
 import de.sr.ipv64.model.LinkNodeRequest
@@ -59,6 +63,13 @@ fun NodesView(navController: NavHostController, mainPadding: PaddingValues) {
     var nodes by remember { mutableStateOf(NodeListCache.peek(ctx)) }
     var refreshing by remember { mutableStateOf(false) }
     var showLink by remember { mutableStateOf(false) }
+    var showAdd by remember { mutableStateOf(false) }
+    var showDirect by remember { mutableStateOf(false) }
+    // Direkt verbundene Nodes (LocalNodeStore) dieses Accounts; bei jeder Rückkehr neu gelesen
+    var directIds by remember { mutableStateOf(emptyList<String>()) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        directIds = LocalNodeStore.list(ctx, User.current?.id?.toString().orEmpty())
+    }
     var linkBusy by remember { mutableStateOf(false) }
     var linkError by remember { mutableStateOf<String?>(null) }
     var waiting by remember { mutableStateOf(false) }
@@ -140,29 +151,32 @@ fun NodesView(navController: NavHostController, mainPadding: PaddingValues) {
         navController = navController,
         mainPadding = mainPadding,
         fab = {
-            if (req.notAvailable == null) {
-                FloatingActionButton(onClick = {
-                    linkError = null
-                    showLink = true
-                }) {
-                    Icon(painter = painterResource(R.drawable.add_24px), contentDescription = "Link node")
-                }
+            FloatingActionButton(onClick = { showAdd = true }) {
+                Icon(painter = painterResource(R.drawable.add_24px), contentDescription = "Add node")
             }
         }
     ) {
         val unavailable = req.notAvailable
-        if (unavailable != null) {
+        val list = nodes.orEmpty()
+        // Nur Nodes, die nicht (mehr) in der Cloud-Liste stehen; ohne Cloud-Liste (Fehler/Plan) alle
+        val cloudIds = list.mapNotNull { it.nodeId }.toSet()
+        val direct = directIds.filter { it !in cloudIds }
+        if (unavailable != null && direct.isEmpty()) {
             NotAvailableView("Nodes", unavailable)
         } else {
-            RefreshableList(refreshing = refreshing, onRefresh = { load(true, true) }) {
+            RefreshableList(
+                refreshing = refreshing,
+                onRefresh = { load(true, true) },
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 if (waiting) {
                     item(key = "waiting") {
-                        Card(modifier = Modifier.fillMaxWidth()) {
+                        ListGroup {
                             Column(
                                 modifier = Modifier.padding(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text("Waiting for the node", style = MaterialTheme.typography.titleSmall)
+                                Text("Waiting for the node", style = MaterialTheme.typography.titleMedium)
                                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                                 Text(
                                     "The node fetches its token itself. This usually takes less than a minute.",
@@ -173,18 +187,46 @@ fun NodesView(navController: NavHostController, mainPadding: PaddingValues) {
                         }
                     }
                 }
-                itemsOrEmpty(
-                    items = nodes.orEmpty(),
-                    loaded = nodes != null,
-                    emptyText = "No nodes linked yet. Tap + and enter the code your Node64 shows under \"ipv64 link\".",
-                    key = { it.nodeId ?: it.hashCode() }
-                ) { node ->
-                    NodeItemView(node) {
-                        navController.navigateWithArgs(Tab.node_details, NavKeys.SELECTED_NODE_ID to it.nodeId)
+                if (nodes != null && list.isEmpty() && direct.isEmpty()) {
+                    item(key = "empty_state") {
+                        EmptyState("No nodes yet. Tap + to link a node with the code your Node64 shows under \"ipv64 link\", or connect to one directly.")
+                    }
+                } else if (list.isNotEmpty() || direct.isNotEmpty()) {
+                    item(key = "nodes") {
+                        ListGroup {
+                            list.forEachIndexed { i, node ->
+                                if (i > 0) GroupDivider()
+                                NodeRow(node) {
+                                    navController.navigateWithArgs(Tab.node_details, NavKeys.SELECTED_NODE_ID to it.nodeId)
+                                }
+                            }
+                            direct.forEachIndexed { i, nid ->
+                                if (i > 0 || list.isNotEmpty()) GroupDivider()
+                                DirectNodeRow(nid) {
+                                    navController.navigateWithArgs(Tab.node_details, NavKeys.SELECTED_NODE_ID to nid)
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+
+    if (showAdd) {
+        AddNodeDialog(
+            canLink = req.notAvailable == null,
+            onLink = {
+                showAdd = false
+                linkError = null
+                showLink = true
+            },
+            onDirect = {
+                showAdd = false
+                showDirect = true
+            },
+            onDismiss = { showAdd = false }
+        )
     }
 
     if (showLink) {
@@ -195,6 +237,11 @@ fun NodesView(navController: NavHostController, mainPadding: PaddingValues) {
             onDismiss = { showLink = false }
         )
     }
+
+    if (showDirect) NodeLocalSheet(null, onDismiss = { showDirect = false }, onSaved = { newId ->
+        showDirect = false
+        navController.navigateWithArgs(Tab.node_details, NavKeys.SELECTED_NODE_ID to newId)
+    })
 
     RequestStateHost(req)
 }

@@ -1,283 +1,126 @@
 package de.rpicloud.ipv64net.main.views
 
-import android.annotation.SuppressLint
 import android.content.Intent
-import android.graphics.drawable.Icon
-import android.net.Uri
-import androidx.activity.ComponentActivity
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.CacheRegistry
-import de.rpicloud.ipv64net.helper.DomainCache
-import de.rpicloud.ipv64net.helper.Hc2ChannelCache
-import de.rpicloud.ipv64net.helper.Hc2ChannelTypeCache
-import de.rpicloud.ipv64net.helper.Hc2CheckListCache
 import de.rpicloud.ipv64net.helper.PreferencesManager
 import de.rpicloud.ipv64net.helper.findActivity
-import de.rpicloud.ipv64net.helper.views.ErrorDialog
-import de.rpicloud.ipv64net.helper.views.SpinnerDialog
 import de.rpicloud.ipv64net.main.startup.activity.LoginActivity
+import de.rpicloud.ipv64net.main.views.common.HubScreen
+import de.rpicloud.ipv64net.main.views.common.HubSection
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
-import me.zhanghai.compose.preference.preference
 import me.zhanghai.compose.preference.rememberPreferenceState
-import me.zhanghai.compose.preference.switchPreference
 
-@OptIn(ExperimentalMaterial3Api::class)
-@SuppressLint("ContextCastToActivity")
+/**
+ * Hub "More": Account (Account, API keys, Account links), Nodes, Notifications (Channels, Notification settings),
+ * Security (IP lookup & My IP, Password check, Honeypot), Tools (Logs), App (Lockscreen, About, YouTube, Discord)
+ * und Logout als eigene Gruppe. Der Lockscreen-Schalter nutzt weiter die compose-preference-Einstellung
+ * "LOCKSCREEN_ENABLED" und spiegelt sie in PreferencesManager.
+ */
 @Composable
 fun SettingsView(navController: NavHostController, mainPadding: PaddingValues) {
     val ctx = LocalContext.current
-    val listState = rememberLazyListState()
 
     ProvidePreferenceLocals {
         val lockScreenEnabled = rememberPreferenceState("LOCKSCREEN_ENABLED", false)
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(Tabs.getLabel(Tab.settings))
-                    },
-                    modifier = Modifier.statusBarsPadding()
-                )
-            }, modifier = Modifier
-                .fillMaxSize()
-                .padding(mainPadding)
-                .consumeWindowInsets(mainPadding)  // avoids double insets
-        ) { it ->
-            Column(modifier = Modifier.padding(it)) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    stickyHeader {
-                        Surface( // nimmt Theme-Hintergrund, hebt Text hervor
-                            tonalElevation = 2.dp
-                        ) {
-                            Text(
-                                text = "General",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-                    preference(
-                        key = "PREF_ACCOUNT_STATS",
-                        title = { Text(text = "Account") },
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.account_circle_24px),
-                                contentDescription = "Account Icon"
-                            )
-                        }
-                    ) {
-                        navController.navigate(Tabs.getRoute(Tab.account))
-                    }
-                    preference(
-                        key = "PREF_ACCOUNT_API_KEYS",
-                        title = { Text(text = "API keys") },
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.key_24px),
-                                contentDescription = "API keys Icon"
-                            )
-                        }
-                    ) {
-                        navController.navigate(Tabs.getRoute(Tab.api_keys))
-                    }
-                    preference(
-                        key = "PREF_ACCOUNT_LINKS",
-                        title = { Text(text = "Account links") },
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.link_24px),
-                                contentDescription = "Account links Icon"
-                            )
-                        }
-                    ) {
-                        navController.navigate(Tabs.getRoute(Tab.account_links))
-                    }
-                    preference(
-                        key = "PREF_ACCOUNT_LOGS",
-                        title = { Text(text = "Logs") },
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.data_info_alert_24px),
-                                contentDescription = "Log Icon"
-                            )
-                        }
-                    ) {
-                        navController.navigate(Tabs.getRoute(Tab.logs))
-                    }
-                    preference(
-                        key = "PREF_ACCOUNT_MY_IP",
-                        title = { Text(text = "My IP") },
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.bring_your_own_ip_24px),
-                                contentDescription = "IP Icon"
-                            )
-                        }
-                    ) {
-                        navController.navigate(Tabs.getRoute(Tab.my_ip))
-                    }
-                    stickyHeader {
-                        Surface( // nimmt Theme-Hintergrund, hebt Text hervor
-                            tonalElevation = 2.dp
-                        ) {
-                            Text(
-                                text = "Security",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-                    switchPreference(
-                        key = "PREF_SECURITY_SCREENLOCK",
-                        title = { Text(text = "Lockscreen") },
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.fingerprint_24px),
-                                contentDescription = "Lockscreen Icon"
-                            )
-                        },
-                        summary = {
-                            Text(if (lockScreenEnabled.value) "enabled" else "disabled")
-                        },
-                        defaultValue = false,
-                        rememberState = { lockScreenEnabled }
-                    )
-                    stickyHeader {
-                        Surface( // nimmt Theme-Hintergrund, hebt Text hervor
-                            tonalElevation = 2.dp
-                        ) {
-                            Text(
-                                text = "Other",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-                    preference(
-                        key = "PREF_OTHER_ABOUT",
-                        title = { Text(text = "About") },
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.info_24px),
-                                contentDescription = "About Icon"
-                            )
-                        }
-                    ) {
-                        navController.navigate(Tabs.getRoute(Tab.about))
-                    }
-                    preference(
-                        key = "PREF_OTHER_YT",
-                        title = { Text(text = "YouTube") },
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.youtube_activity_24px),
-                                contentDescription = "YouTube Icon"
-                            )
-                        }
-                    ) {
-                        val intent = Intent(Intent.ACTION_VIEW, "https://www.youtube.com/c/RaspberryPiCloud".toUri())
-                        ctx.startActivity(intent)
-                    }
-//                    preference(
-//                        key = "PREF_OTHER_DC",
-//                        title = { Text(text = "Discord") },
-//                        icon = {
-//                            Icon(
-//                                painter = painterResource(id = R.drawable.discord_24px),
-//                                contentDescription = "Discord Icon"
-//                            )
-//                        }
-//                    ) {
-//
-//                    }
-                    item { }
-                    preference(
-                        key = "PREF_LOGOUT",
-                        title = { Text(
-                            text = "Logout",
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Red
-                        ) },
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.logout_24px),
-                                contentDescription = "Discord Icon",
-                                tint = Color.Red
-                            )
-                        }
-                    ) {
-                        PreferencesManager.saveString(ctx, "APIKEY", "")
-                        // Zwischengespeicherte Daten (u. a. Update-Tokens) aus dem Speicher entfernen
-                        CacheRegistry.clearAll()
-                        DomainCache.clear()
-                        Hc2ChannelCache.clear()
-                        Hc2ChannelTypeCache.clear()
-                        Hc2CheckListCache.clear()
-                        lockScreenEnabled.value = false
-                        val activity = ctx.findActivity()
 
-                        val intent = Intent(activity, LoginActivity::class.java)
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        activity?.startActivity(intent)
-                        activity?.finish()
-                    }
+        val sections = listOf(
+            HubSection(Tab.account, group = "Account"),
+            HubSection(Tab.api_keys, group = "Account"),
+            HubSection(Tab.account_links, group = "Account"),
+            HubSection(Tab.nodes, subtitle = "Connect a node with its API key", group = "Nodes"),
+            HubSection(Tab.channels, subtitle = "Where notifications are sent", group = "Notifications"),
+            HubSection(Tab.hc2_settings, subtitle = "Quiet hours and batching", group = "Notifications"),
+            HubSection(Tab.threat_lookup, title = "IP lookup & My IP", subtitle = "Your public IP and why an IP is on the blocklist", group = "Security"),
+            HubSection(Tab.password_check, subtitle = "Was a password used in attacks? Stays on your device", group = "Security"),
+            HubSection(Tab.honeypot, subtitle = "Attacks, ports and rankings of the Honeypot64 network", group = "Security"),
+            HubSection(Tab.logs, group = "Tools")
+        )
+
+        HubScreen(
+            title = Tabs.getLabel(Tab.settings),
+            navController = navController,
+            mainPadding = mainPadding,
+            sections = sections,
+            footer = {
+                appGroup(
+                    lockScreenEnabled = lockScreenEnabled.value,
+                    onLockScreenChange = { lockScreenEnabled.value = it },
+                    onAbout = { navController.navigate(Tabs.getRoute(Tab.about)) { launchSingleTop = true } },
+                    onOpen = { url -> ctx.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+                )
+                logoutGroup {
+                    PreferencesManager.saveString(ctx, "APIKEY", "")
+                    // Zwischengespeicherte Daten (u. a. Update-Tokens) aus dem Speicher entfernen
+                    CacheRegistry.clearAll()
+                    lockScreenEnabled.value = false
+                    val activity = ctx.findActivity()
+
+                    val intent = Intent(activity, LoginActivity::class.java)
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    activity?.startActivity(intent)
+                    activity?.finish()
                 }
             }
+        )
 
-            LaunchedEffect(lockScreenEnabled.value) {
-                PreferencesManager.saveBool(ctx, "LOCKSCREEN_ENABLED", lockScreenEnabled.value)
-            }
+        LaunchedEffect(lockScreenEnabled.value) {
+            PreferencesManager.saveBool(ctx, "LOCKSCREEN_ENABLED", lockScreenEnabled.value)
+        }
+    }
+}
+
+private fun LazyListScope.appGroup(
+    lockScreenEnabled: Boolean,
+    onLockScreenChange: (Boolean) -> Unit,
+    onAbout: () -> Unit,
+    onOpen: (String) -> Unit
+) {
+    item(key = "group_app") {
+        ListGroup(title = "App") {
+            ListRow(
+                title = "Lockscreen",
+                subtitle = if (lockScreenEnabled) "enabled" else "disabled",
+                icon = R.drawable.fingerprint_24px,
+                centerIcon = true,
+                trailing = { Switch(checked = lockScreenEnabled, onCheckedChange = null) },
+                modifier = Modifier.toggleable(value = lockScreenEnabled, role = Role.Switch, onValueChange = onLockScreenChange)
+            )
+            GroupDivider(56.dp)
+            ListRow(title = "About", icon = R.drawable.info_24px, centerIcon = true, onClick = onAbout)
+            GroupDivider(56.dp)
+            ListRow(title = "YouTube", icon = R.drawable.youtube_activity_24px, centerIcon = true, onClick = { onOpen("https://www.youtube.com/c/RaspberryPiCloud") })
+            GroupDivider(56.dp)
+            ListRow(title = "Discord", icon = R.drawable.discord_24px, centerIcon = true, onClick = { onOpen("https://discord.gg/rpicloud") })
+        }
+    }
+}
+
+private fun LazyListScope.logoutGroup(onLogout: () -> Unit) {
+    item(key = "group_logout") {
+        // etwas Abstand, damit Logout nicht an der App-Gruppe klebt
+        ListGroup(modifier = Modifier.padding(top = 16.dp)) {
+            val error = MaterialTheme.colorScheme.error
+            ListRow(title = "Logout", icon = R.drawable.logout_24px, titleColor = error, iconTint = error, centerIcon = true, onClick = onLogout, showChevron = false)
         }
     }
 }

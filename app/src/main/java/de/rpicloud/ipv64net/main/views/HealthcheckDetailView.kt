@@ -1,5 +1,8 @@
 package de.rpicloud.ipv64net.main.views
 
+import de.rpicloud.ipv64net.main.views.common.GroupText
+import de.rpicloud.ipv64net.main.views.common.groupedRows
+import de.rpicloud.ipv64net.main.views.common.spacedItem
 import android.content.ClipData
 import android.content.ClipDescription
 import android.os.Build
@@ -10,7 +13,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -20,13 +25,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import de.rpicloud.ipv64net.main.views.common.ActionTile
+import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -44,33 +48,42 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.InfoRow
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
+import de.rpicloud.ipv64net.main.views.common.StatusChip
+import de.rpicloud.ipv64net.main.views.common.InfoGroup
+import de.rpicloud.ipv64net.main.views.common.InfoItem
 import de.rpicloud.ipv64net.helper.Hc2ChannelCache
 import de.rpicloud.ipv64net.helper.Hc2CheckListCache
 import de.rpicloud.ipv64net.helper.Hc2NavKeys
 import de.rpicloud.ipv64net.helper.IPv64Client
+import de.rpicloud.ipv64net.helper.NavKeys
 import de.rpicloud.ipv64net.helper.formatGermanTime
+import de.rpicloud.ipv64net.helper.realOrNull
 import de.rpicloud.ipv64net.helper.formatLatency
 import de.rpicloud.ipv64net.helper.formatPercent
 import de.rpicloud.ipv64net.helper.formatRelative
 import de.rpicloud.ipv64net.helper.displayName
 import de.rpicloud.ipv64net.helper.ipv64Retrying
+import de.rpicloud.ipv64net.helper.navigateWithArgs
 import de.rpicloud.ipv64net.helper.toError
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
+import de.rpicloud.ipv64net.main.views.network.awaitNodeCommand
+import de.rpicloud.ipv64net.main.views.network.outputText
 import de.rpicloud.ipv64net.models.Hc2StateUi
 import de.rpicloud.ipv64net.models.RequestTyp
 import de.rpicloud.ipv64net.models.Tab
@@ -84,16 +97,19 @@ import de.sr.ipv64.model.Hc2CheckType
 import de.sr.ipv64.model.Hc2Event
 import de.sr.ipv64.model.Hc2Execution
 import de.sr.ipv64.model.Hc2Incident
+import de.sr.ipv64.model.Hc2Measurement
 import de.sr.ipv64.model.Hc2Stats
 import de.sr.ipv64.model.Hc2StatsRange
+import androidx.compose.material3.SnackbarDuration
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private const val EVENTS_PAGE_SIZE = 50
 private const val INCIDENTS_LIMIT = 20
+private const val MEASUREMENTS_LIMIT = 100
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HealthcheckDetailView(navController: NavHostController, mainPadding: PaddingValues) {
     val ctx = LocalContext.current
@@ -107,6 +123,7 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
     }
 
     var showLoadingDialog by remember { mutableStateOf(false) }
+    var nodeRunActive by remember { mutableStateOf(false) }
     var showDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var errorDialogTitle by remember { mutableStateOf("") }
@@ -118,6 +135,7 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
 
     var detail by remember { mutableStateOf<Hc2CheckDetail?>(null) }
     var events by remember { mutableStateOf<List<Hc2Event>>(emptyList()) }
+    var measurements by remember { mutableStateOf<List<Hc2Measurement>>(emptyList()) }
     var nextBefore by remember { mutableStateOf<Long?>(null) }
     var moreEventsLoading by remember { mutableStateOf(false) }
     var moreEventsJob by remember { mutableStateOf<Job?>(null) }
@@ -147,7 +165,7 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
         }
     }
 
-    // Erst get, dann events (sequentiell, Rate-Limit)
+    // Erst get, dann events, dann Messungen (sequentiell, Rate-Limit)
     fun load() {
         if (token == null) return
         // Laufendes "Load more" abbrechen, sonst überlappen sich die Seiten
@@ -162,6 +180,12 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
                 val page = ipv64Retrying { ipv64.hc2.checks.events(token, limit = EVENTS_PAGE_SIZE) }
                 events = page.data
                 nextBefore = if (page.meta?.hasMore == true) page.meta?.nextBefore else null
+                // Fehler hier bricht den Screen nicht ab: ohne Messungen zeigt die Leiste die Events
+                measurements = try {
+                    ipv64Retrying { ipv64.hc2.checks.measurements(token, limit = MEASUREMENTS_LIMIT) }
+                } catch (_: IPv64Exception) {
+                    emptyList()
+                }
             } catch (e: IPv64Exception) {
                 showError(e) { load() }
             } finally {
@@ -215,13 +239,41 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
                 val ipv64 = IPv64Client.get(ctx)
                 val result = ipv64Retrying { ipv64.hc2.checks.run(token) }
                 showLoadingDialog = false
-                snackbarHost.showSnackbar(
-                    if (result.queued == false) "Run not queued" else "Run queued"
-                )
+                val nodeId = result.nodeId
+                val commandId = result.commandId
+                if (result.queued == false || nodeId == null || commandId == null) {
+                    snackbarHost.showSnackbar(if (result.queued == false) "Run not queued" else "Run queued")
+                } else {
+                    // Node-Check: auf das Ergebnis der Node warten (Snackbar bleibt bis dahin stehen)
+                    val waiting = launch {
+                        snackbarHost.showSnackbar(
+                            "Waiting for node ${detail?.nodeName ?: ""}…",
+                            duration = SnackbarDuration.Indefinite
+                        )
+                    }
+                    nodeRunActive = true
+                    val finished = try {
+                        awaitNodeCommand(ctx, nodeId, commandId)
+                    } finally {
+                        waiting.cancel()
+                        nodeRunActive = false
+                    }
+                    if (finished == null) {
+                        snackbarHost.showSnackbar("Node has not reported back yet")
+                    } else {
+                        // Erst neu laden, dann melden: showSnackbar wartet bis zum Ausblenden
+                        Hc2CheckListCache.invalidate()
+                        load()
+                        val output = finished.output.outputText()?.let { "\n$it" }.orEmpty()
+                        snackbarHost.showSnackbar(
+                            (if (finished.ok == false) "Run failed" else "Run finished: OK") + output
+                        )
+                    }
+                }
             } catch (e: IPv64Exception) {
-                showError(e, null)
-            } finally {
+                // Kein finally: würde den Lade-Dialog von load() sofort wieder schließen
                 showLoadingDialog = false
+                showError(e, null)
             }
         }
     }
@@ -325,38 +377,23 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
                 .padding(inner)
                 .fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             if (d != null) {
-                item { HeaderCard(d) }
-                item {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(onClick = { pauseResume() }, modifier = Modifier.weight(1f)) {
-                            Icon(
-                                painter = painterResource(
-                                    if (d.paused == true) R.drawable.play_arrow_24px else R.drawable.pause_circle_24px
-                                ),
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(if (d.paused == true) " Resume" else " Pause")
-                        }
-                        OutlinedButton(onClick = { runNow() }, modifier = Modifier.weight(1f)) {
-                            Icon(
-                                painter = painterResource(R.drawable.refresh_24px),
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(" Run now")
-                        }
-                    }
-                }
-                if (d.type in listOf(Hc2CheckType.HTTP, Hc2CheckType.KEYWORD, Hc2CheckType.JSON) &&
-                    d.target?.startsWith("http", ignoreCase = true) == true
-                ) {
-                    item {
-                        OutlinedButton(
-                            onClick = {
+                spacedItem { HeaderCard(d) }
+                spacedItem { StatusFacts(d) }
+                spacedItem {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ActionTile(
+                            if (d.paused == true) R.drawable.play_arrow_24px else R.drawable.pause_24px,
+                            if (d.paused == true) "Resume" else "Pause",
+                            { pauseResume() }, Modifier.weight(1f)
+                        )
+                        ActionTile(R.drawable.refresh_24px, "Run now", { runNow() }, Modifier.weight(1f), enabled = !nodeRunActive)
+                        if (d.type in listOf(Hc2CheckType.HTTP, Hc2CheckType.KEYWORD, Hc2CheckType.JSON) &&
+                            d.target?.startsWith("http", ignoreCase = true) == true
+                        ) {
+                            ActionTile(R.drawable.open_in_new_24px, "Open in browser", {
                                 try {
                                     ctx.startActivity(
                                         Intent(Intent.ACTION_VIEW, d.target.orEmpty().toUri())
@@ -364,62 +401,62 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
                                     )
                                 } catch (_: android.content.ActivityNotFoundException) {
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(painterResource(R.drawable.open_in_new_24px), null, Modifier.size(18.dp))
-                            Text(" Open in browser")
+                            }, Modifier.weight(1f))
                         }
                     }
                 }
-                if (events.isNotEmpty()) {
-                    item { HealthcheckEventsBar(events) }
+                if (measurements.isNotEmpty()) {
+                    spacedItem {
+                        ListGroup("Recent checks") {
+                            Box(Modifier.padding(16.dp)) { HealthcheckMeasurementsBar(measurements) }
+                        }
+                    }
+                } else if (events.isNotEmpty()) {
+                    spacedItem {
+                        ListGroup("Recent events") {
+                            Box(Modifier.padding(16.dp)) { HealthcheckEventsBar(events) }
+                        }
+                    }
                 }
                 if (d.sources.isNotEmpty()) {
-                    item { SectionTitle("Measuring points") }
-                    items(d.sources, key = { "src-${it.source.orEmpty()}-${it.label.orEmpty()}" }) { s ->
-                        val st = Hc2StateUi.from(s.state)
-                        Card(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        s.label ?: s.source.orEmpty(),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Hc2StateBadge(st)
-                                }
+                    spacedItem {
+                        ListGroup("Measuring points") {
+                            d.sources.forEachIndexed { i, s ->
+                                if (i > 0) GroupDivider()
+                                val st = Hc2StateUi.from(s.state)
                                 val parts = listOfNotNull(
                                     s.lastLatencyMs?.formatLatency(),
                                     s.lastCheckAt?.let { "checked ${it.formatRelative()}" },
                                     s.consecutiveFail?.takeIf { it > 0 }?.let { "$it failed in a row" },
                                     s.consecutiveOk?.takeIf { it > 0 }?.let { "$it ok in a row" }
                                 )
-                                if (parts.isNotEmpty()) {
-                                    Text(parts.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                                }
                                 val msg = s.lastMessage?.takeIf { it.isNotBlank() } ?: s.lastReason?.takeIf { it.isNotBlank() }
-                                if (msg != null) Text(msg, style = MaterialTheme.typography.bodySmall)
+                                ListRow(
+                                    title = s.label ?: s.source.orEmpty(),
+                                    subtitle = listOfNotNull(parts.takeIf { it.isNotEmpty() }?.joinToString(" · "), msg)
+                                        .joinToString("\n").ifEmpty { null },
+                                    subtitleMaxLines = 4,
+                                    trailing = { StatusChip(st.label, colorResource(st.color)) }
+                                )
                             }
                         }
                     }
                 }
                 if (d.type == Hc2CheckType.PUSH && d.push != null) {
-                    item { PushCard(ctx, d, onCopied = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }) }
+                    spacedItem { PushCard(ctx, d, onCopied = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }) }
                 }
-                item { SectionTitle("Configuration") }
-                item { ConfigCard(d) }
+                spacedItem {
+                    // Check mit Node: Ausführung führt zur Node-Detailansicht
+                    ConfigCard(d, d.nodeId?.takeIf { it.isNotBlank() }?.let { nid ->
+                        { navController.navigateWithArgs(Tab.node_details, NavKeys.SELECTED_NODE_ID to nid) }
+                    })
+                }
 
-                item {
+                spacedItem {
                     ExpandableTitle("Statistics", statsExpanded) { statsExpanded = !statsExpanded }
                 }
                 if (statsExpanded) {
-                    item {
+                    spacedItem {
                         HealthcheckStatsView(
                             range = statsRange,
                             onRangeChange = { statsRange = it },
@@ -429,27 +466,32 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
                         )
                     }
                 }
-                item {
+                spacedItem {
                     ExpandableTitle("Incidents", incidentsExpanded) { incidentsExpanded = !incidentsExpanded }
                 }
                 if (incidentsExpanded) {
-                    when {
-                        incidentsLoading -> item { Text("Loading...", color = Color.Gray) }
-                        incidentsError != null -> item { Text(incidentsError.orEmpty(), color = MaterialTheme.colorScheme.error) }
-                        incidents.isNullOrEmpty() -> item { Text("No incidents", color = Color.Gray) }
-                        else -> items(incidents.orEmpty(), key = { "inc-${it.id ?: it.hashCode()}" }) { HealthcheckIncidentItemView(it) }
+                    spacedItem {
+                        ListGroup {
+                            when {
+                                incidentsLoading -> ListRow("Loading...")
+                                incidentsError != null -> GroupText(incidentsError.orEmpty(), error = true)
+                                incidents.isNullOrEmpty() -> ListRow("No incidents")
+                                else -> incidents.orEmpty().forEachIndexed { i, inc ->
+                                    if (i > 0) GroupDivider()
+                                    HealthcheckIncidentItemView(inc)
+                                }
+                            }
+                        }
                     }
                 }
 
-                item { SectionTitle("Events") }
-                if (events.isEmpty()) {
-                    item { Text("No events", color = Color.Gray) }
-                } else {
-                    items(events, key = { "ev-${it.id ?: it.hashCode()}" }) { HealthcheckEventItemView(it) }
+                if (events.isEmpty()) spacedItem { ListGroup("Events") { ListRow("No events") } }
+                else groupedRows(events, key = { ev -> "ev-" + (ev.id ?: ev) }, title = "Events") { ev ->
+                    HealthcheckEventItemView(ev)
                 }
                 if (nextBefore != null) {
-                    item {
-                        Button(
+                    spacedItem {
+                        FilledTonalButton(
                             onClick = { loadMoreEvents() },
                             enabled = !moreEventsLoading,
                             modifier = Modifier.fillMaxWidth()
@@ -467,16 +509,13 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
     }
 
     if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete healthcheck") },
-            text = { Text("Delete \"${detail?.name.orEmpty()}\" and its history permanently?") },
-            confirmButton = {
-                TextButton(onClick = { showDeleteDialog = false; deleteCheck() }) { Text("Delete") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text(stringCancel()) }
-            }
+        ConfirmDialog(
+            title = "Delete healthcheck",
+            text = "Delete \"${detail?.name.orEmpty()}\" and its history permanently?",
+            confirmLabel = "Delete",
+            destructive = true,
+            onConfirm = { showDeleteDialog = false; deleteCheck() },
+            onDismiss = { showDeleteDialog = false }
         )
     }
 
@@ -501,74 +540,47 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
     }
 }
 
-@Composable
-private fun stringCancel(): String = androidx.compose.ui.res.stringResource(android.R.string.cancel)
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleMedium)
-}
-
+// Aufklappbarer Abschnitt: eine Zeile mit "Show"/"Hide"
 @Composable
 private fun ExpandableTitle(text: String, expanded: Boolean, onToggle: () -> Unit) {
-    TextButton(onClick = onToggle, modifier = Modifier.fillMaxWidth()) {
-        Text(
-            if (expanded) "$text (hide)" else "$text (show)",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Start
-        )
+    ListGroup {
+        ListRow(title = text, badge = if (expanded) "Hide" else "Show", showChevron = false, onClick = onToggle)
     }
 }
 
-@Composable
-private fun InfoRow(label: String, value: String?, valueColor: Color = Color.Gray) {
-    if (value.isNullOrBlank()) return
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(label, fontWeight = FontWeight.Bold)
-        Text(
-            value,
-            style = MaterialTheme.typography.titleSmall,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f),
-            color = valueColor
-        )
-    }
-}
-
-// Kopf: Zustand, seit wann, letzte Messung, Verfügbarkeit
+// Kopf: Zustand und Ziel
 @Composable
 private fun HeaderCard(d: Hc2CheckDetail) {
-    val st = d.state
-    val ui = Hc2StateUi.from(st?.state, d.paused)
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${d.type.label}${d.target?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Hc2StateBadge(ui)
-            }
-            InfoRow("Since", st?.since?.formatGermanTime())
-            InfoRow("Last check", st?.lastCheckAt?.let { "${it.formatGermanTime()} (${it.formatRelative()})" })
-            InfoRow("Last status", st?.lastStatus)
-            InfoRow("Latency", st?.lastLatencyMs?.formatLatency())
-            InfoRow("Reason", st?.lastReason)
-            InfoRow("Message", st?.lastMessage)
-            InfoRow("Down since", st?.downSince?.formatGermanTime(), Color(0xFFD32F2F))
-            InfoRow("Last push", st?.lastPushAt?.let { "${it.formatGermanTime()} (${it.formatRelative()})" })
-            d.availabilityPercent?.let { a ->
-                InfoRow("Availability 24 h", a.last24h.formatPercent())
-                InfoRow("Availability 30 d", a.last30d.formatPercent())
-                InfoRow("Availability 1 y", a.last1y.formatPercent())
-            }
-        }
+    val ui = Hc2StateUi.from(d.state?.state, d.paused)
+    ListGroup {
+        ListRow(
+            title = "${d.type.label}${d.target?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()}",
+            trailing = { StatusChip(ui.label, colorResource(ui.color)) }
+        )
     }
+}
+
+// Zustand: seit wann, letzte Messung, Verfügbarkeit
+@Composable
+private fun StatusFacts(d: Hc2CheckDetail) {
+    val st = d.state
+    InfoGroup(
+        "Status",
+        listOf(
+            InfoItem("Since", st?.since?.realOrNull()?.formatGermanTime()),
+            InfoItem("Last check", st?.lastCheckAt?.let { "${it.formatGermanTime()} (${it.formatRelative()})" }),
+            InfoItem("Last status", st?.lastStatus),
+            InfoItem("Latency", st?.lastLatencyMs?.formatLatency()),
+            InfoItem("Reason", st?.lastReason),
+            InfoItem("Message", st?.lastMessage),
+            InfoItem("Down since", st?.downSince?.realOrNull()?.formatGermanTime(), valueColor = MaterialTheme.colorScheme.error),
+            InfoItem("Last push", st?.lastPushAt?.let { "${it.formatGermanTime()} (${it.formatRelative()})" }),
+            InfoItem("Availability 24 h", d.availabilityPercent?.last24h?.formatPercent()),
+            InfoItem("Availability 30 d", d.availabilityPercent?.last30d?.formatPercent()),
+            InfoItem("Availability 1 y", d.availabilityPercent?.last1y?.formatPercent())
+        ),
+        hideEmpty = true
+    )
 }
 
 // Push-URL kopieren oder teilen (enthält das Check-Token, daher nie loggen)
@@ -581,12 +593,11 @@ private fun PushCard(ctx: Context, d: Hc2CheckDetail, onCopied: () -> Unit) {
         push.nodePath?.takeIf { it.isNotBlank() }?.let { "Node path" to it }
     )
     if (entries.isEmpty()) return
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Push endpoints", style = MaterialTheme.typography.titleMedium)
-            entries.forEach { (label, value) ->
-                Text(label, fontWeight = FontWeight.Bold)
-                Text(value, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+    ListGroup("Push endpoints") {
+        entries.forEachIndexed { i, (label, value) ->
+            if (i > 0) GroupDivider()
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                InfoRow(label, value)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
                         val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -620,7 +631,7 @@ private fun PushCard(ctx: Context, d: Hc2CheckDetail, onCopied: () -> Unit) {
 
 // Einstellungen des Checks; Kanalnamen nur aus dem Cache (keine zusätzliche Anfrage)
 @Composable
-private fun ConfigCard(d: Hc2CheckDetail) {
+private fun ConfigCard(d: Hc2CheckDetail, onNode: (() -> Unit)?) {
     val channelText = if (d.channels.isEmpty()) {
         "Default channels"
     } else {
@@ -634,31 +645,33 @@ private fun ConfigCard(d: Hc2CheckDetail) {
         Hc2Execution.ONLINE, null -> "Online" + d.locations.takeIf { it.isNotEmpty() }?.joinToString(", ", " (", ")").orEmpty()
     }
     fun yn(v: Boolean?) = when (v) { true -> "Yes"; false -> "No"; null -> null }
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            InfoRow("Type", d.type.label)
-            InfoRow("Target", d.target)
-            InfoRow("Interval", d.intervalSeconds?.let { formatSeconds(it) })
-            InfoRow("Retry interval", d.retryIntervalSeconds?.let { formatSeconds(it) })
-            InfoRow("Retries", d.retries?.toString())
-            InfoRow("Timeout", d.timeoutSeconds?.let { formatSeconds(it.roundToInt()) })
-            InfoRow("Connect timeout", d.connectTimeoutSeconds?.let { formatSeconds(it.roundToInt()) })
-            InfoRow("Stabilize", d.stabilize?.toString())
-            InfoRow("IP mode", d.ipMode?.value)
-            InfoRow("Invert result", yn(d.invert))
-            InfoRow("Execution", execution)
-            InfoRow("Policy", d.policy?.value?.takeIf { d.locations.size + d.nodes.size > 1 })
-            InfoRow("Notify down", yn(d.notifyDown))
-            InfoRow("Notify up", yn(d.notifyUp))
-            InfoRow("Notify degraded", yn(d.notifyDegraded))
-            InfoRow("Critical", yn(d.critical))
-            InfoRow("Reminder", repeatMinutesLabel(d.repeatMinutes))
-            InfoRow("Channels", channelText)
-            InfoRow("Tags", d.tags.takeIf { it.isNotEmpty() }?.joinToString(", "))
-            InfoRow("Group", d.group)
-            InfoRow("Description", d.description)
-            InfoRow("Created", d.createdAt?.formatGermanTime())
-            InfoRow("Updated", d.updatedAt?.formatGermanTime())
-        }
-    }
+    InfoGroup(
+        "Configuration",
+        listOf(
+            InfoItem("Type", d.type.label),
+            InfoItem("Target", d.target),
+            InfoItem("Interval", d.intervalSeconds?.let { formatSeconds(it) }),
+            InfoItem("Retry interval", d.retryIntervalSeconds?.let { formatSeconds(it) }),
+            InfoItem("Retries", d.retries?.toString()),
+            InfoItem("Timeout", d.timeoutSeconds?.let { formatSeconds(it.roundToInt()) }),
+            InfoItem("Connect timeout", d.connectTimeoutSeconds?.let { formatSeconds(it.roundToInt()) }),
+            InfoItem("Stabilize", d.stabilize?.toString()),
+            InfoItem("IP mode", d.ipMode?.value),
+            InfoItem("Invert result", yn(d.invert)),
+            InfoItem("Execution", execution, onClick = onNode),
+            InfoItem("Policy", d.policy?.value?.takeIf { d.locations.size + d.nodes.size > 1 }),
+            InfoItem("Notify down", yn(d.notifyDown)),
+            InfoItem("Notify up", yn(d.notifyUp)),
+            InfoItem("Notify degraded", yn(d.notifyDegraded)),
+            InfoItem("Critical", yn(d.critical)),
+            InfoItem("Reminder", repeatMinutesLabel(d.repeatMinutes)),
+            InfoItem("Channels", channelText),
+            InfoItem("Tags", d.tags.takeIf { it.isNotEmpty() }?.joinToString(", ")),
+            InfoItem("Group", d.group),
+            InfoItem("Description", d.description),
+            InfoItem("Created", d.createdAt?.formatGermanTime()),
+            InfoItem("Updated", d.updatedAt?.formatGermanTime())
+        ),
+        hideEmpty = true
+    )
 }

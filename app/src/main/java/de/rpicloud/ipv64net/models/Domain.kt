@@ -1,6 +1,6 @@
 package de.rpicloud.ipv64net.models
 
-import androidx.compose.ui.graphics.Color
+import android.net.InetAddresses
 import de.rpicloud.ipv64net.helper.v64domains
 import de.sr.ipv64.model.Domain
 import de.sr.ipv64.model.DomainDetail
@@ -10,6 +10,7 @@ import de.sr.ipv64.model.IgnoreFamily
 import de.sr.ipv64.model.Record
 import de.sr.ipv64.model.RecordState
 import de.sr.ipv64.model.RecordType
+import java.net.Inet6Address
 
 const val NO_IPV4 = "0.0.0.0"
 const val NO_IPV6 = "::"
@@ -34,11 +35,18 @@ fun DomainDetail.isSameTypeAAddress(myIpv4: String): Boolean =
 fun DomainDetail.isSameTypeAAAAAddress(myIpv6: String): Boolean =
     records.any { it.type == RecordType.AAAA && it.content == myIpv6 }
 
-fun DomainDetail?.tintColor(myIpv4: String, myIpv6: String): Color = when {
-    this == null -> Color.Gray
-    isSameTypeAAddress(myIpv4) || isSameTypeAAAAAddress(myIpv6) -> Color.Green
-    else -> Color.Red
-}
+/** Hat die Domain überhaupt eine IP (A- oder AAAA-Record)? */
+fun DomainDetail.hasIp(): Boolean = records.any { it.type == RecordType.A || it.type == RecordType.AAAA }
+
+// Abweichung zählt nur, wenn die Domain schon einen Record dieses Typs hat und die Familie nicht ignoriert wird
+fun DomainDetail.mismatchV4(myIpv4: String): Boolean =
+    myIpv4 != NO_IPV4 && ignore != IgnoreFamily.IPV4 &&
+            records.any { it.type == RecordType.A } && !isSameTypeAAddress(myIpv4)
+
+// Mit festem IPv6-Präfix passt die Geräteadresse nie 1:1 zum Record
+fun DomainDetail.mismatchV6(myIpv6: String): Boolean =
+    myIpv6 != NO_IPV6 && ignore != IgnoreFamily.IPV6 && ipv6Prefix.isNullOrBlank() &&
+            records.any { it.type == RecordType.AAAA } && !isSameTypeAAAAAddress(myIpv6)
 
 val Domain.baseDomain: String
     get() {
@@ -150,14 +158,20 @@ val DynDnsOutcome?.isFailure: Boolean
     get() = this == DynDnsOutcome.INVALID_IP || this == DynDnsOutcome.CNAME_CONFLICT || this == DynDnsOutcome.CDN_MANAGED
 
 // ---------------------------------------------------------------------------------------------
-// Einfache IP-Prüfung (nur Plausibilität; der Server prüft endgültig)
+// IP-Prüfung (einzige Quelle für IPv4/IPv6; der Server prüft endgültig)
 // ---------------------------------------------------------------------------------------------
 
+// Vier Dezimal-Oktette 0-255, ohne führende Nullen und Vorzeichen; kein trim (Aufrufer bereinigen die Eingabe)
 private val IPV4_REGEX = Regex("""^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$""")
 
-fun looksLikeIpv4(s: String): Boolean = IPV4_REGEX.matches(s.trim())
+fun isIpv4(s: String): Boolean = IPV4_REGEX.matches(s)
 
-fun looksLikeIpv6(s: String): Boolean {
-    val t = s.trim()
-    return t.contains(':') && t.length in 2..45 && t.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' || it == ':' || it == '.' }
-}
+// isNumericAddress löst nie per DNS auf (kein getByName auf Benutzereingaben); benötigt Android
+fun isIpv6(s: String): Boolean =
+    s.contains(':') && s.length <= 45 && '%' !in s && InetAddresses.isNumericAddress(s) &&
+        try {
+            // IPv4-mapped (::ffff:1.2.3.4) wird als Inet4Address geparst und damit abgelehnt
+            InetAddresses.parseNumericAddress(s) is Inet6Address
+        } catch (e: IllegalArgumentException) {
+            false
+        }

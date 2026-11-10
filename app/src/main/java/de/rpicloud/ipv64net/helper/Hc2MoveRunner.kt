@@ -15,17 +15,19 @@ sealed class Hc2MoveOutcome {
     object TimedOut : Hc2MoveOutcome()
 }
 
-// Startet den Standortwechsel eines Online-Checks und fragt den Testlauf alle 2 s ab (höchstens 60 s Wanduhrzeit).
+// Startet den Wechsel von Ausführung/Standorten/Node eines Checks und fragt den Testlauf alle 2 s ab (höchstens 60 s Wanduhrzeit).
 // Wirft IPv64Exception bei API-Fehlern; CancellationException wird nicht abgefangen.
 object Hc2MoveRunner {
     private const val POLL_INTERVAL_MS = 2_000L
     private const val MAX_WAIT_MS = 60_000L
 
-    suspend fun moveOnline(ctx: Context, token: String, locations: List<String>): Hc2MoveOutcome {
+    suspend fun move(
+        ctx: Context, token: String, execution: Hc2Execution, nodeId: String?, locations: List<String>?
+    ): Hc2MoveOutcome {
         val client = IPv64Client.get(ctx)
         val deadline = SystemClock.elapsedRealtime() + MAX_WAIT_MS
         var run: Hc2Testrun = ipv64Retrying {
-            client.hc2.checks.move(token, Hc2MoveCheckRequest(execution = Hc2Execution.ONLINE, locations = locations))
+            client.hc2.checks.move(token, Hc2MoveCheckRequest(execution = execution, nodeId = nodeId, locations = locations))
         }
         classify(run)?.let { return it }
         val id = run.id ?: return Hc2MoveOutcome.Failed("The test run could not be started.")
@@ -60,7 +62,7 @@ object Hc2MoveRunner {
         return when {
             msgs.isNotEmpty() -> msgs.joinToString("\n")
             !run.error.isNullOrBlank() -> run.error!!
-            else -> "The test run failed. The locations were not changed."
+            else -> "The test run failed. The change was not applied."
         }
     }
 }

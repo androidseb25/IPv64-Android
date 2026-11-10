@@ -30,9 +30,12 @@ import de.rpicloud.ipv64net.helper.NavKeys
 import de.rpicloud.ipv64net.helper.ipv64Retrying
 import de.rpicloud.ipv64net.helper.rememberNavArg
 import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
+import de.rpicloud.ipv64net.main.views.common.FormSection
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.rpicloud.ipv64net.models.label
@@ -131,14 +134,14 @@ fun DomainSettingsView(navController: NavHostController, mainPadding: PaddingVal
         } else LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                Text(domain, style = MaterialTheme.typography.titleLarge)
+                ListGroup { ListRow(title = domain) }
             }
             if (original != null) {
                 item {
-                    ChannelFormSection("Wildcard") {
+                    FormSection("Wildcard") {
                         FormSwitchRow(
                             label = "Wildcard records",
                             checked = wildcard,
@@ -148,7 +151,7 @@ fun DomainSettingsView(navController: NavHostController, mainPadding: PaddingVal
                     }
                 }
                 item {
-                    ChannelFormSection("DynDNS updates") {
+                    FormSection("DynDNS updates") {
                         FormDropdown(
                             label = "Ignored address family",
                             value = ignore,
@@ -165,7 +168,7 @@ fun DomainSettingsView(navController: NavHostController, mainPadding: PaddingVal
                     }
                 }
                 item {
-                    ChannelFormSection("IPv6 prefix") {
+                    FormSection("IPv6 prefix") {
                         FormTextField(
                             label = "Fixed IPv6 prefix",
                             value = ipv6Prefix,

@@ -1,6 +1,9 @@
 package de.rpicloud.ipv64net.main.views.security
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -10,17 +13,24 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.helper.formatRelative
 import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.ListGroup
 import de.rpicloud.ipv64net.main.views.common.RefreshableList
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
 import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
+import de.rpicloud.ipv64net.main.views.common.InfoItem
+import de.rpicloud.ipv64net.main.views.common.InfoRows
+import de.rpicloud.ipv64net.main.views.common.FormSection
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
+import de.rpicloud.ipv64net.ui.theme.chartPalette
 import de.sr.ipv64.model.ThreatStats
 import de.sr.ipv64.model.ThreatStatsEntry
 
@@ -50,7 +60,11 @@ fun ThreatStatsView(navController: NavHostController, mainPadding: PaddingValues
     LaunchedEffect(Unit) { load() }
 
     ScreenScaffold(Tabs.getLabel(Tab.threat_stats), navController, mainPadding) {
-        RefreshableList(refreshing = refreshing, onRefresh = { load(force = true, pull = true) }) {
+        RefreshableList(
+            refreshing = refreshing,
+            onRefresh = { load(force = true, pull = true) },
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             val s = stats
             if (s == null) {
                 item(key = "empty") { EmptyState(if (req.isBusy) "Loading..." else "No statistics available.") }
@@ -71,10 +85,11 @@ private fun List<ThreatStatsEntry>.toRows(): List<RankRow> = mapNotNull { e ->
     RankRow(label, e.events ?: 0L, detail.ifEmpty { null })
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.statsContent(s: ThreatStats) {
-    item(key = "overview") {
-        SecurityCard {
-            Text("Honeypot64 network", style = MaterialTheme.typography.titleMedium)
+/** Auch von HoneypotView genutzt; dort zeigt der Live-Block schon die Kennzahlen (withOverview = false). */
+internal fun androidx.compose.foundation.lazy.LazyListScope.statsContent(s: ThreatStats, withOverview: Boolean = true) {
+    if (withOverview) item(key = "overview") {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionHeader("Honeypot64 network", Modifier.padding(start = 4.dp))
             StatTiles(
                 listOf(
                     "Sensors online" to "${(s.sensors?.online ?: 0L).formatCount()} / ${(s.sensors?.active7d ?: 0L).formatCount()}",
@@ -87,7 +102,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.statsContent(s: Threa
                 Text(
                     "Updated ${it.formatRelative()}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp)
                 )
             }
         }
@@ -95,12 +111,13 @@ private fun androidx.compose.foundation.lazy.LazyListScope.statsContent(s: Threa
 
     if (s.timeline.isNotEmpty()) {
         item(key = "timeline") {
-            SecurityCard {
-                Text("Attacks per day (30 days)", style = MaterialTheme.typography.titleSmall)
+            FormSection(title = "Attacks per day (30 days)") {
                 SimpleBarChart(
                     values = s.timeline.map { it.events ?: 0L },
                     firstLabel = shortDay(s.timeline.first().day),
-                    lastLabel = shortDay(s.timeline.last().day)
+                    lastLabel = shortDay(s.timeline.last().day),
+                    color = chartPalette().categorical(0),
+                    labels = s.timeline.map { shortDay(it.day) }
                 )
             }
         }
@@ -125,7 +142,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.statsContent(s: Threa
             RankingCard(
                 "Origin of blocklist IPs",
                 top.countries.map {
-                    RankRow(it.country ?: "–", it.ips ?: 0L, "${(it.ips ?: 0L).formatCount()} IPs")
+                    RankRow(it.country?.countryFlag() ?: "–", it.ips ?: 0L, "${(it.ips ?: 0L).formatCount()} IPs")
                 }
             )
         }
@@ -141,11 +158,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.statsContent(s: Threa
 
     if (s.lists.isNotEmpty()) {
         item(key = "lists") {
-            SecurityCard {
-                Text("List sizes", style = MaterialTheme.typography.titleSmall)
-                s.lists.entries.sortedBy { it.key }.forEach { (name, size) ->
-                    KeyValueLine(prettyKey(name), size.formatCount())
-                }
+            ListGroup("List sizes") {
+                InfoRows(s.lists.entries.sortedBy { it.key }.map { (name, size) -> InfoItem(prettyKey(name), size.formatCount()) })
             }
         }
     }
@@ -157,7 +171,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.statsContent(s: Threa
     )
     if (notes.isNotEmpty()) {
         item(key = "notes") {
-            SecurityCard {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
                 notes.forEach {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }

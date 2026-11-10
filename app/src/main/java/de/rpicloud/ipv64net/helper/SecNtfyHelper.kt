@@ -42,12 +42,24 @@ object SecNtfyHelper {
             PreferencesManager.saveString(appContext, "FCM_TOKEN", fcmToken)
 
             CoroutineScope(Dispatchers.IO).launch {
-                try {
+                val token = try {
                     register(appContext, apiUrl, appKey, fcmToken)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     e.printStackTrace()
+                    null
+                }
+                // Gerätekanal des aktiven Accounts nachziehen, auch bei unverändertem Token (ein früherer Abgleich kann
+                // offline fehlgeschlagen sein); ohne Änderung kostet das keine Anfrage. Best effort, eigener Fehlerpfad
+                if (token != null) {
+                    try {
+                        PushChannelRegistrar.syncTokenIfChanged(appContext, Hc2ChannelCache.peek())
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
             }
         }

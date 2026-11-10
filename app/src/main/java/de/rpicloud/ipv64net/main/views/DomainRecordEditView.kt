@@ -1,13 +1,9 @@
 package de.rpicloud.ipv64net.main.views
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,10 +30,14 @@ import de.rpicloud.ipv64net.helper.formatGermanTime
 import de.rpicloud.ipv64net.helper.ipv64Retrying
 import de.rpicloud.ipv64net.helper.rememberNavArg
 import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
 import de.rpicloud.ipv64net.main.views.common.InfoRow
+import de.rpicloud.ipv64net.main.views.common.ListGroup
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
+import de.rpicloud.ipv64net.main.views.common.FormSection
+import de.rpicloud.ipv64net.main.views.common.GroupRowPadding
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.rpicloud.ipv64net.models.isLocked
@@ -141,29 +141,28 @@ fun DomainRecordEditView(navController: NavHostController, mainPadding: PaddingV
         } else LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (orig != null) {
                 item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            InfoRow("Name", orig.fqdn ?: listOfNotNull(origPrefix.ifEmpty { null }, domain.ifEmpty { null }).joinToString("."))
-                            InfoRow("TTL", orig.ttl?.let { "$it s" })
-                            orig.state?.let { InfoRow("State", it.label) }
-                            if (orig.pendingDns == true) InfoRow("DNS", "Change is being propagated")
-                            orig.updatedAt?.let { InfoRow("Last update", it.formatGermanTime()) }
-                        }
+                    ListGroup {
+                        InfoRow("Name", orig.fqdn ?: listOfNotNull(origPrefix.ifEmpty { null }, domain.ifEmpty { null }).joinToString("."), GroupRowPadding)
+                        GroupDivider()
+                        InfoRow("TTL", orig.ttl?.let { "$it s" }, GroupRowPadding)
+                        orig.state?.let { GroupDivider(); InfoRow("State", it.label, GroupRowPadding) }
+                        if (orig.pendingDns == true) { GroupDivider(); InfoRow("DNS", "Change is being propagated", GroupRowPadding) }
+                        orig.updatedAt?.let { GroupDivider(); InfoRow("Last update", it.formatGermanTime(), GroupRowPadding) }
                     }
                 }
                 if (locked) {
                     item {
-                        ChannelFormSection("Locked") {
+                        FormSection("Locked") {
                             Text(orig.lockReason ?: "This record cannot be edited.", style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }
                 item {
-                    ChannelFormSection("Record") {
+                    FormSection("Record") {
                         FormDropdown(
                             label = "Type",
                             value = type,

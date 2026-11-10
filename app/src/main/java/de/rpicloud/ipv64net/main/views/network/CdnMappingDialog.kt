@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import de.rpicloud.ipv64net.main.views.common.ActionSheet
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import de.rpicloud.ipv64net.main.views.FormDropdown
 import de.rpicloud.ipv64net.main.views.FormNumberField
 import de.rpicloud.ipv64net.main.views.FormTextField
+import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.sr.ipv64.model.CreateCdnMappingRequest
 import de.sr.ipv64.model.CdnTransport
 import de.sr.ipv64.model.Record
@@ -78,54 +80,45 @@ fun CdnMappingDialog(
         )
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add port mapping") },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    "Forwards a public port of the CDN server to a port on your server.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                FormDropdown(
-                    label = "Target record",
-                    value = record,
-                    options = records,
-                    labelOf = { it.cdnTitle() },
-                    onSelect = { record = it }
-                )
-                FormNumberField(
-                    label = "Port on your server",
-                    value = targetPort,
-                    onValue = { targetPort = it; targetError = null },
-                    supporting = targetError
-                )
-                FormDropdown(
-                    label = "Protocol",
-                    value = transport,
-                    options = CdnTransport.entries.toList(),
-                    labelOf = { it.transportLabel() },
-                    onSelect = { transport = it }
-                )
-                FormNumberField(
-                    label = "Public port (optional)",
-                    value = listenPort,
-                    onValue = { listenPort = it; listenError = null },
-                    supporting = listenError
-                        ?: "${LISTEN_PORTS.first}-${LISTEN_PORTS.last}. A free port is assigned if empty."
-                )
-                FormTextField(
-                    label = "Name (optional)",
-                    value = name,
-                    onValue = { name = it }
-                )
-            }
-        },
-        confirmButton = { TextButton(onClick = { submit() }) { Text("Add") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+    ActionSheet(title = "Add port mapping", onDismiss = onDismiss, confirmLabel = "Add", onConfirm = { submit() }) {
+        Text(
+            "Forwards a public port of the CDN server to a port on your server.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        SectionHeader("Target")
+        FormDropdown(
+            label = "Target record",
+            value = record,
+            options = records,
+            labelOf = { it.cdnTitle() },
+            onSelect = { record = it }
+        )
+        FormNumberField(
+            label = "Port on your server",
+            value = targetPort,
+            onValue = { targetPort = it; targetError = null },
+            supporting = targetError
+        )
+        FormDropdown(
+            label = "Protocol",
+            value = transport,
+            options = CdnTransport.entries.toList(),
+            labelOf = { it.transportLabel() },
+            onSelect = { transport = it }
+        )
+        SectionHeader("Optional")
+        FormNumberField(
+            label = "Public port (optional)",
+            value = listenPort,
+            onValue = { listenPort = it; listenError = null },
+            supporting = listenError
+                ?: "${LISTEN_PORTS.first}-${LISTEN_PORTS.last}. A free port is assigned if empty."
+        )
+        FormTextField(
+            label = "Name (optional)",
+            value = name,
+            onValue = { name = it }
+        )
+    }
 }

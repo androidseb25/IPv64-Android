@@ -1,15 +1,15 @@
 package de.rpicloud.ipv64net.main.views.monitoring
 
-import androidx.compose.foundation.clickable
+import de.rpicloud.ipv64net.main.views.common.spacedItem
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Arrangement
+import de.rpicloud.ipv64net.main.views.common.groupedRows
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab as TabItem
 import androidx.compose.material3.Text
@@ -25,7 +25,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import kotlinx.coroutines.Job
 import de.rpicloud.ipv64net.helper.Hc2NavKeys
@@ -33,10 +32,12 @@ import de.rpicloud.ipv64net.helper.loadHc2Checks
 import de.rpicloud.ipv64net.helper.navigateWithArgs
 import de.rpicloud.ipv64net.main.views.HealthcheckEventItemView
 import de.rpicloud.ipv64net.main.views.HealthcheckIncidentItemView
+import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListGroup
 import de.rpicloud.ipv64net.main.views.common.RefreshableList
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
-import de.rpicloud.ipv64net.main.views.common.itemsOrEmpty
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
 import de.rpicloud.ipv64net.main.views.common.unknownCheckLabel
 import de.rpicloud.ipv64net.models.Tab
@@ -65,6 +66,7 @@ fun Hc2ActivityView(navController: NavHostController, mainPadding: PaddingValues
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var openOnly by rememberSaveable { mutableStateOf(startOpenOnly) }
     var eventsJob by remember { mutableStateOf<Job?>(null) }
+    var incidentsJob by remember { mutableStateOf<Job?>(null) }
 
     var names by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var incidents by remember { mutableStateOf<List<Hc2Incident>>(emptyList()) }
@@ -75,8 +77,10 @@ fun Hc2ActivityView(navController: NavHostController, mainPadding: PaddingValues
     var refreshing by remember { mutableStateOf(false) }
 
     fun loadIncidents(force: Boolean = false, pull: Boolean = false) {
+        // Eine ältere Antwort darf eine neuere (z. B. nach Umschalten von "Open only") nicht überschreiben
+        incidentsJob?.cancel()
         if (pull) refreshing = true
-        req.launch(
+        incidentsJob = req.launch(
             scope,
             spinner = if (pull) null else "Loading...",
             retry = { loadIncidents(true) },
@@ -133,8 +137,8 @@ fun Hc2ActivityView(navController: NavHostController, mainPadding: PaddingValues
                 TabItem(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Events") })
             }
             if (tab == 0) {
-                RefreshableList(refreshing, { loadIncidents(force = true, pull = true) }) {
-                    item(key = "filter") {
+                RefreshableList(refreshing, { loadIncidents(force = true, pull = true) }, verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    spacedItem(key = "filter") {
                         FilterChip(
                             selected = openOnly,
                             onClick = {
@@ -144,46 +148,27 @@ fun Hc2ActivityView(navController: NavHostController, mainPadding: PaddingValues
                             label = { Text("Open only") }
                         )
                     }
-                    itemsOrEmpty(
-                        incidents, incidentsLoaded,
-                        if (openOnly) "No open incidents." else "No incidents yet.",
-                        key = { "inc_" + (it.id ?: it.hashCode()) }
-                    ) { inc ->
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = inc.token != null) { openCheck(inc.token) },
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                nameOf(inc.token, inc.name),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 4.dp)
+                    if (incidentsLoaded && incidents.isEmpty()) {
+                        item(key = "empty_state") { EmptyState(if (openOnly) "No open incidents." else "No incidents yet.") }
+                    } else if (incidents.isNotEmpty()) {
+                        groupedRows(incidents, key = { inc -> "inc_" + (inc.id ?: inc) }, title = "Incidents") { inc ->
+                            HealthcheckIncidentItemView(
+                                inc, checkName = nameOf(inc.token, inc.name),
+                                onClick = if (inc.token != null) ({ openCheck(inc.token) }) else null
                             )
-                            HealthcheckIncidentItemView(inc)
                         }
                     }
                 }
             } else {
-                RefreshableList(refreshing, { loadEvents(more = false, pull = true) }) {
-                    itemsOrEmpty(
-                        events, eventsLoaded, "No events yet.",
-                        key = { "ev_" + (it.id ?: it.hashCode()) }
-                    ) { ev ->
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = ev.token != null) { openCheck(ev.token) },
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                nameOf(ev.token),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 4.dp)
+                RefreshableList(refreshing, { loadEvents(more = false, pull = true) }, verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    if (eventsLoaded && events.isEmpty()) {
+                        item(key = "empty_state") { EmptyState("No events yet.") }
+                    } else if (events.isNotEmpty()) {
+                        groupedRows(events, key = { ev -> "ev_" + (ev.id ?: ev) }, title = "Events") { ev ->
+                            HealthcheckEventItemView(
+                                ev, checkName = nameOf(ev.token),
+                                onClick = if (ev.token != null) ({ openCheck(ev.token) }) else null
                             )
-                            HealthcheckEventItemView(ev)
                         }
                     }
                     if (nextBefore != null) {

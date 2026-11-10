@@ -3,13 +3,14 @@ package de.rpicloud.ipv64net.main.views.network
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.net.InetAddresses
 import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.colorResource
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.TimedCache
+import de.rpicloud.ipv64net.models.isIpv4
+import de.rpicloud.ipv64net.models.isIpv6
 import de.sr.ipv64.model.Dns64Blocklist
 import de.sr.ipv64.model.Dns64Client
 import de.sr.ipv64.model.Dns64RuleAction
@@ -146,19 +147,7 @@ fun normalizeDns64Domain(input: String): String? {
 }
 
 // Nur Adress-Literale zulassen (keine Namen, damit nie eine DNS-Auflösung stattfindet)
-fun isIpLiteral(input: String): Boolean {
-    val t = input.trim()
-    if (t.isEmpty()) return false
-    if (t.all { it.isDigit() || it == '.' }) {
-        val parts = t.split('.')
-        return parts.size == 4 && parts.all { p -> p.isNotEmpty() && p.length <= 3 && (p.toIntOrNull() ?: 256) in 0..255 }
-    }
-    // Nur numerische Prüfung: InetAddress.getByName würde bei Teileingaben (z. B. "2001:") eine DNS-Auflösung versuchen
-    if (t.contains(':') && t.all { it.isLetterOrDigit() || it == ':' || it == '.' }) {
-        return InetAddresses.isNumericAddress(t)
-    }
-    return false
-}
+fun isIpLiteral(input: String): Boolean = input.trim().let { isIpv4(it) || isIpv6(it) }
 
 // =============================================================================================
 // Android Private DNS

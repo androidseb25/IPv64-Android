@@ -21,9 +21,16 @@ class QrCodeAnalyzer(
         ImageFormat.YUV_444_888,
     )
 
+    // Nur auf dem einen Analyse-Thread genutzt; Hints einmalig setzen (decodeWithState behält sie)
+    private val reader = MultiFormatReader().apply {
+        setHints(mapOf(DecodeHintType.POSSIBLE_FORMATS to arrayListOf(BarcodeFormat.QR_CODE)))
+    }
+
     override fun analyze(image: ImageProxy) {
-        if (image.format in supportedImageFormats) {
-            val bytes = image.planes.first().buffer.toByteArray()
+        image.use {
+            if (image.format !in supportedImageFormats) return
+            val plane = image.planes[0]
+            val bytes = plane.buffer.toLuminance(plane.rowStride, image.width, image.height)
             val source = PlanarYUVLuminanceSource(
                 bytes,
                 image.width,
@@ -36,28 +43,20 @@ class QrCodeAnalyzer(
             )
             val binaryBmp = BinaryBitmap(HybridBinarizer(source))
             try {
-                val result = MultiFormatReader().apply {
-                    setHints(
-                        mapOf(
-                            DecodeHintType.POSSIBLE_FORMATS to arrayListOf(
-                                BarcodeFormat.QR_CODE
-                            )
-                        )
-                    )
-                }.decode(binaryBmp)
-                onQrCodeScanned(result.text)
+                onQrCodeScanned(reader.decodeWithState(binaryBmp).text)
             } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                image.close()
+                // Kein QR-Code im Bild (ReaderException) oder ZXing-Fehler: pro Frame kein Logging, nie den Analyse-Thread beenden
             }
         }
     }
 
-    private fun ByteBuffer.toByteArray(): ByteArray {
-        rewind()
-        return ByteArray(remaining()).also {
-            get(it)
+    // Y-Ebene zeilenweise kopieren, da rowStride größer als die Bildbreite sein kann (Padding)
+    private fun ByteBuffer.toLuminance(rowStride: Int, width: Int, height: Int): ByteArray {
+        val data = ByteArray(width * height)
+        for (row in 0 until height) {
+            position(row * rowStride)
+            get(data, row * width, width)
         }
+        return data
     }
 }

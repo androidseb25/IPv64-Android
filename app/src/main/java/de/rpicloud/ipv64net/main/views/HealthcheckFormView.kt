@@ -8,12 +8,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -21,7 +21,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -38,12 +39,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.main.views.common.ActionSheet
 import de.rpicloud.ipv64net.helper.Hc2ChannelCache
 import de.rpicloud.ipv64net.helper.Hc2ChannelTypeCache
 import de.rpicloud.ipv64net.helper.Hc2CheckListCache
 import de.rpicloud.ipv64net.helper.Hc2MoveOutcome
 import de.rpicloud.ipv64net.helper.Hc2MoveRunner
-import de.rpicloud.ipv64net.helper.Hc2NavKeys
 import de.rpicloud.ipv64net.helper.IPv64Client
 import de.rpicloud.ipv64net.helper.IPv64Context
 import de.rpicloud.ipv64net.helper.ipv64Retrying
@@ -51,6 +52,7 @@ import de.rpicloud.ipv64net.helper.toError
 import de.rpicloud.ipv64net.helper.views.ErrorDialog
 import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
+import de.rpicloud.ipv64net.main.views.network.NodeListCache
 import de.rpicloud.ipv64net.models.RequestTyp
 import de.rpicloud.ipv64net.models.creatableOnline
 import de.rpicloud.ipv64net.models.label
@@ -65,6 +67,7 @@ import de.sr.ipv64.model.Hc2CheckType
 import de.sr.ipv64.model.Hc2CheckUpdate
 import de.sr.ipv64.model.Hc2Execution
 import de.sr.ipv64.model.Hc2IpMode
+import de.sr.ipv64.model.Hc2Node
 import de.sr.ipv64.model.Hc2Policy
 import kotlinx.coroutines.launch
 
@@ -75,6 +78,24 @@ private val CREATE_TYPE_ORDER = listOf(
     Hc2CheckType.TCP, Hc2CheckType.PORT, Hc2CheckType.CERT, Hc2CheckType.PUSH, Hc2CheckType.WHOIS,
     Hc2CheckType.DOCKER,
 )
+
+// Ausführungsfelder je Modus: Online → nur Standorte, Node → nur Node, Both → beides
+internal data class ExecutionFields(val execution: Hc2Execution, val nodeId: String?, val locations: List<String>?)
+
+internal fun executionFields(execution: Hc2Execution, nodeId: String?, locations: List<String>) = ExecutionFields(
+    execution,
+    nodeId.takeIf { execution != Hc2Execution.ONLINE },
+    locations.takeIf { execution != Hc2Execution.LOCAL },
+)
+
+// Braucht die Änderung checks.move()? (fehlendes altes execution gilt als Online)
+internal fun executionMoveNeeded(
+    oldExec: Hc2Execution?, oldNodeId: String?, oldLocations: List<String>,
+    exec: Hc2Execution, nodeId: String?, locations: List<String>,
+): Boolean =
+    (oldExec ?: Hc2Execution.ONLINE) != exec ||
+        (exec != Hc2Execution.ONLINE && nodeId != oldNodeId) ||
+        (exec != Hc2Execution.LOCAL && locations.toSet() != oldLocations.toSet())
 
 private fun formatDouble(d: Double?): String =
     if (d == null) "" else if (d % 1.0 == 0.0) d.toLong().toString() else d.toString()
@@ -148,6 +169,9 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
 
     var locations by remember { mutableStateOf<List<String>>(emptyList()) }
     var policy by remember { mutableStateOf<Hc2Policy?>(null) }
+    var execSel by remember { mutableStateOf(Hc2Execution.ONLINE) }
+    var nodeId by remember { mutableStateOf<String?>(null) }
+    var nodes by remember { mutableStateOf<List<Hc2Node>>(emptyList()) }
 
     var notifyDown by remember { mutableStateOf(true) }
     var notifyUp by remember { mutableStateOf(true) }
@@ -162,9 +186,18 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
     var description by remember { mutableStateOf("") }
     var createPaused by remember { mutableStateOf(false) }
 
-    // Existierende Checks, die auf einem Node laufen (local/both): Ausführung nur lesen
-    val isNodeCheck = detail?.execution.let { it == Hc2Execution.LOCAL || it == Hc2Execution.BOTH }
-    val online = !isNodeCheck
+    // Einklappbare Bereiche, standardmäßig zu; bei Validierungsfehlern darin automatisch geöffnet
+    var advOpen by rememberSaveable { mutableStateOf(false) }
+    var notifOpen by rememberSaveable { mutableStateOf(false) }
+
+    // Push-Checks laufen nie auf Standorten/Nodes
+    val execution = if (type == Hc2CheckType.PUSH) Hc2Execution.ONLINE else execSel
+    val online = execution == Hc2Execution.ONLINE
+    // Node-only-Typen (Docker): eine zusätzliche Online-Messung könnte den lokalen Container nicht prüfen
+    val nodeOnly = execution == Hc2Execution.LOCAL
+    val usesLocations = execution != Hc2Execution.LOCAL && type != Hc2CheckType.PUSH
+    // Gesamtregel: mehrere Standorte oder Standorte + Node
+    val policyApplies = (usesLocations && locations.size > 1) || execution == Hc2Execution.BOTH
     val maxLocations = account?.locationsPerCheck?.takeIf { it > 0 } ?: Int.MAX_VALUE
 
     fun showApiError(e: IPv64Exception, popAfter: Boolean = false) {
@@ -205,6 +238,8 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
         ipMode = d.ipMode
         locations = d.locations
         policy = d.policy
+        execSel = d.execution ?: Hc2Execution.ONLINE
+        nodeId = d.nodeId
         notifyDown = d.notifyDown ?: true
         notifyUp = d.notifyUp ?: true
         notifyDegraded = d.notifyDegraded ?: false
@@ -228,13 +263,20 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
             val client = IPv64Client.get(ctx)
             val acc = ipv64Retrying { client.hc2.account() }
             account = acc
-            channels = Hc2ChannelCache.get(ctx, force = true)
+            channels = Hc2ChannelCache.get(ctx)
             if (editToken != null) {
                 val d = ipv64Retrying { client.hc2.checks.get(editToken) }
                 detail = d
                 applyDetail(d)
             } else {
                 locations = acc.locations.mapNotNull { it.code }.take(1)
+            }
+            // Nodes nur laden, wenn es welche gibt oder der Check auf einem läuft; ein Fehler blockiert das Formular nicht
+            if ((acc.nodes?.total ?: 1) > 0 || execSel != Hc2Execution.ONLINE) {
+                try {
+                    nodes = NodeListCache.get(ctx) { it.nodes.list() }
+                } catch (_: IPv64Exception) {
+                }
             }
         } catch (e: IPv64Exception) {
             showApiError(e, popAfter = true)
@@ -252,28 +294,35 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
 
     // Gemeinsame Prüfung der Eingaben, Fehlertext oder null
     fun validate(): String? {
+        fun fail(msg: String, section: Int = 0): String {
+            if (section == 1) advOpen = true
+            if (section == 2) notifOpen = true
+            return msg
+        }
         if (name.isBlank()) return "Please enter a name."
         if (type != Hc2CheckType.PUSH && target.isBlank()) return "Please enter a target."
-        ps.validate(type, target)?.let { return it }
+        ps.validateIssue(type, target)?.let { (msg, adv) -> return fail(msg, if (adv) 1 else 0) }
         durationToSeconds(intervalValue, intervalUnit).let {
-            if (it == -1 || (it != null && it < 20)) return "Interval must be at least 20 seconds."
+            if (it == -1 || (it != null && it < 20)) return fail("Interval must be at least 20 seconds.", 1)
         }
         durationToSeconds(retryValue, retryUnit).let {
-            if (it == -1 || (it != null && it < 5)) return "Retry interval must be at least 5 seconds."
+            if (it == -1 || (it != null && it < 5)) return fail("Retry interval must be at least 5 seconds.", 1)
         }
         if (retries.isNotBlank() && retries.toIntOrNull()?.let { it in 0..10 } != true)
-            return "Retries must be between 0 and 10."
+            return fail("Retries must be between 0 and 10.", 1)
         if (stabilize.isNotBlank() && stabilize.toIntOrNull()?.let { it in 1..20 } != true)
-            return "Stabilize must be between 1 and 20."
+            return fail("Stabilize must be between 1 and 20.", 1)
         for ((label, v) in listOf("Timeout" to timeout, "Connect timeout" to connectTimeout)) {
-            if (v.isNotBlank() && (v.toDoubleOrNull()?.let { it > 0 } != true)) return "$label must be greater than 0."
+            if (v.isNotBlank() && (v.toDoubleOrNull()?.let { it > 0 } != true)) return fail("$label must be greater than 0.", 1)
         }
-        if (online && type != Hc2CheckType.PUSH) {
+        if (usesLocations && type != Hc2CheckType.PUSH) {
             if (locations.isEmpty()) return "Select at least one location."
             if (locations.size > maxLocations) return "Your plan allows up to $maxLocations locations per check."
         }
+        if (!online && nodeId == null) return "Select a node."
+        if (type == Hc2CheckType.DOCKER && !nodeOnly) return "Docker checks need a node. Set \"Where it runs\" to Node."
         if (!useDefaultChannels && selectedChannels.isEmpty())
-            return "Select at least one channel or use the default channels."
+            return fail("Select at least one channel or use the default channels.", 2)
         return null
     }
 
@@ -283,7 +332,7 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
     }
 
     fun saveCreate() {
-        val locs = if (type == Hc2CheckType.PUSH) null else locations
+        val ex = executionFields(execution, nodeId, locations)
         val input = Hc2CheckInput(
             name = name.trim(),
             type = type,
@@ -302,9 +351,10 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
             description = description.trim().ifBlank { null },
             paused = createPaused,
             critical = critical,
-            execution = Hc2Execution.ONLINE,
-            locations = locs,
-            policy = if ((locs?.size ?: 0) > 1) policy else null,
+            execution = ex.execution,
+            nodeId = ex.nodeId,
+            locations = if (type == Hc2CheckType.PUSH) null else ex.locations,
+            policy = if (policyApplies) policy else null,
             notifyDegraded = notifyDegraded,
             notifyDown = notifyDown,
             notifyUp = notifyUp,
@@ -342,7 +392,8 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
 
         val newTags = parseTags()
         val newChannels = if (useDefaultChannels) emptyList() else selectedChannels.sorted()
-        val locChanged = locations.toSet() != d.locations.toSet()
+        val moveNeeded = type != Hc2CheckType.PUSH &&
+            executionMoveNeeded(d.execution, d.nodeId, d.locations, execution, nodeId, locations)
         val paramsDirty = ps != iniPs
         return Hc2CheckUpdate(
             name = text(name, d.name),
@@ -361,7 +412,7 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
             description = text(description, d.description),
             critical = diff(critical, d.critical ?: false),
             // Standort/Execution nie im PATCH, das übernimmt checks.move()
-            policy = if (online && locations.size > 1 && !locChanged) diff(policy, d.policy) else null,
+            policy = if (policyApplies && !moveNeeded) diff(policy, d.policy) else null,
             notifyDegraded = diff(notifyDegraded, d.notifyDegraded ?: false),
             notifyDown = diff(notifyDown, d.notifyDown ?: true),
             notifyUp = diff(notifyUp, d.notifyUp ?: true),
@@ -372,9 +423,11 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
 
     fun saveEdit(d: Hc2CheckDetail, token: String) {
         val update = buildUpdate(d)
-        val moveNeeded = online && type != Hc2CheckType.PUSH && locations.toSet() != d.locations.toSet()
+        val moveNeeded = type != Hc2CheckType.PUSH &&
+            executionMoveNeeded(d.execution, d.nodeId, d.locations, execution, nodeId, locations)
         // Die Policy gehört zum neuen Standortsatz und wird nach dem Wechsel gesetzt
-        val policyAfterMove = if (moveNeeded && locations.size > 1 && policy != d.policy) policy else null
+        val policyAfterMove = if (moveNeeded && policyApplies && policy != d.policy) policy else null
+        val ex = executionFields(execution, nodeId, locations)
         saving = true
         spinnerText = "Saving healthcheck..."
         scope.launch {
@@ -388,8 +441,8 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
                     Hc2CheckListCache.invalidate()
                 }
                 if (moveNeeded) {
-                    spinnerText = "Testing new locations…"
-                    when (val outcome = Hc2MoveRunner.moveOnline(ctx, token, locations)) {
+                    spinnerText = "Testing the new setup…"
+                    when (val outcome = Hc2MoveRunner.move(ctx, token, ex.execution, ex.nodeId, ex.locations)) {
                         is Hc2MoveOutcome.Applied -> {
                             Hc2CheckListCache.invalidate()
                             if (policyAfterMove != null) {
@@ -402,16 +455,16 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
 
                         is Hc2MoveOutcome.Failed -> {
                             showMessage(
-                                "Locations not changed",
-                                "The test run failed, so the check keeps its old locations. Other changes were saved.\n\n" + outcome.message
+                                "Execution not changed",
+                                "The test run failed, so the check keeps its previous settings. Other changes were saved.\n\n" + outcome.message
                             )
                             return@launch
                         }
 
                         is Hc2MoveOutcome.TimedOut -> {
                             showMessage(
-                                "Location change pending",
-                                "The test run did not finish within 60 seconds. Check the healthcheck details later to see whether the locations were changed.",
+                                "Change pending",
+                                "The test run did not finish within 60 seconds. Check the healthcheck details later to see whether the change was applied.",
                                 popAfter = true
                             )
                             return@launch
@@ -476,8 +529,8 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
                 } else {
                     FormDropdown(
                         label = "Type", value = type, options = CREATE_TYPE_ORDER,
-                        labelOf = { if (it.creatableOnline) it.label else "${it.label} (requires a node)" },
-                        optionEnabled = { it.creatableOnline },
+                        labelOf = { if (it.creatableOnline || nodeOnly) it.label else "${it.label} (requires a node)" },
+                        optionEnabled = { it.creatableOnline || nodeOnly },
                         onSelect = {
                             if (it != type) {
                                 type = it
@@ -486,7 +539,10 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
                             }
                         }
                     )
-                    FormHint("Docker checks need a node. Create them at ipv64.net.")
+                    FormHint(
+                        if (nodes.isEmpty()) "Docker checks need a node. Link one under Infrastructure."
+                        else "Docker checks need a node. Set \"Where it runs\" to Node first."
+                    )
                 }
                 FormTextField("Name", name, { name = it })
                 if (type != Hc2CheckType.PUSH) {
@@ -498,46 +554,50 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
                     FormHint("A push URL is created with the check.")
                 }
 
-                // --- Typabhängige Parameter ---
-                if (type != Hc2CheckType.WHOIS && type != Hc2CheckType.DOCKER) {
-                    FormSectionTitle("${type.label} options")
-                    HealthcheckParamsEditor(type, ps, { ps = it }, online = online, isEdit = isEdit)
+                // --- Typabhängige Kernparameter ---
+                if (type.hasEssentialParams()) {
+                    HealthcheckParamsEditor(type, ps, { ps = it }, online = online, isEdit = isEdit, initial = iniPs)
                 }
-
-                // --- Zeitplan ---
-                FormSectionTitle("Schedule")
-                FormHint(
-                    if (isEdit) "Clearing a field keeps the current value; it cannot be reset to the default here."
-                    else "Empty fields use the server default."
-                )
-                DurationField(
-                    "Interval", intervalValue, intervalUnit,
-                    { intervalValue = it }, { intervalUnit = it }, supporting = "Minimum 20 seconds"
-                )
-                DurationField(
-                    "Retry interval", retryValue, retryUnit,
-                    { retryValue = it }, { retryUnit = it }, supporting = "Minimum 5 seconds"
-                )
-                FormNumberField("Retries (0-10)", retries, { retries = it })
-                FormNumberField("Timeout (seconds)", timeout, { timeout = it }, decimal = true)
-                FormNumberField("Connect timeout (seconds)", connectTimeout, { connectTimeout = it }, decimal = true)
-                FormNumberField(
-                    "Stabilize (1-20)", stabilize, { stabilize = it },
-                    supporting = "Measurements until the state changes"
-                )
-                FormSwitchRow("Invert result", invert, { invert = it })
-                FormDropdown(
-                    label = "IP mode", value = ipMode, options = (if (isEdit && detail?.ipMode != null) emptyList() else listOf(null)) + Hc2IpMode.entries,
-                    labelOf = { it?.value ?: "Default" }, onSelect = { ipMode = it }
-                )
 
                 // --- Ausführung ---
                 if (type != Hc2CheckType.PUSH) {
                     FormSectionTitle("Execution")
-                    if (isNodeCheck) {
-                        val nodeLabel = detail?.nodeName ?: detail?.nodeId ?: "a node"
-                        FormHint("Runs on node $nodeLabel. Change it at ipv64.net.")
-                    } else {
+                    if (nodes.isNotEmpty() || !online) {
+                        FormDropdown(
+                            label = "Where it runs", value = execution, options = Hc2Execution.entries,
+                            labelOf = {
+                                when (it) {
+                                    Hc2Execution.ONLINE -> "Online"
+                                    Hc2Execution.LOCAL -> "Node"
+                                    Hc2Execution.BOTH -> "Online + node"
+                                }
+                            },
+                            onSelect = {
+                                execSel = it
+                                if (it != Hc2Execution.ONLINE && nodeId == null) nodeId = nodes.singleOrNull()?.nodeId
+                            }
+                        )
+                    }
+                    if (!online) {
+                        val nodeIds = nodes.mapNotNull { it.nodeId }.let { ids -> nodeId?.let { (ids + it).distinct() } ?: ids }
+                        FormDropdown(
+                            label = "Node", value = nodeId, options = nodeIds,
+                            labelOf = { id ->
+                                if (id == null) "Select a node" else {
+                                    val n = nodes.firstOrNull { it.nodeId == id }
+                                    val name = n?.name?.takeIf { it.isNotBlank() }
+                                        ?: detail?.nodeName?.takeIf { id == detail?.nodeId } ?: id
+                                    when (n?.online) {
+                                        true -> "$name (online)"
+                                        false -> "$name (offline)"
+                                        null -> name
+                                    }
+                                }
+                            },
+                            onSelect = { nodeId = it }
+                        )
+                    }
+                    if (usesLocations) {
                         val limitText = if (maxLocations == Int.MAX_VALUE) "" else " (up to $maxLocations)"
                         Text("Locations$limitText", style = MaterialTheme.typography.bodyMedium)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -557,67 +617,108 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
                                 )
                             }
                         }
-                        if (locations.size > 1) {
+                    }
+                    if (isEdit) FormHint("Changing where the check runs or its locations runs a test measurement first.")
+                }
+
+                // --- Feinoptionen (eingeklappt) ---
+                FormAccordion("Advanced", advOpen, { advOpen = !advOpen }) {
+                    if (type.hasAdvancedParams()) {
+                        FormSectionTitle("${type.label} options")
+                        HealthcheckParamsEditor(
+                            type, ps, { ps = it }, online = online, isEdit = isEdit, initial = iniPs, advanced = true
+                        )
+                    }
+                    // --- Zeitplan ---
+                    FormSectionTitle("Schedule")
+                    FormHint(
+                        if (isEdit) "Clearing a field keeps the current value; it cannot be reset to the default here."
+                        else "Empty fields use the server default."
+                    )
+                    DurationField(
+                        "Interval", intervalValue, intervalUnit,
+                        { intervalValue = it }, { intervalUnit = it }, supporting = "Minimum 20 seconds"
+                    )
+                    DurationField(
+                        "Retry interval", retryValue, retryUnit,
+                        { retryValue = it }, { retryUnit = it }, supporting = "Minimum 5 seconds"
+                    )
+                    FormNumberField("Retries (0-10)", retries, { retries = it })
+                    FormNumberField("Timeout (seconds)", timeout, { timeout = it }, decimal = true)
+                    FormNumberField("Connect timeout (seconds)", connectTimeout, { connectTimeout = it }, decimal = true)
+                    FormNumberField(
+                        "Stabilize (1-20)", stabilize, { stabilize = it },
+                        supporting = "Measurements until the state changes"
+                    )
+                    FormSwitchRow("Invert result", invert, { invert = it })
+                    FormDropdown(
+                        label = "IP mode", value = ipMode, options = (if (isEdit && detail?.ipMode != null) emptyList() else listOf(null)) + Hc2IpMode.entries,
+                        labelOf = { it?.value ?: "Default" }, onSelect = { ipMode = it }
+                    )
+                    if (type != Hc2CheckType.PUSH) {
+                        if (policyApplies) {
+                            val unit = if (execution == Hc2Execution.BOTH) "sources" else "locations"
                             FormDropdown(
                                 label = "Overall rule", value = policy,
                                 options = (if (isEdit && detail?.policy != null) emptyList() else listOf(null)) + Hc2Policy.entries,
                                 labelOf = { p ->
                                     when (p) {
                                         null -> "Default"
-                                        Hc2Policy.ALL -> "Down if all locations fail"
-                                        Hc2Policy.ANY -> "Down if any location fails"
-                                        Hc2Policy.MAJORITY -> "Down if most locations fail"
+                                        Hc2Policy.ALL -> "Down if all $unit fail"
+                                        Hc2Policy.ANY -> "Down if any of the $unit fails"
+                                        Hc2Policy.MAJORITY -> "Down if most $unit fail"
                                     }
                                 },
                                 onSelect = { policy = it }
                             )
                         }
-                        if (isEdit) FormHint("Changing locations runs a test measurement first.")
                     }
                 }
+                FormAccordion("Notifications & organisation", notifOpen, { notifOpen = !notifOpen }) {
+                    // --- Benachrichtigungen ---
+                    FormSectionTitle("Notifications")
+                    FormSwitchRow("Notify when down", notifyDown, { notifyDown = it })
+                    FormSwitchRow("Notify when back up", notifyUp, { notifyUp = it })
+                    FormSwitchRow(
+                        "Notify when degraded", notifyDegraded, { notifyDegraded = it },
+                        supporting = "Also notify on partial failure"
+                    )
+                    FormSwitchRow(
+                        "Critical", critical, { critical = it },
+                        supporting = "Ignores quiet hours"
+                    )
+                    FormDropdown(
+                        label = "Repeat reminder",
+                        value = repeatMinutes,
+                        options = (REPEAT_OPTIONS + repeatMinutes).distinct().filter { !(isEdit && detail?.repeatMinutes != null && it == null) },
+                        labelOf = { if (it == null) "Default" else repeatMinutesLabel(it) },
+                        onSelect = { repeatMinutes = it }
+                    )
+                    FormSectionTitle("Channels")
+                    HealthcheckChannelPicker(
+                        useDefault = useDefaultChannels,
+                        onUseDefaultChange = { useDefaultChannels = it },
+                        channels = channels,
+                        types = channelTypes,
+                        selected = selectedChannels,
+                        onToggle = { id ->
+                            selectedChannels = if (id in selectedChannels) selectedChannels - id else selectedChannels + id
+                        }
+                    )
 
-                // --- Benachrichtigungen ---
-                FormSectionTitle("Notifications")
-                FormSwitchRow("Notify when down", notifyDown, { notifyDown = it })
-                FormSwitchRow("Notify when back up", notifyUp, { notifyUp = it })
-                FormSwitchRow(
-                    "Notify when degraded", notifyDegraded, { notifyDegraded = it },
-                    supporting = "Also notify on partial failure"
-                )
-                FormSwitchRow(
-                    "Critical", critical, { critical = it },
-                    supporting = "Ignores quiet hours"
-                )
-                FormDropdown(
-                    label = "Repeat reminder",
-                    value = repeatMinutes,
-                    options = (REPEAT_OPTIONS + repeatMinutes).distinct().filter { !(isEdit && detail?.repeatMinutes != null && it == null) },
-                    labelOf = { if (it == null) "Default" else repeatMinutesLabel(it) },
-                    onSelect = { repeatMinutes = it }
-                )
-                HealthcheckChannelPicker(
-                    useDefault = useDefaultChannels,
-                    onUseDefaultChange = { useDefaultChannels = it },
-                    channels = channels,
-                    types = channelTypes,
-                    selected = selectedChannels,
-                    onToggle = { id ->
-                        selectedChannels = if (id in selectedChannels) selectedChannels - id else selectedChannels + id
-                    }
-                )
-
-                // --- Organisation ---
-                FormSectionTitle("Organisation")
-                FormTextField("Tags", tags, { tags = it }, supporting = "Comma-separated")
-                FormTextField("Group", group, { group = it })
-                FormTextField(
-                    "Description", description, { description = it },
-                    singleLine = false, minLines = 2
-                )
-                if (!isEdit) FormSwitchRow(
-                    "Create paused", createPaused, { createPaused = it },
-                    supporting = "No measurements until you resume the check"
-                )
+                    // --- Organisation ---
+                    FormSectionTitle("Organisation")
+                    FormTextField("Tags", tags, { tags = it }, supporting = "Comma-separated")
+                    FormTextField("Group", group, { group = it })
+                    FormTextField(
+                        "Description", description, { description = it },
+                        singleLine = false, minLines = 2
+                    )
+                    if (!isEdit) FormSwitchRow(
+                        "Create paused", createPaused, { createPaused = it },
+                        supporting = "No measurements until you resume the check"
+                    )
+                }
             }
         }
     }
@@ -650,26 +751,16 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
     }
 
     pushUrl?.let { url ->
-        AlertDialog(
-            onDismissRequest = {},
-            icon = { Icon(painterResource(R.drawable.content_copy_24px), contentDescription = null) },
-            title = { Text("Push URL") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Call this URL from your job or service to report that it is alive.")
-                    Text(url, style = MaterialTheme.typography.bodySmall)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    pushUrl = null
-                    navController.popBackStack()
-                }) { Text("Done") }
-            },
-            dismissButton = {
-                TextButton(onClick = { copySensitive(ctx, url) }) { Text("Copy") }
-            }
-        )
+        val done = {
+            pushUrl = null
+            safePop()
+        }
+        // nicht wegwischbar, damit die URL nicht versehentlich verloren geht
+        ActionSheet(title = "Push URL", onDismiss = done, confirmLabel = "Done", onConfirm = done, dismissible = false) {
+            Text("Call this URL from your job or service to report that it is alive.")
+            Text(url, style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = { copySensitive(ctx, url) }, modifier = Modifier.fillMaxWidth()) { Text("Copy") }
+        }
     }
 }
 

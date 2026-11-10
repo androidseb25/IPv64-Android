@@ -14,10 +14,8 @@ import com.google.firebase.messaging.RemoteMessage
 import com.secntfy.android.SecNtfy
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.main.activity.MainActivity
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -26,9 +24,6 @@ import java.net.URL
  * Overrides [handleIntent] to intercept background notification payloads before FCM auto-displays ciphertext.
  */
 class SecNtfyMessagingService : FirebaseMessagingService() {
-
-    private val job = SupervisorJob()
-    private val scope = CoroutineScope(Dispatchers.IO + job)
 
     @Suppress("OverridingDeprecatedMember", "DEPRECATION")
     override fun onNewToken(token: String) {
@@ -74,16 +69,20 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
         )
     }
 
+    // Synchron (handleIntent/onMessageReceived laufen bereits im Hintergrund-Thread): Firebase beendet den Dienst
+    // direkt nach der Rückkehr, ein gestarteter Job ginge mit Empfangsbestätigung/Benachrichtigung verloren
     private fun processNotification(title: String, body: String, image: String, messageId: String) {
-        scope.launch(Dispatchers.IO) {
+        runBlocking {
             try {
                 val apiUrl = PreferencesManager.loadString(applicationContext, "SECNTFY_API_URL")
                 val appKey = PreferencesManager.loadString(applicationContext, "SECNTFY_APP_KEY")
 
                 val secntfy = SecNtfy.getInstance()
                 if (apiUrl.isNotEmpty() && appKey.isNotEmpty()) {
-                    // Gemeinsam mit der Registrierung serialisiert und nur einmal pro Prozess initialisiert
-                    SecNtfyHelper.ensureConfigured(applicationContext)
+                    // Gemeinsam mit der Registrierung serialisiert und nur einmal pro Prozess initialisiert.
+                    // Höchstens kurz warten (Firebase-Zeitfenster ~20 s): eine laufende Registrierung hält den Mutex
+                    // evtl. lange, hat den Singleton aber schon zu Beginn konfiguriert, Entschlüsseln klappt dann trotzdem
+                    withTimeoutOrNull(3_000) { SecNtfyHelper.ensureConfigured(applicationContext) }
                 }
 
                 val decryptedTitle = try {
@@ -104,7 +103,9 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
                     image
                 }
 
-                showNotification(decryptedTitle, decryptedBody, decryptedImage)
+                // Text sofort anzeigen; ein Bild wird erst nach der Empfangsbestätigung nachgeladen
+                val notificationId = System.currentTimeMillis().toInt()
+                val builder = showNotification(notificationId, decryptedTitle, decryptedBody)
 
                 if (messageId.isNotEmpty()) {
                     try {
@@ -115,17 +116,22 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
                         error.printStackTrace()
                     }
                 }
+
+                if (builder != null && decryptedImage.startsWith("https://")) {
+                    showImage(notificationId, builder, decryptedBody, decryptedImage)
+                }
             } catch (error: Exception) {
                 error.printStackTrace()
             }
         }
     }
 
-    private fun showNotification(title: String, message: String, imageUrl: String) {
+    // Zeigt die Textbenachrichtigung an; liefert den Builder für das spätere Bild, null ohne Berechtigung
+    private fun showNotification(notificationId: Int, title: String, message: String): NotificationCompat.Builder? {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            return
+            return null
         }
 
         val channelId = "secntfy_channel"
@@ -159,33 +165,33 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
+            // Nachträgliches Bild-Update ohne zweiten Ton/Vibration
+            .setOnlyAlertOnce(true)
 
-        if (imageUrl.startsWith("http")) {
-            try {
-                val url = URL(imageUrl)
-                val connection = url.openConnection() as HttpURLConnection
-                connection.doInput = true
-                connection.connect()
-                val bitmap = BitmapFactory.decodeStream(connection.inputStream)
-                if (bitmap != null) {
-                    builder.setStyle(
-                        NotificationCompat.BigPictureStyle()
-                            .bigPicture(bitmap)
-                            .setSummaryText(message)
-                            .bigLargeIcon(null as android.graphics.Bitmap?)
-                    )
-                    builder.setLargeIcon(bitmap)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-
-        notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
+        notificationManager.notify(notificationId, builder.build())
+        return builder
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        job.cancel()
+    // Bild mit kurzen Timeouts laden und die Benachrichtigung unter derselben ID erneut anzeigen; Fehler ignorieren
+    private fun showImage(notificationId: Int, builder: NotificationCompat.Builder, message: String, imageUrl: String) {
+        try {
+            val url = URL(imageUrl)
+            val connection = url.openConnection() as HttpURLConnection
+            connection.doInput = true
+            connection.connectTimeout = 4_000
+            connection.readTimeout = 4_000
+            connection.connect()
+            val bitmap = BitmapFactory.decodeStream(connection.inputStream) ?: return
+            builder.setStyle(
+                NotificationCompat.BigPictureStyle()
+                    .bigPicture(bitmap)
+                    .setSummaryText(message)
+                    .bigLargeIcon(null as android.graphics.Bitmap?)
+            )
+            builder.setLargeIcon(bitmap)
+            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(notificationId, builder.build())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }

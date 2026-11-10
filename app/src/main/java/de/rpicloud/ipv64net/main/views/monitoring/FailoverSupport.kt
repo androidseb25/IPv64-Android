@@ -2,7 +2,6 @@ package de.rpicloud.ipv64net.main.views.monitoring
 
 import android.content.Context
 import android.graphics.BitmapFactory
-import android.net.InetAddresses
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -33,6 +32,8 @@ import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.TimedCache
 import de.rpicloud.ipv64net.helper.toError
 import de.rpicloud.ipv64net.main.views.inlineText
+import de.rpicloud.ipv64net.models.isIpv4
+import de.rpicloud.ipv64net.models.isIpv6
 import de.sr.ipv64.IPv64Exception
 import de.sr.ipv64.model.FailoverMode
 import de.sr.ipv64.model.FailoverPolicy
@@ -48,7 +49,6 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.net.Inet6Address
 
 // =============================================================================================
 // Caches
@@ -179,21 +179,6 @@ val BLOCKED_RULE_RECORD_STATES = setOf(
 
 // Referenz für die API: Token (bleibt bei IP-Änderungen gleich), sonst ID
 fun Record.ref(): String? = token?.takeIf { it.isNotBlank() } ?: id?.toString()
-
-private val IPV4_REGEX = Regex("^(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}$")
-
-fun isIpv4(s: String): Boolean = IPV4_REGEX.matches(s)
-
-// Nur numerische Adressen: isNumericAddress löst nie per DNS auf (kein getByName)
-fun isIpv6(s: String): Boolean {
-    if (!s.contains(':') || s.length > 45) return false
-    if (!InetAddresses.isNumericAddress(s)) return false
-    return try {
-        InetAddresses.parseNumericAddress(s) is Inet6Address
-    } catch (e: IllegalArgumentException) {
-        false
-    }
-}
 
 // Fehlertext, wenn die Adresse nicht zur IP-Familie des Record-Typs passt (null = passt)
 fun ipFamilyError(recordType: de.sr.ipv64.model.RecordType?, ip: String): String? {

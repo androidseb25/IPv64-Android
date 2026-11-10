@@ -4,13 +4,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -30,15 +31,22 @@ import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.main.views.common.ActionSheet
+import de.rpicloud.ipv64net.main.views.common.ActionTile
 import de.rpicloud.ipv64net.helper.formatGermanTime
 import de.rpicloud.ipv64net.main.views.FormTextField
 import de.rpicloud.ipv64net.main.views.common.EmptyState
-import de.rpicloud.ipv64net.main.views.common.InfoRow
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.rpicloud.ipv64net.main.views.common.StatusChip
+import de.rpicloud.ipv64net.main.views.common.InfoGroup
+import de.rpicloud.ipv64net.main.views.common.InfoItem
+import de.rpicloud.ipv64net.main.views.common.InfoRows
+import de.rpicloud.ipv64net.main.views.common.GroupText
 import de.sr.ipv64.model.AccessListEntry
 import de.sr.ipv64.model.CdnDomain
 import de.sr.ipv64.model.CdnDomainDetail
@@ -55,46 +63,37 @@ import de.sr.ipv64.model.Record
 
 @Composable
 fun CdnHeaderCard(cdn: CdnDomain) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    cdn.displayName(),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                if (cdn.active == true) StatusChip("Active", colorResource(R.color.ipv64_green))
-                else StatusChip("Inactive", colorResource(R.color.ipv64_gray))
-            }
-            if (cdn.isBusy()) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                val tasks = cdn.pending.map { it.label() }.distinct()
-                Text(
-                    (if (tasks.isEmpty()) "Applying changes" else tasks.joinToString(", ")) +
-                            ". This usually takes a few seconds.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            val server = cdn.server
-            InfoRow(
-                "CDN server",
-                server?.let { listOfNotNull(it.name, it.hostname).filter { s -> s.isNotBlank() }.joinToString(" · ") }
+    val server = cdn.server
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ListGroup {
+            ListRow(
+                title = cdn.displayName(),
+                subtitle = server?.let { listOfNotNull(it.name, it.hostname).filter { s -> s.isNotBlank() }.joinToString(" · ") }
+                    ?.takeIf { it.isNotEmpty() },
+                trailing = {
+                    if (cdn.active == true) StatusChip("Active", colorResource(R.color.ipv64_green))
+                    else StatusChip("Inactive", colorResource(R.color.ipv64_gray))
+                }
             )
-            InfoRow("Server IPv4", server?.ipv4, copyable = true, monospace = true)
-            InfoRow("Server IPv6", server?.ipv6, copyable = true, monospace = true)
-            InfoRow("Records via CDN", if (cdn.dnsRecordsEnabled == true) "Yes" else "No")
-            InfoRow("Traffic", cdn.trafficMb.trafficText())
-            InfoRow("Added", cdn.createdAt?.formatGermanTime())
+            if (cdn.isBusy()) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                val tasks = cdn.pending.map { it.label() }.distinct()
+                GroupText(
+                    (if (tasks.isEmpty()) "Applying changes" else tasks.joinToString(", ")) +
+                            ". This usually takes a few seconds."
+                )
+            }
         }
+        InfoGroup(
+            title = "Details",
+            rows = listOf(
+                InfoItem("Server IPv4", server?.ipv4, copyable = true, monospace = true),
+                InfoItem("Server IPv6", server?.ipv6, copyable = true, monospace = true),
+                InfoItem("Records via CDN", if (cdn.dnsRecordsEnabled == true) "Yes" else "No"),
+                InfoItem("Traffic", cdn.trafficMb.trafficText()),
+                InfoItem("Added", cdn.createdAt?.formatGermanTime())
+            )
+        )
     }
 }
 
@@ -114,58 +113,47 @@ fun CdnProxyCard(
     val proxy = detail.proxy
     val state = proxy?.state
     val proxyOn = state == CdnProxyState.ON
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Reverse proxy", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                StatusChip(state.proxyLabel(), state.proxyColor())
-            }
-            InfoRow("Frontend", proxy?.frontend.frontendLabel())
-            InfoRow(
-                "Origin server",
-                proxy?.backend?.let { "${it.scheme.schemeLabel()} · port ${it.port ?: "–"}" }
+    val caching = proxy?.caching
+    val acl = proxy?.accessList
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ListGroup(title = "Reverse proxy") {
+            ListRow(title = "Status", trailing = { StatusChip(state.proxyLabel(), state.proxyColor()) })
+            GroupDivider()
+            InfoRows(
+                listOf(
+                    InfoItem("Frontend", proxy?.frontend.frontendLabel()),
+                    InfoItem("Origin server", proxy?.backend?.let { "${it.scheme.schemeLabel()} · port ${it.port ?: "–"}" }),
+                    InfoItem("WebSocket", if (proxy?.websocket == true) "On" else "Off"),
+                    InfoItem("Certificate", proxy?.certificate.certificateLabel()),
+                    InfoItem(
+                        "Cache",
+                        if (caching?.enabled == true) "On · ${caching.timeMinutes ?: "–"} min · ${caching.sizeMb ?: "–"} MB" else "Off"
+                    ),
+                    InfoItem("Access list", if (acl?.enabled == true) "On · ${acl.mode.accessModeLabel()}" else "Off")
+                )
             )
-            InfoRow("WebSocket", if (proxy?.websocket == true) "On" else "Off")
-            InfoRow("Certificate", proxy?.certificate.certificateLabel())
-            val caching = proxy?.caching
-            InfoRow(
-                "Cache",
-                if (caching?.enabled == true) "On · ${caching.timeMinutes ?: "–"} min · ${caching.sizeMb ?: "–"} MB" else "Off"
+        }
+        val canEnable = detail.dnsRecordsEnabled == true
+        if (!proxyOn && state != CdnProxyState.DISABLING && !canEnable) {
+            Text(
+                "Enable the CDN for at least one record before you switch the proxy on.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp)
             )
-            val acl = proxy?.accessList
-            InfoRow(
-                "Access list",
-                if (acl?.enabled == true) "On · ${acl.mode.accessModeLabel()}" else "Off"
-            )
-            val canEnable = detail.dnsRecordsEnabled == true
-            if (!proxyOn && state != CdnProxyState.DISABLING && !canEnable) {
-                Text(
-                    "Enable the CDN for at least one record before you switch the proxy on.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            if (proxyOn) {
+                ActionTile(R.drawable.cloud_off_24px, "Switch off", onToggleProxy, Modifier.weight(1f), enabled = enabled && !lockTasks)
+            } else {
+                ActionTile(
+                    R.drawable.cloud_24px, "Switch on", onToggleProxy, Modifier.weight(1f),
+                    enabled = enabled && !lockTasks && canEnable && state != CdnProxyState.DISABLING
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                if (proxyOn) {
-                    OutlinedButton(onClick = onToggleProxy, enabled = enabled && !lockTasks, modifier = Modifier.weight(1f)) {
-                        Text("Switch off")
-                    }
-                } else {
-                    Button(
-                        onClick = onToggleProxy,
-                        enabled = enabled && !lockTasks && canEnable && state != CdnProxyState.DISABLING,
-                        modifier = Modifier.weight(1f)
-                    ) { Text("Switch on") }
-                }
-                OutlinedButton(onClick = onSettings, enabled = enabled) { Text("Settings") }
-            }
+            ActionTile(R.drawable.tune_24px, "Settings", onSettings, Modifier.weight(1f), enabled = enabled)
             if (proxyOn && proxy?.frontend != CdnFrontend.HTTP) {
-                TextButton(onClick = onRenewCertificate, enabled = enabled && !lockTasks) { Text("Renew certificate") }
+                ActionTile(R.drawable.autorenew_24px, "Renew certificate", onRenewCertificate, Modifier.weight(1f), enabled = enabled && !lockTasks)
             }
         }
     }
@@ -186,94 +174,54 @@ fun CdnPortmapperCard(
 ) {
     val state = detail.portmapper?.state
     val isOn = state == CdnPortmapperState.ON
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Port mapper", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                StatusChip(state.portmapperLabel(), state.portmapperColor())
-            }
-            Text(
-                "Forwards public ports of the CDN server (TCP/UDP) to ports on your server.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+    val canEnable = detail.dnsRecordsEnabled == true
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ListGroup(title = "Port mapper") {
+            ListRow(
+                title = "Status",
+                subtitle = "Forwards public ports of the CDN server (TCP/UDP) to ports on your server.",
+                subtitleMaxLines = 3,
+                trailing = { StatusChip(state.portmapperLabel(), state.portmapperColor()) }
             )
-            val canEnable = detail.dnsRecordsEnabled == true
-            if (!isOn && !canEnable) {
-                Text(
-                    "Enable the CDN for at least one record before you switch the port mapper on.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+        }
+        if (!isOn && !canEnable) {
+            Text(
+                "Enable the CDN for at least one record before you switch the port mapper on.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            if (isOn) {
+                ActionTile(R.drawable.cloud_off_24px, "Switch off", onTogglePortmapper, Modifier.weight(1f), enabled = enabled && !lockTasks)
+            } else {
+                ActionTile(
+                    R.drawable.alt_route_24px, "Switch on", onTogglePortmapper, Modifier.weight(1f),
+                    enabled = enabled && !lockTasks && canEnable && state != CdnPortmapperState.DISABLING &&
+                            state != CdnPortmapperState.SUSPENDED_TRAFFIC_LIMIT
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                if (isOn) {
-                    OutlinedButton(onClick = onTogglePortmapper, enabled = enabled && !lockTasks, modifier = Modifier.weight(1f)) {
-                        Text("Switch off")
-                    }
-                } else {
-                    Button(
-                        onClick = onTogglePortmapper,
-                        enabled = enabled && !lockTasks && canEnable && state != CdnPortmapperState.DISABLING &&
-                                state != CdnPortmapperState.SUSPENDED_TRAFFIC_LIMIT,
-                        modifier = Modifier.weight(1f)
-                    ) { Text("Switch on") }
-                }
-                OutlinedButton(onClick = onAddMapping, enabled = enabled) {
-                    Icon(painter = painterResource(R.drawable.add_24px), contentDescription = null)
-                    Text("Mapping", modifier = Modifier.padding(start = 4.dp))
-                }
-            }
-            if (detail.mappings.isEmpty()) {
-                Text(
-                    "No port mappings.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            detail.mappings.forEach { mapping ->
-                MappingRow(mapping, enabled) { onDeleteMapping(mapping) }
-            }
+            ActionTile(R.drawable.add_24px, "Mapping", onAddMapping, Modifier.weight(1f), enabled = enabled)
         }
     }
 }
 
 @Composable
 private fun MappingRow(mapping: CdnMapping, enabled: Boolean, onDelete: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                mapping.name?.takeIf { it.isNotBlank() } ?: "Port mapping",
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                "Public port ${mapping.listenPort ?: "–"} → port ${mapping.targetPort ?: "–"} (${mapping.transport.transportLabel()})",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            mapping.fqdn?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+    ListRow(
+        title = mapping.name?.takeIf { it.isNotBlank() } ?: "Port mapping",
+        subtitle = listOfNotNull(
+            "Public port ${mapping.listenPort ?: "–"} → port ${mapping.targetPort ?: "–"} (${mapping.transport.transportLabel()})",
+            mapping.fqdn?.takeIf { it.isNotBlank() }
+        ).joinToString("\n"),
+        showChevron = false,
+        trailing = {
+            IconButton(onClick = onDelete, enabled = enabled) {
+                Icon(painter = painterResource(R.drawable.delete_24px), contentDescription = "Delete port mapping")
             }
         }
-        IconButton(onClick = onDelete, enabled = enabled) {
-            Icon(painter = painterResource(R.drawable.delete_24px), contentDescription = "Delete port mapping")
-        }
-    }
+    )
 }
 
 // =============================================================================================
@@ -291,10 +239,11 @@ private fun SectionToggleHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clickable(onClick = onToggle),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SectionHeader(title, modifier = Modifier.weight(1f))
+        SectionHeader(title, modifier = Modifier.weight(1f).padding(start = 4.dp))
         if (expanded && onRefresh != null) {
             IconButton(onClick = onRefresh, enabled = enabled) {
                 Icon(painter = painterResource(R.drawable.refresh_24px), contentDescription = "Refresh")
@@ -331,47 +280,37 @@ fun LazyListScope.cdnRecordsSection(
         item(key = "records_empty") { EmptyState("No A or AAAA records on this domain.") }
         return
     }
-    items(records.size, key = { "cdn_record_${records[it].id ?: it}" }) { index ->
-        val record = records[index]
-        CdnRecordRow(record, enabled, onEnable, onDisable)
+    item(key = "records_list") {
+        ListGroup {
+            records.forEachIndexed { index, record ->
+                if (index > 0) GroupDivider()
+                CdnRecordRow(record, enabled, onEnable, onDisable)
+            }
+        }
     }
 }
 
 @Composable
 private fun CdnRecordRow(record: Record, enabled: Boolean, onEnable: (Record) -> Unit, onDisable: (Record) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    ListRow(
+        title = record.cdnTitle(),
+        subtitle = record.content.orEmpty().takeIf { it.isNotEmpty() },
+        subtitleMaxLines = 1,
+        trailing = { StatusChip(record.cdnStateLabel(), record.cdnStateColor()) }
+    )
+    val canEnable = record.canEnableCdn()
+    val canDisable = !canEnable && record.canDisableCdn()
+    if (record.pendingDns == true || canEnable || canDisable) {
         Row(
             modifier = Modifier
-                .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    record.cdnTitle(),
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    record.content.orEmpty(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    StatusChip(record.cdnStateLabel(), record.cdnStateColor())
-                    if (record.pendingDns == true) StatusChip("DNS updating", colorResource(R.color.ipv64_orange))
-                }
-            }
-            when {
-                record.canEnableCdn() ->
-                    TextButton(onClick = { onEnable(record) }, enabled = enabled) { Text("Enable") }
-
-                record.canDisableCdn() ->
-                    TextButton(onClick = { onDisable(record) }, enabled = enabled) { Text("Disable") }
-            }
+            if (record.pendingDns == true) StatusChip("DNS updating", colorResource(R.color.ipv64_orange))
+            Spacer(Modifier.weight(1f))
+            if (canEnable) TextButton(onClick = { onEnable(record) }, enabled = enabled) { Text("Enable") }
+            if (canDisable) TextButton(onClick = { onDisable(record) }, enabled = enabled) { Text("Disable") }
         }
     }
 }
@@ -391,14 +330,14 @@ fun LazyListScope.cdnAccessListSection(
     }
     if (!expanded) return
     item(key = "acl_info") {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
             Text(
                 settingsText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f)
             )
-            TextButton(onClick = onAdd, enabled = enabled && entries != null) {
+            FilledTonalButton(onClick = onAdd, enabled = enabled && entries != null) {
                 Icon(painter = painterResource(R.drawable.add_24px), contentDescription = null)
                 Text("Add", modifier = Modifier.padding(start = 4.dp))
             }
@@ -414,24 +353,20 @@ fun LazyListScope.cdnAccessListSection(
         item(key = "acl_empty") { EmptyState("The access list is empty.") }
         return
     }
-    items(entries.size, key = { "acl_${entries[it].id ?: it}" }) { index ->
-        val entry = entries[index]
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .padding(start = 16.dp, top = 4.dp, bottom = 4.dp, end = 4.dp)
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    entry.label(),
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                    modifier = Modifier.weight(1f)
+    item(key = "acl_list") {
+        ListGroup {
+            entries.forEachIndexed { index, entry ->
+                if (index > 0) GroupDivider()
+                ListRow(
+                    title = entry.label(),
+                    monospaceTitle = true,
+                    showChevron = false,
+                    trailing = {
+                        IconButton(onClick = { onRemove(entry) }, enabled = enabled) {
+                            Icon(painter = painterResource(R.drawable.close_24px), contentDescription = "Remove entry")
+                        }
+                    }
                 )
-                IconButton(onClick = { onRemove(entry) }, enabled = enabled) {
-                    Icon(painter = painterResource(R.drawable.close_24px), contentDescription = "Remove entry")
-                }
             }
         }
     }
@@ -449,40 +384,37 @@ fun CdnEnableRecordDialog(
     onDismiss: () -> Unit
 ) {
     var mode by remember { mutableStateOf(CdnRecordMode.FULL) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Route through CDN") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(record.cdnTitle(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                CdnRecordMode.entries.forEach { option ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(selected = mode == option, role = Role.RadioButton) { mode = option },
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        RadioButton(selected = mode == option, onClick = null, modifier = Modifier.padding(top = 4.dp, end = 8.dp))
-                        Column {
-                            Text(option.modeTitle(), style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                option.modeDescription(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+    ActionSheet(
+        title = "Route through CDN",
+        onDismiss = onDismiss,
+        confirmLabel = "Enable",
+        onConfirm = { onConfirm(mode) }
+    ) {
+        Text(record.cdnTitle(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        CdnRecordMode.entries.forEach { option ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectable(selected = mode == option, role = Role.RadioButton) { mode = option },
+                verticalAlignment = Alignment.Top
+            ) {
+                RadioButton(selected = mode == option, onClick = null, modifier = Modifier.padding(top = 4.dp, end = 8.dp))
+                Column {
+                    Text(option.modeTitle(), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        option.modeDescription(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Text(
-                    "The DNS entry changes immediately. Visitors reach the CDN as soon as DNS caches expire.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
-        },
-        confirmButton = { TextButton(onClick = { onConfirm(mode) }) { Text("Enable") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+        }
+        Text(
+            "The DNS entry changes immediately. Visitors reach the CDN as soon as DNS caches expire.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 // IP oder Netz (CIDR) für die Zugriffsliste
@@ -490,24 +422,21 @@ fun CdnEnableRecordDialog(
 fun CdnAddAddressDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
     var address by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add to access list") },
-        text = {
-            FormTextField(
-                label = "IP address or network",
-                value = address,
-                onValue = { address = it; error = null },
-                placeholder = "203.0.113.0/24",
-                supporting = error ?: "IPv4 or IPv6, optionally with prefix length (CIDR)."
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val problem = addressError(address)
-                if (problem != null) error = problem else onConfirm(address.trim())
-            }) { Text("Add") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+    ActionSheet(
+        title = "Add to access list",
+        onDismiss = onDismiss,
+        confirmLabel = "Add",
+        onConfirm = {
+            val problem = addressError(address)
+            if (problem != null) error = problem else onConfirm(address.trim())
+        }
+    ) {
+        FormTextField(
+            label = "IP address or network",
+            value = address,
+            onValue = { address = it; error = null },
+            placeholder = "203.0.113.0/24",
+            supporting = error ?: "IPv4 or IPv6, optionally with prefix length (CIDR)."
+        )
+    }
 }

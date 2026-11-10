@@ -276,19 +276,23 @@ object PushChannelRegistrar {
      * Gleicht den gespeicherten Gerätekanal mit der Kanalliste ab und aktualisiert bei geändertem Ntfy-Token (anderer
      * Fingerprint) nur das Token-Feld per PATCH. Fehlt der Kanal in [channels] (evtl. veraltet), wird erst eine frische
      * Liste geladen; nur wenn er dort auch fehlt, wird er vergessen. True, wenn aktualisiert wurde. Wirft IPv64Exception.
+     * Ohne [channels] (null) und bei unverändertem Token wird keine Anfrage gestellt.
      */
-    suspend fun syncTokenIfChanged(ctx: Context, channels: List<Hc2Channel>): Boolean {
+    suspend fun syncTokenIfChanged(ctx: Context, channels: List<Hc2Channel>?): Boolean {
         val appContext = ctx.applicationContext
         val storedId = PushSetupStore.channelId(appContext) ?: return false
+        val token = SecNtfyHelper.storedNtfyToken(appContext)
+        val fp = token?.let { PushSetupStore.fingerprint(it) }
+        val upToDate = token == null || fp == PushSetupStore.tokenFingerprint(appContext)
+        // Vor der frischen Liste prüfen: ohne Liste zum Abgleich nichts zu tun
+        if (channels == null && upToDate) return false
         fun find(list: List<Hc2Channel>) = list.firstOrNull { it.id == storedId && it.type == HC2_CHANNEL_TYPE_APP }
-        val channel = find(channels) ?: find(Hc2ChannelCache.get(appContext, force = true))
+        val channel = channels?.let { find(it) } ?: find(Hc2ChannelCache.get(appContext, force = true))
         if (channel == null) {
             PushSetupStore.clearChannel(appContext)
             return false
         }
-        val token = SecNtfyHelper.storedNtfyToken(appContext) ?: return false
-        val fp = PushSetupStore.fingerprint(token)
-        if (fp == PushSetupStore.tokenFingerprint(appContext)) return false
+        if (upToDate || token == null || fp == null) return false
 
         val key = tokenKeyFor(channel, appType(Hc2ChannelTypeCache.get(appContext)))
         if (configHoldsToken(channel, key, token)) {

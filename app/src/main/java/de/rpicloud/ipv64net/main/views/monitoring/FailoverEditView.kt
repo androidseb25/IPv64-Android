@@ -27,7 +27,7 @@ import de.rpicloud.ipv64net.helper.IPv64Client
 import de.rpicloud.ipv64net.helper.NavKeys
 import de.rpicloud.ipv64net.helper.ipv64Retrying
 import de.rpicloud.ipv64net.helper.rememberNavArg
-import de.rpicloud.ipv64net.main.views.ChannelFormSection
+import de.rpicloud.ipv64net.main.views.common.FormSection
 import de.rpicloud.ipv64net.main.views.ChannelSwitchRow
 import de.rpicloud.ipv64net.main.views.FormDropdown
 import de.rpicloud.ipv64net.main.views.FormTextField
@@ -166,9 +166,9 @@ fun FailoverEditView(navController: NavHostController, mainPadding: PaddingValue
                 modifier = Modifier
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                ChannelFormSection("General") {
+                FormSection("General") {
                     FormTextField(
                         label = "Name",
                         value = name,
@@ -177,7 +177,7 @@ fun FailoverEditView(navController: NavHostController, mainPadding: PaddingValue
                     )
                 }
 
-                ChannelFormSection("Switching") {
+                FormSection("Switching") {
                     FormDropdown(
                         label = "Mode",
                         value = mode,
@@ -199,7 +199,7 @@ fun FailoverEditView(navController: NavHostController, mainPadding: PaddingValue
                     )
                 }
 
-                ChannelFormSection("Monitors") {
+                FormSection("Monitors") {
                     FormDropdown(
                         label = "Monitor logic",
                         value = linking,
@@ -216,7 +216,7 @@ fun FailoverEditView(navController: NavHostController, mainPadding: PaddingValue
                     )
                 }
 
-                ChannelFormSection("Notifications") {
+                FormSection("Notifications") {
                     ChannelSwitchRow(
                         title = "Send notifications",
                         checked = notifications,

@@ -1,14 +1,10 @@
 package de.rpicloud.ipv64net.main.views.network
 
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -16,7 +12,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -35,11 +30,14 @@ import de.rpicloud.ipv64net.helper.isPlanRestricted
 import de.rpicloud.ipv64net.helper.loadMe
 import de.rpicloud.ipv64net.helper.navigateWithArgs
 import de.rpicloud.ipv64net.helper.planRestrictionText
+import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.main.views.common.NotAvailableView
 import de.rpicloud.ipv64net.main.views.common.RefreshableList
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
-import de.rpicloud.ipv64net.main.views.common.itemsOrEmpty
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
@@ -133,36 +131,67 @@ fun Dns64View(navController: NavHostController, mainPadding: PaddingValues) {
         }
     ) {
         val unavailable = req.notAvailable
-        if (unavailable != null) {
+        val nodeIds = ConnectedNodes.ids
+        if (unavailable != null && nodeIds.isEmpty()) {
             NotAvailableView(PlanFeature.DNS64.label, unavailable)
         } else {
-            RefreshableList(refreshing = refreshing, onRefresh = { load(true, true) }) {
-                val limit = availability as? FeatureAvailability.LimitReached
-                if (limit != null) {
-                    item(key = "limit") {
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    "Plan limit reached (${limit.used} of ${limit.limit} clients)",
-                                    style = MaterialTheme.typography.titleSmall
-                                )
-                                Text(
-                                    "Delete a client or upgrade your plan to create more.",
-                                    style = MaterialTheme.typography.bodySmall
+            RefreshableList(
+                refreshing = refreshing,
+                onRefresh = { load(true, true) },
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Lokales DNS der direkt verbundenen Nodes (keine Anfrage hier; Details im Modul-Screen)
+                if (nodeIds.isNotEmpty()) {
+                    item(key = "local_dns") {
+                        ListGroup(title = "Local DNS") {
+                            nodeIds.forEachIndexed { i, id ->
+                                if (i > 0) GroupDivider()
+                                ListRow(
+                                    title = LocalNodeStore.name(ctx, id) ?: id,
+                                    subtitle = "Status, queries and top lists",
+                                    icon = R.drawable.dns_24px,
+                                    onClick = {
+                                        navController.navigateWithArgs(Tab.node_dns, NavKeys.SELECTED_NODE_ID to id)
+                                    }
                                 )
                             }
                         }
                     }
                 }
-                itemsOrEmpty(
-                    items = clients.orEmpty(),
-                    loaded = clients != null,
-                    emptyText = "No DNS64 clients yet. A client gives you a personal DNS resolver with optional filtering.",
-                    key = { it.id ?: it.hashCode() }
-                ) { client ->
-                    Dns64ItemView(client) {
-                        val token = it.id ?: return@Dns64ItemView
-                        navController.navigateWithArgs(Tab.dns64_details, NavKeys.SELECTED_DNS64_TOKEN to token)
+                if (unavailable != null) {
+                    item(key = "not_in_plan") {
+                        ListGroup(title = "DNS64 clients") { ListRow(title = "Not available on your plan", subtitle = unavailable, showChevron = false) }
+                    }
+                    return@RefreshableList
+                }
+                val limit = availability as? FeatureAvailability.LimitReached
+                if (limit != null) {
+                    item(key = "limit") {
+                        ListGroup {
+                            ListRow(
+                                title = "Plan limit reached (${limit.used} of ${limit.limit} clients)",
+                                subtitle = "Delete a client or upgrade your plan to create more.",
+                                subtitleMaxLines = 3
+                            )
+                        }
+                    }
+                }
+                val list = clients.orEmpty()
+                if (clients != null && list.isEmpty()) {
+                    item(key = "empty_state") {
+                        EmptyState("No DNS64 clients yet. A client gives you a personal DNS resolver with optional filtering.")
+                    }
+                } else if (list.isNotEmpty()) {
+                    item(key = "clients") {
+                        ListGroup {
+                            list.forEachIndexed { i, client ->
+                                if (i > 0) GroupDivider()
+                                Dns64Row(client) {
+                                    val token = it.id ?: return@Dns64Row
+                                    navController.navigateWithArgs(Tab.dns64_details, NavKeys.SELECTED_DNS64_TOKEN to token)
+                                }
+                            }
+                        }
                     }
                 }
             }

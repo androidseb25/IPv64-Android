@@ -34,8 +34,8 @@ import de.rpicloud.ipv64net.main.views.common.InfoRow
 enum class DomainAction { SETTINGS, DYNDNS, ROTATE_TOKEN, RESET, DELETE }
 
 /**
- * Überlaufmenü (⋮) der Domain-Detailansicht: Einstellungen, manuelles DynDNS-Update, Token erneuern,
- * Zurücksetzen und Löschen. [enabled] = false solange die Domain noch nicht geladen ist.
+ * Überlaufmenü (⋮) der Domain-Detailansicht: Token erneuern, Zurücksetzen und Löschen (Einstellungen und
+ * DynDNS-Update sind Buttons im Screen). [enabled] = false solange die Domain noch nicht geladen ist.
  */
 @Composable
 fun DomainActionsMenu(enabled: Boolean, onAction: (DomainAction) -> Unit) {
@@ -49,16 +49,6 @@ fun DomainActionsMenu(enabled: Boolean, onAction: (DomainAction) -> Unit) {
                 expanded = false
                 onAction(action)
             }
-            DropdownMenuItem(
-                text = { Text("Settings") },
-                leadingIcon = { Icon(painterResource(R.drawable.tune_24px), null) },
-                onClick = { pick(DomainAction.SETTINGS) }
-            )
-            DropdownMenuItem(
-                text = { Text("Manual DynDNS update") },
-                leadingIcon = { Icon(painterResource(R.drawable.autorenew_24px), null) },
-                onClick = { pick(DomainAction.DYNDNS) }
-            )
             DropdownMenuItem(
                 text = { Text("Rotate update token") },
                 leadingIcon = { Icon(painterResource(R.drawable.key_24px), null) },

@@ -12,9 +12,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.navigation.NavController
-import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.compose.runtime.collectAsState
+import androidx.navigation.NavGraph
 import de.rpicloud.ipv64net.R
-import de.rpicloud.ipv64net.helper.FeatureFlags
+import de.rpicloud.ipv64net.main.views.network.ConnectedNodes
 
 /**
  * Alle Navigationsziele. Die Route ist immer der Enum-Name (Tabs.getRoute(tab) == tab.name).
@@ -27,8 +28,6 @@ enum class Tab {
     // Domains
     domains,
     domain_details,
-    domain_new,
-    domain_new_dns,
     domain_settings,
     domain_record_edit,
 
@@ -38,6 +37,8 @@ enum class Tab {
     healthcheck_new,
     healthcheck_edit,
     healthcheck_details,
+    node_check_edit,
+    node_check_details,
     channels,
     channel_new,
     channel_edit,
@@ -59,13 +60,18 @@ enum class Tab {
     cdn,
     cdn_details,
     cdn_settings,
+    proxy64,
+    proxy_host_edit,
     dns64,
     dns64_details,
     nodes,
     node_details,
+    node_dns,
+    node_dns_log,
+    node_dns_records,
+    node_module,
 
-    // Security
-    security,
+    // Security (Unterseiten des Infrastructure-Tabs)
     threat_lookup,
     threat_stats,
     threat_watch,
@@ -86,24 +92,33 @@ enum class Tab {
 
 sealed class Tabs {
     companion object {
-        /** Tabs der unteren Leiste (Tab-Wurzeln); Network nur mit FeatureFlags.NETWORK_TAB. */
-        val tabList: List<Tab> = buildList {
-            add(Tab.domains)
-            add(Tab.monitoring)
-            if (FeatureFlags.NETWORK_TAB) add(Tab.network)
-            add(Tab.security)
-            add(Tab.settings)
-        }
+        /**
+         * Tabs der unteren Leiste (Tab-Wurzeln), abhängig von direkt verbundenen Nodes (Compose-State, daher
+         * recomponiert die Leiste beim Verbinden/Entfernen): CDN64 wird zu Proxy64, wenn eine Node Proxy64 aktiv
+         * hat; DNS64 nur, wenn auf einer verbundenen Node das DNS64-Modul eingeschaltet ist. Monitoring- und Infrastructure-Hub sind vorerst nicht erreichbar.
+         */
+        val tabList: List<Tab>
+            get() = listOfNotNull(
+                Tab.domains,
+                Tab.healthcheck,
+                if (ConnectedNodes.proxyActive) Tab.proxy64 else Tab.cdn,
+                Tab.dns64.takeIf { ConnectedNodes.dnsIds.isNotEmpty() },
+                Tab.settings
+            )
+
+        /** Alle Ziele, die je Tab-Wurzel sein können (unabhängig vom aktuellen Node-Zustand). */
+        val rootTabs: Set<Tab> = setOf(Tab.domains, Tab.healthcheck, Tab.cdn, Tab.proxy64, Tab.dns64, Tab.settings)
 
         @Composable
         fun RowScope.AddItem(
             tabBarItem: Tab,
             navController: NavController
         ) {
-            val navBackStackEntry by navController.currentBackStackEntryAsState()
-            val currentRoute = navBackStackEntry?.destination?.route
-            // Auch auf Unter-Screens den zugehörigen Tab hervorheben
-            val selected = parentTab(currentRoute) == tabBarItem
+            val backStack by navController.currentBackStack.collectAsState()
+            // Tab-Wurzel des Stacks (ein Tab-Tipp leert den Stack): so bleibt z. B. DNS64 → Local DNS markiert, auch
+            // wenn der Unter-Screen sonst zu More gehört; Proxy64 teilt sich den Platz mit CDN64
+            val rootRoute = backStack.firstOrNull { it.destination !is NavGraph }?.destination?.route
+            val selected = parentTab(rootRoute) == parentTab(getRoute(tabBarItem))
             NavigationBarItem(
                 selected = selected,
                 onClick = {
@@ -147,32 +162,34 @@ sealed class Tabs {
         fun parentTab(route: String?): Tab? = when (fromRoute(route) ?: return null) {
             Tab.welcome, Tab.login -> null
 
-            Tab.domains, Tab.domain_details, Tab.domain_new, Tab.domain_new_dns, Tab.domain_settings,
+            Tab.domains, Tab.domain_details, Tab.domain_settings,
             Tab.domain_record_edit -> Tab.domains
 
-            Tab.monitoring, Tab.healthcheck, Tab.healthcheck_new, Tab.healthcheck_edit, Tab.healthcheck_details,
-            Tab.channels, Tab.channel_new, Tab.channel_edit, Tab.push_setup, Tab.hc2_activity, Tab.maintenance,
-            Tab.maintenance_edit, Tab.hc2_settings, Tab.status_pages, Tab.status_page_edit, Tab.failover,
-            Tab.failover_details, Tab.failover_edit, Tab.offline_pages, Tab.offline_page_edit -> Tab.monitoring
+            Tab.healthcheck, Tab.healthcheck_new, Tab.healthcheck_edit, Tab.healthcheck_details, Tab.node_check_edit, Tab.node_check_details,
+            // Vorerst nicht über die Oberfläche erreichbar (Monitoring-Hub und seine Bereiche)
+            Tab.monitoring, Tab.hc2_activity, Tab.maintenance, Tab.maintenance_edit, Tab.status_pages,
+            Tab.status_page_edit, Tab.failover, Tab.failover_details, Tab.failover_edit, Tab.offline_pages,
+            Tab.offline_page_edit -> Tab.healthcheck
 
-            Tab.network, Tab.cdn, Tab.cdn_details, Tab.cdn_settings, Tab.dns64, Tab.dns64_details, Tab.nodes,
-            Tab.node_details -> Tab.network
+            // Proxy64 ersetzt CDN64 in der Leiste: gleicher Platz
+            Tab.cdn, Tab.cdn_details, Tab.cdn_settings, Tab.proxy64, Tab.proxy_host_edit -> Tab.cdn
 
-            Tab.security, Tab.threat_lookup, Tab.threat_stats, Tab.threat_watch, Tab.password_check,
-            Tab.honeypot -> Tab.security
+            Tab.dns64, Tab.dns64_details, Tab.node_dns, Tab.node_dns_log, Tab.node_dns_records -> Tab.dns64
 
+            // More: Account, Tools, Benachrichtigungen, Security und Nodes; network (Infrastructure-Hub) vorerst
+            // nicht erreichbar
             Tab.settings, Tab.account, Tab.account_details, Tab.account_edit, Tab.api_keys, Tab.account_links,
-            Tab.logs, Tab.my_ip, Tab.about -> Tab.settings
+            Tab.logs, Tab.my_ip, Tab.about, Tab.channels, Tab.channel_new, Tab.channel_edit, Tab.push_setup,
+            Tab.hc2_settings, Tab.network, Tab.nodes, Tab.node_details, Tab.node_module,
+            Tab.threat_lookup, Tab.threat_stats, Tab.threat_watch, Tab.password_check, Tab.honeypot -> Tab.settings
         }
 
         /** Titel bzw. Beschriftung eines Ziels (Tab-Leiste, TopAppBar, Hub-Einträge). */
         fun getLabel(tab: Tab): String = when (tab) {
             Tab.welcome -> "Welcome"
             Tab.login -> "Login"
-            Tab.domains -> "Domains"
+            Tab.domains -> "DynDNS"
             Tab.domain_details -> "Domain"
-            Tab.domain_new -> "New domain"
-            Tab.domain_new_dns -> "New DNS record"
             Tab.domain_settings -> "Domain settings"
             Tab.domain_record_edit -> "Edit record"
             Tab.monitoring -> "Monitoring"
@@ -180,6 +197,10 @@ sealed class Tabs {
             Tab.healthcheck_new -> "New healthcheck"
             Tab.healthcheck_edit -> "Edit healthcheck"
             Tab.healthcheck_details -> "Healthcheck"
+            Tab.node_check_edit -> "Edit node healthcheck"
+            Tab.node_check_details -> "Node healthcheck"
+            Tab.node_dns_log -> "Query log"
+            Tab.node_dns_records -> "Local DNS records"
             Tab.channels -> "Channels"
             Tab.channel_new -> "New channel"
             Tab.channel_edit -> "Edit channel"
@@ -195,16 +216,19 @@ sealed class Tabs {
             Tab.failover_edit -> "Edit failover policy"
             Tab.offline_pages -> "Offline pages"
             Tab.offline_page_edit -> "Offline page"
-            Tab.network -> "Network"
-            Tab.cdn -> "CDN"
+            Tab.network -> "Infrastructure"
+            Tab.cdn -> "CDN64"
             Tab.cdn_details -> "CDN domain"
             Tab.cdn_settings -> "CDN settings"
+            Tab.proxy64 -> "Proxy64"
+            Tab.proxy_host_edit -> "Proxy host"
             Tab.dns64 -> "DNS64"
             Tab.dns64_details -> "DNS64 client"
             Tab.nodes -> "Nodes"
             Tab.node_details -> "Node"
-            Tab.security -> "Security"
-            Tab.threat_lookup -> "IP lookup"
+            Tab.node_dns -> "Local DNS"
+            Tab.node_module -> "Module"
+            Tab.threat_lookup -> "IP lookup & My IP"
             Tab.threat_stats -> "Threat statistics"
             Tab.threat_watch -> "Early warning"
             Tab.password_check -> "Password check"
@@ -225,7 +249,6 @@ sealed class Tabs {
             Tab.domains -> R.drawable.domain_24px_fill
             Tab.monitoring -> R.drawable.monitor_heart_24px_fill
             Tab.network -> R.drawable.lan_24px_fill
-            Tab.security -> R.drawable.shield_24px_fill
             Tab.settings -> R.drawable.more_horiz_24px
             Tab.healthcheck -> R.drawable.ecg_heart_24px_fill
             Tab.channels -> R.drawable.notifications_unread_24px_fill
@@ -237,9 +260,8 @@ sealed class Tabs {
             Tab.domains -> R.drawable.domain_24px
             Tab.monitoring -> R.drawable.monitor_heart_24px
             Tab.network -> R.drawable.lan_24px
-            Tab.security -> R.drawable.shield_24px
             Tab.settings -> R.drawable.more_horiz_24px
-            Tab.healthcheck -> R.drawable.ecg_heart_24px
+            Tab.healthcheck, Tab.node_check_edit, Tab.node_check_details -> R.drawable.ecg_heart_24px
             Tab.channels, Tab.push_setup -> R.drawable.notifications_unread_24px
             Tab.hc2_activity -> R.drawable.history_24px
             Tab.maintenance, Tab.maintenance_edit -> R.drawable.construction_24px
@@ -248,8 +270,10 @@ sealed class Tabs {
             Tab.failover, Tab.failover_details, Tab.failover_edit -> R.drawable.alt_route_24px
             Tab.offline_pages, Tab.offline_page_edit -> R.drawable.web_asset_off_24px
             Tab.cdn, Tab.cdn_details, Tab.cdn_settings -> R.drawable.cloud_24px
-            Tab.dns64, Tab.dns64_details -> R.drawable.dns_24px
+            Tab.proxy64, Tab.proxy_host_edit -> R.drawable.swap_horiz_24px
+            Tab.dns64, Tab.dns64_details, Tab.node_dns -> R.drawable.dns_24px
             Tab.nodes, Tab.node_details -> R.drawable.hub_24px
+            Tab.node_module -> R.drawable.hub_24px
             Tab.threat_lookup -> R.drawable.search_24px
             Tab.threat_watch -> R.drawable.radar_24px
             Tab.threat_stats -> R.drawable.bar_chart_24px

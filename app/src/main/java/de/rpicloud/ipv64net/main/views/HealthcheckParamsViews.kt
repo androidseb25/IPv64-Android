@@ -1,5 +1,6 @@
 package de.rpicloud.ipv64net.main.views
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,11 +29,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.sr.ipv64.model.Hc2CheckParams
 import de.sr.ipv64.model.Hc2CheckType
 import de.sr.ipv64.model.Hc2DnsRecordType
@@ -70,7 +75,9 @@ fun secondsToDuration(seconds: Int?): Pair<String, Int> {
 fun durationToSeconds(value: String, unitIdx: Int): Int? {
     if (value.isBlank()) return null
     val n = value.trim().toLongOrNull() ?: return -1
-    val total = n * DURATION_UNITS[unitIdx.coerceIn(DURATION_UNITS.indices)].second
+    val unit = DURATION_UNITS[unitIdx.coerceIn(DURATION_UNITS.indices)].second
+    // Überlauf bei riesigen Eingaben darf die Bereichsprüfung nicht umgehen
+    val total = try { Math.multiplyExact(n, unit.toLong()) } catch (_: ArithmeticException) { return -1 }
     return if (total in 0..Int.MAX_VALUE) total.toInt() else -1
 }
 
@@ -250,12 +257,22 @@ fun ParamsState.toParams(type: Hc2CheckType, ini: ParamsState): Hc2CheckParams? 
     }
 }
 
-// Immer die komplette Header-Map senden (PATCH könnte params ersetzen). Unveränderte Werte, die wie
-// maskierte Platzhalter aussehen, werden weggelassen, damit nie ein Platzhalter als echter Wert gespeichert wird.
+// Header nur senden, wenn der Nutzer sie geändert hat (null = Server behält die gespeicherten).
+// Geänderte Header werden als komplette Map gesendet, unveränderte maskierte Platzhalter ("…", "****")
+// fehlen darin aber, damit nie ein Platzhalter als echter Wert gespeichert wird. Ersetzt der Server die Map,
+// gehen diese Header verloren; die UI weist deshalb darauf hin (headersNeedReentry).
 private fun ParamsState.headersForRequest(ini: ParamsState): Map<String, String>? {
-    if (headers.isEmpty() && ini.headers.isEmpty()) return null
     val old = ini.headers.toHeaderMap()
-    return headers.toHeaderMap().filter { (k, v) -> !(old[k] == v && v.looksMasked()) }
+    val now = headers.toHeaderMap()
+    if (now == old) return null
+    return now.filter { (k, v) -> !(old[k] == v && v.looksMasked()) }
+}
+
+// Header wurden geändert, obwohl noch unveränderte maskierte Werte enthalten sind
+internal fun ParamsState.headersNeedReentry(ini: ParamsState): Boolean {
+    val old = ini.headers.toHeaderMap()
+    val now = headers.toHeaderMap()
+    return now != old && now.any { (k, v) -> old[k] == v && v.looksMasked() }
 }
 
 private fun String.looksMasked(): Boolean =
@@ -269,52 +286,87 @@ fun Hc2JsonOp.needsValue(): Boolean = this != Hc2JsonOp.EXISTS && this != Hc2Jso
 private fun inRange(s: String, range: IntRange): Boolean = s.isBlank() || (int(s)?.let { it in range } ?: false)
 
 // Fehlertext oder null
-fun ParamsState.validate(type: Hc2CheckType, target: String): String? {
+fun ParamsState.validate(type: Hc2CheckType, target: String): String? = validateIssue(type, target)?.first
+
+// Fehlertext + ob das Feld im eingeklappten "Advanced"-Bereich liegt
+fun ParamsState.validateIssue(type: Hc2CheckType, target: String): Pair<String, Boolean>? {
     when (type) {
         Hc2CheckType.HTTP, Hc2CheckType.KEYWORD, Hc2CheckType.JSON -> {
-            if (!inRange(maxRedirects, 0..50)) return "Max redirects must be a number between 0 and 50."
-            if (!inRange(certMinDays, 0..3650)) return "Certificate minimum days must be between 0 and 3650."
-            if (headers.any { it.key.isBlank() && it.value.isNotBlank() }) return "Every header needs a name."
-            if (type == Hc2CheckType.KEYWORD && keyword.isBlank()) return "Please enter a keyword."
+            if (followRedirects && !inRange(maxRedirects, 0..50)) return "Max redirects must be a number between 0 and 50." to true
+            if (!inRange(certMinDays, 0..3650)) return "Certificate minimum days must be between 0 and 3650." to true
+            if (headers.any { it.key.isBlank() && it.value.isNotBlank() }) return "Every header needs a name." to true
+            if (type == Hc2CheckType.KEYWORD && keyword.isBlank()) return "Please enter a keyword." to false
             if (type == Hc2CheckType.JSON) {
-                if (jsonRules.isEmpty()) return "Add at least one JSON rule."
-                if (jsonRules.size > 10) return "At most 10 JSON rules are allowed."
-                if (jsonRules.any { it.path.isBlank() }) return "Every JSON rule needs a path."
-                if (jsonRules.any { it.op.needsValue() && it.value.isBlank() }) return "Every JSON rule except exists / not exists needs a value."
+                if (jsonRules.isEmpty()) return "Add at least one JSON rule." to false
+                if (jsonRules.size > 10) return "At most 10 JSON rules are allowed." to false
+                if (jsonRules.any { it.path.isBlank() }) return "Every JSON rule needs a path." to false
+                if (jsonRules.any { it.op.needsValue() && it.value.isBlank() }) return "Every JSON rule except exists / not exists needs a value." to false
             }
         }
 
         Hc2CheckType.DNS -> {
-            if (resolver == Hc2DnsResolver.SERVER && server.isBlank()) return "Please enter a DNS server."
-            if (!inRange(minTtl, 0..Int.MAX_VALUE)) return "Minimum TTL must be a number of 0 or more."
+            if (resolver == Hc2DnsResolver.SERVER && server.isBlank()) return "Please enter a DNS server." to true
+            if (!inRange(minTtl, 0..Int.MAX_VALUE)) return "Minimum TTL must be a number of 0 or more." to true
             if ((expect == "contains" || expect == "equals" || expect == "regex") && values.isBlank())
-                return "Please enter the expected value(s)."
+                return "Please enter the expected value(s)." to true
         }
 
         Hc2CheckType.ICMP -> {
-            if (!inRange(count, 1..20)) return "Packet count must be between 1 and 20."
-            if (!inRange(maxLossPercent, 0..100)) return "Max packet loss must be between 0 and 100."
-            if (!inRange(maxLatencyMs, 0..Int.MAX_VALUE)) return "Max latency must be a number of 0 or more."
+            if (!inRange(count, 1..20)) return "Packet count must be between 1 and 20." to true
+            if (!inRange(maxLossPercent, 0..100)) return "Max packet loss must be between 0 and 100." to true
+            if (!inRange(maxLatencyMs, 0..Int.MAX_VALUE)) return "Max latency must be a number of 0 or more." to true
         }
 
         Hc2CheckType.TCP, Hc2CheckType.PORT -> {
-            if (!inRange(port, 1..65535)) return "Port must be between 1 and 65535."
-            if (port.isBlank() && !target.contains(":")) return "Please enter a port or use host:port as target."
+            if (!inRange(port, 1..65535)) return "Port must be between 1 and 65535." to false
+            if (port.isBlank() && !target.contains(":")) return "Please enter a port or use host:port as target." to false
         }
 
         Hc2CheckType.CERT -> {
-            if (!inRange(port, 1..65535)) return "Port must be between 1 and 65535."
-            if (!inRange(minDays, 0..3650)) return "Minimum days must be between 0 and 3650."
+            if (!inRange(port, 1..65535)) return "Port must be between 1 and 65535." to true
+            if (!inRange(minDays, 0..3650)) return "Minimum days must be between 0 and 3650." to true
         }
 
         Hc2CheckType.PUSH -> {
-            if (durationToSeconds(periodValue, periodUnit) == -1) return "Expected interval is not a valid number."
-            if (durationToSeconds(graceValue, graceUnit) == -1) return "Grace period is not a valid number."
+            if (durationToSeconds(periodValue, periodUnit) == -1) return "Expected interval is not a valid number." to false
+            if (durationToSeconds(graceValue, graceUnit) == -1) return "Grace period is not a valid number." to false
         }
 
         Hc2CheckType.WHOIS, Hc2CheckType.DOCKER -> {}
     }
     return null
+}
+
+// Typen mit Pflicht-/Kernparametern bzw. mit Feinoptionen (Rest des Formulars: Advanced)
+fun Hc2CheckType.hasEssentialParams() = this in listOf(
+    Hc2CheckType.KEYWORD, Hc2CheckType.JSON, Hc2CheckType.DNS, Hc2CheckType.TCP, Hc2CheckType.PORT, Hc2CheckType.PUSH,
+)
+
+fun Hc2CheckType.hasAdvancedParams() =
+    this != Hc2CheckType.WHOIS && this != Hc2CheckType.DOCKER && this != Hc2CheckType.PUSH
+
+// Einklappbarer Bereich (standardmäßig zu); Zustand liegt beim Aufrufer
+@Composable
+internal fun FormAccordion(title: String, expanded: Boolean, onToggle: () -> Unit, content: @Composable () -> Unit) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button, onClick = onToggle)
+                .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
+                .padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Icon(
+                painterResource(if (expanded) R.drawable.expand_less_24px else R.drawable.expand_more_24px),
+                contentDescription = null
+            )
+        }
+        AnimatedVisibility(expanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -323,12 +375,7 @@ fun ParamsState.validate(type: Hc2CheckType, target: String): String? {
 
 @Composable
 internal fun FormSectionTitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 8.dp)
-    )
+    SectionHeader(text, Modifier.padding(top = 8.dp))
 }
 
 @Composable
@@ -403,7 +450,13 @@ internal fun FormNumberField(
     FormTextField(
         label = label,
         value = value,
-        onValue = { s -> onValue(s.filter { it.isDigit() || (decimal && it == '.') }) },
+        onValue = { s ->
+            var dot = false
+            // Dezimalkomma wie Punkt behandeln, höchstens ein Trennzeichen
+            onValue((if (decimal) s.replace(',', '.') else s).filter {
+                it.isDigit() || (decimal && it == '.' && !dot).also { ok -> if (ok) dot = true }
+            })
+        },
         modifier = modifier,
         supporting = supporting,
         keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,
@@ -495,12 +548,15 @@ fun HealthcheckParamsEditor(
     onChange: (ParamsState) -> Unit,
     online: Boolean,
     isEdit: Boolean = false,
+    initial: ParamsState? = null,
+    advanced: Boolean = false,
 ) {
+    // advanced=false: nur die Kernfelder des Typs, true: die übrigen Feinoptionen
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         when (type) {
-            Hc2CheckType.HTTP, Hc2CheckType.KEYWORD, Hc2CheckType.JSON -> HttpParams(type, state, onChange, isEdit)
-            Hc2CheckType.DNS -> DnsParams(state, onChange, online)
-            Hc2CheckType.ICMP -> {
+            Hc2CheckType.HTTP, Hc2CheckType.KEYWORD, Hc2CheckType.JSON -> HttpParams(type, state, onChange, isEdit, initial, advanced)
+            Hc2CheckType.DNS -> DnsParams(state, onChange, online, advanced)
+            Hc2CheckType.ICMP -> if (advanced) {
                 FormNumberField("Packets (1-20)", state.count, { onChange(state.copy(count = it)) })
                 FormNumberField(
                     "Max packet loss (%)", state.maxLossPercent,
@@ -512,18 +568,19 @@ fun HealthcheckParamsEditor(
             }
 
             Hc2CheckType.TCP -> {
-                FormNumberField(
+                if (!advanced) FormNumberField(
                     "Port", state.port, { onChange(state.copy(port = it)) },
                     supporting = "Or use host:port as target"
-                )
+                ) else {
                 FormTextField("Data to send", state.send, { onChange(state.copy(send = it)) })
                 FormTextField(
                     "Expected response start", state.expect, { onChange(state.copy(expect = it)) }
                 )
                 FormSwitchRow("Use TLS", state.tls, { onChange(state.copy(tls = it)) })
+                }
             }
 
-            Hc2CheckType.PORT -> {
+            Hc2CheckType.PORT -> if (!advanced) {
                 FormNumberField(
                     "Port", state.port, { onChange(state.copy(port = it)) },
                     supporting = "Or use host:port as target"
@@ -537,7 +594,7 @@ fun HealthcheckParamsEditor(
                 )
             }
 
-            Hc2CheckType.CERT -> {
+            Hc2CheckType.CERT -> if (advanced) {
                 FormNumberField("Port", state.port, { onChange(state.copy(port = it)) }, supporting = "Default: 443")
                 FormNumberField(
                     "Minimum remaining days", state.minDays, { onChange(state.copy(minDays = it)) }
@@ -548,7 +605,7 @@ fun HealthcheckParamsEditor(
                     "Skip hostname validation", state.skipHostname, { onChange(state.copy(skipHostname = it)) })
             }
 
-            Hc2CheckType.PUSH -> {
+            Hc2CheckType.PUSH -> if (!advanced) {
                 DurationField(
                     "Expected interval", state.periodValue, state.periodUnit,
                     { onChange(state.copy(periodValue = it)) }, { onChange(state.copy(periodUnit = it)) },
@@ -567,7 +624,15 @@ fun HealthcheckParamsEditor(
 }
 
 @Composable
-private fun HttpParams(type: Hc2CheckType, s: ParamsState, onChange: (ParamsState) -> Unit, isEdit: Boolean) {
+private fun HttpParams(
+    type: Hc2CheckType, s: ParamsState, onChange: (ParamsState) -> Unit, isEdit: Boolean, initial: ParamsState?,
+    advanced: Boolean,
+) {
+    if (!advanced) {
+        if (type == Hc2CheckType.KEYWORD) FormTextField("Keyword", s.keyword, { onChange(s.copy(keyword = it)) })
+        if (type == Hc2CheckType.JSON) JsonRulesEditor(s, onChange)
+        return
+    }
     var showSecrets by remember { mutableStateOf(false) }
     FormDropdown(
         label = "Method",
@@ -581,14 +646,10 @@ private fun HttpParams(type: Hc2CheckType, s: ParamsState, onChange: (ParamsStat
         placeholder = "200-299,301"
     )
     if (type == Hc2CheckType.KEYWORD) {
-        FormTextField("Keyword", s.keyword, { onChange(s.copy(keyword = it)) })
         FormSwitchRow(
             "Keyword must be absent", s.keywordAbsent, { onChange(s.copy(keywordAbsent = it)) },
             supporting = "The check fails if the text is found"
         )
-    }
-    if (type == Hc2CheckType.JSON) {
-        JsonRulesEditor(s, onChange)
     }
     FormSwitchRow("Follow redirects", s.followRedirects, { onChange(s.copy(followRedirects = it)) })
     if (s.followRedirects) FormNumberField(
@@ -616,6 +677,11 @@ private fun HttpParams(type: Hc2CheckType, s: ParamsState, onChange: (ParamsStat
             )
         }
     }
+    if (isEdit && initial != null && s.headersNeedReentry(initial)) Text(
+        "Masked header values can't be sent back; re-enter them when you change headers",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
     s.headers.forEachIndexed { idx, row ->
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
             FormTextField(
@@ -697,11 +763,14 @@ private fun JsonRulesEditor(s: ParamsState, onChange: (ParamsState) -> Unit) {
 }
 
 @Composable
-private fun DnsParams(s: ParamsState, onChange: (ParamsState) -> Unit, online: Boolean) {
-    FormDropdown(
-        label = "Record type", value = s.recordType, options = Hc2DnsRecordType.entries,
-        labelOf = { it.value }, onSelect = { onChange(s.copy(recordType = it)) }
-    )
+private fun DnsParams(s: ParamsState, onChange: (ParamsState) -> Unit, online: Boolean, advanced: Boolean) {
+    if (!advanced) {
+        FormDropdown(
+            label = "Record type", value = s.recordType, options = Hc2DnsRecordType.entries,
+            labelOf = { it.value }, onSelect = { onChange(s.copy(recordType = it)) }
+        )
+        return
+    }
     FormDropdown(
         label = "Resolver", value = s.resolver, options = Hc2DnsResolver.entries,
         labelOf = { it.value.replaceFirstChar { c -> c.uppercase() } },

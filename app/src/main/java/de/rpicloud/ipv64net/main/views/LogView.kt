@@ -35,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -45,18 +44,20 @@ import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.IPv64Client
 import de.rpicloud.ipv64net.helper.ipv64Request
-import de.rpicloud.ipv64net.helper.toError
-import de.rpicloud.ipv64net.helper.views.ErrorDialog
-import de.rpicloud.ipv64net.helper.views.RequestDialogs
-import de.rpicloud.ipv64net.helper.views.SpinnerDialog
-import de.rpicloud.ipv64net.models.RequestTyp
+import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.RequestStateHost
+import de.rpicloud.ipv64net.main.views.common.rememberRequestState
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.sr.ipv64.IPv64Exception
 import de.sr.ipv64.model.LogEntry
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
+
+// Einträge pro Gruppe in der Liste
+private const val LOG_CHUNK = 10
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,14 +65,7 @@ fun LogView(navController: NavHostController, mainPadding: PaddingValues) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    var showLoadingDialog by remember { mutableStateOf(false) }
-    var showDialog by remember { mutableStateOf(false) }
-    var errorDialogTitle by remember { mutableStateOf("") }
-    var errorDialogText by remember { mutableStateOf("") }
-    var errorDialogButtonText by remember { mutableIntStateOf(android.R.string.ok) }
-
-    var showRequestDialog by remember { mutableStateOf(false) }
-    var requestType by remember { mutableStateOf(RequestTyp.UnAuthorized) }
+    val req = rememberRequestState()
 
     // Geladene Einträge (neueste zuerst), nextBefore ist der Cursor für die nächste Seite
     val logList = remember { mutableStateListOf<LogEntry>() }
@@ -82,19 +76,32 @@ fun LogView(navController: NavHostController, mainPadding: PaddingValues) {
     var pagingFailed by remember { mutableStateOf(false) }
     var loadJob by remember { mutableStateOf<Job?>(null) }
 
+    // Erste Seite erfolgreich geladen bzw. fehlgeschlagen (für Leer- und Fehlerzustand)
+    var loaded by remember { mutableStateOf(false) }
+    var firstPageFailed by remember { mutableStateOf(false) }
+    // Zählt die Abrufe; nur der aktuelle setzt die Anzeige zurück
+    var loadGen by remember { mutableIntStateOf(0) }
+
     // reset = true lädt die erste Seite neu, sonst wird die nächste Seite angehängt
     fun loadPage(reset: Boolean) {
         // Keine parallelen Seitenabrufe und kein Nachladen am Ende der Liste
         if (!reset && (pagingFailed || loadJob?.isActive == true || nextBefore == null)) return
         loadJob?.cancel()
         val before = if (reset) null else nextBefore
+        val gen = ++loadGen
         if (reset) {
             pagingFailed = false
-            showLoadingDialog = true
+            firstPageFailed = false
         } else {
             isLoadingMore = true
         }
-        val job = scope.launch {
+        loadJob = req.launch(
+            scope,
+            spinner = if (reset) "Loading..." else null,
+            retry = { if (reset) loadPage(true) else { pagingFailed = false; loadPage(false) } },
+            // Nur der aktuelle Abruf setzt die Anzeige zurück
+            onFinally = { if (gen == loadGen) isLoadingMore = false }
+        ) {
             try {
                 val page = ipv64Request { IPv64Client.get(ctx).account.logs(before = before) }
                 if (reset) logList.clear()
@@ -104,28 +111,14 @@ fun LogView(navController: NavHostController, mainPadding: PaddingValues) {
                 nextBefore = page.meta?.nextBefore
                 retentionDays = page.meta?.retentionDays ?: retentionDays
                 pagingFailed = false
+                loaded = true
             } catch (e: IPv64Exception) {
-                if (!reset) pagingFailed = true
-                println(e.message)
-                val error = e.toError()
-                if (error.requestType != null) {
-                    requestType = error.requestType
-                    showRequestDialog = true
-                } else {
-                    errorDialogTitle = error.title
-                    errorDialogText = error.text
-                    errorDialogButtonText = R.string.retry
-                    showDialog = true
-                }
-            } finally {
-                // Nur der aktuelle Abruf setzt die Anzeige zurück
-                if (loadJob === currentCoroutineContext()[Job]) {
-                    showLoadingDialog = false
-                    isLoadingMore = false
-                }
+                // Abgelöste Anfrage: keinen Fehler anzeigen
+                if (!isActive) return@launch
+                if (reset) firstPageFailed = true else pagingFailed = true
+                throw e
             }
         }
-        loadJob = job
     }
 
     Scaffold(
@@ -159,10 +152,24 @@ fun LogView(navController: NavHostController, mainPadding: PaddingValues) {
                     .fillMaxWidth()
                     .weight(1f),
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(items = logList, key = { i, l -> l.id ?: "idx-$i" }) { _, log ->
-                    LogItemView(log)
+                if (loaded && logList.isEmpty()) {
+                    item(key = "empty") { EmptyState("No logs yet.") }
+                } else if (firstPageFailed && logList.isEmpty()) {
+                    item(key = "failed") {
+                        EmptyState("Logs could not be loaded.", actionLabel = "Retry", onAction = { loadPage(reset = true) })
+                    }
+                }
+                // Je 10 Einträge eine Gruppe: die Liste bleibt lazy, wirkt aber wie eine Fläche
+                val chunks = logList.toList().chunked(LOG_CHUNK)
+                itemsIndexed(items = chunks, key = { i, c -> c.first().id ?: "chunk-$i" }) { _, chunk ->
+                    ListGroup {
+                        chunk.forEachIndexed { i, log ->
+                            if (i > 0) GroupDivider()
+                            LogItemView(log)
+                        }
+                    }
                 }
                 if (pagingFailed) {
                     item(key = "retry") {
@@ -184,7 +191,7 @@ fun LogView(navController: NavHostController, mainPadding: PaddingValues) {
                             Text(
                                 "Logs are kept for $days days",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.Gray,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -205,41 +212,9 @@ fun LogView(navController: NavHostController, mainPadding: PaddingValues) {
             val info = listState.layoutInfo
             (info.visibleItemsInfo.lastOrNull()?.index ?: -1) to info.totalItemsCount
         }.collect { (last, total) ->
-            if (total > 0 && last >= total - 5) loadPage(reset = false)
+            if (total > 0 && last >= total - 2) loadPage(reset = false)
         }
     }
 
-    if (showLoadingDialog) {
-        SpinnerDialog(
-            spinnerText = "Loading..."
-        )
-    }
-
-    if (showDialog) {
-        ErrorDialog(
-            onDismissRequest = { showDialog = false },
-            onConfirmation = {
-                showDialog = false
-                // Nach einem Fehler beim Nachladen die fehlgeschlagene Seite wiederholen, sonst von vorn laden
-                if (pagingFailed) {
-                    pagingFailed = false
-                    loadPage(reset = false)
-                } else {
-                    loadPage(reset = true)
-                }
-            },
-            dialogTitle = errorDialogTitle,
-            dialogText = errorDialogText,
-            dialogConfirmText = errorDialogButtonText
-        )
-    }
-
-    if (showRequestDialog) {
-        RequestDialogs(
-            onDismissRequest = { showRequestDialog = false },
-            onConfirmation = { showRequestDialog = false; },
-            dialogConfirmText = errorDialogButtonText,
-            request = requestType
-        )
-    }
+    RequestStateHost(req)
 }

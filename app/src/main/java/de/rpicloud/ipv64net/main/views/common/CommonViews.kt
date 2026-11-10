@@ -3,29 +3,50 @@ package de.rpicloud.ipv64net.main.views.common
 import android.view.WindowManager
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CornerSize
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.material3.ModalBottomSheetProperties
+import androidx.compose.material3.SheetValue
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -38,6 +59,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -52,14 +74,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import androidx.navigation.NavHostController
@@ -354,17 +380,29 @@ fun HubScreen(
 ) {
     ScreenScaffold(title = title, navController = navController, mainPadding = mainPadding, actions = actions) {
         val body: LazyListScope.() -> Unit = {
+            // Fester Anker oben: später eingefügte Kopf-Einträge (z. B. Status-Kacheln) schieben die Liste sonst aus dem Blick
+            item(key = "hub_top") {}
             header()
-            var lastGroup: String? = null
-            sections.forEachIndexed { index, section ->
-                if (section.group != null && (index == 0 || section.group != lastGroup)) {
-                    item(key = "group_${index}_${section.group}") { SectionHeader(section.group) }
-                }
-                lastGroup = section.group
-                item(key = "section_${section.tab.name}") {
-                    HubSectionRow(section) {
-                        // launchSingleTop: Doppeltippen legt den Screen nicht zweimal auf den Stack
-                        navController.navigate(Tabs.getRoute(section.tab)) { launchSingleTop = true }
+            // Aufeinanderfolgende Einträge mit gleicher Gruppe bilden EINE Fläche (wie Android-Einstellungen)
+            val chunks = mutableListOf<List<HubSection>>()
+            sections.forEach { s -> if (chunks.lastOrNull()?.first()?.group == s.group) chunks[chunks.lastIndex] = chunks.last() + s else chunks += listOf(s) }
+            chunks.forEach { chunk ->
+                val first = chunk.first()
+                item(key = "group_${first.tab.name}") {
+                    ListGroup(title = first.group) {
+                        chunk.forEachIndexed { i, section ->
+                            if (i > 0) GroupDivider(56.dp)
+                            ListRow(
+                                title = section.title,
+                                subtitle = section.subtitle,
+                                icon = section.icon,
+                                badge = section.badge,
+                                enabled = section.enabled,
+                                centerIcon = true,
+                                // launchSingleTop: Doppeltippen legt den Screen nicht zweimal auf den Stack
+                                onClick = { navController.navigate(Tabs.getRoute(section.tab)) { launchSingleTop = true } }
+                            )
+                        }
                     }
                 }
             }
@@ -383,36 +421,207 @@ fun HubScreen(
     }
 }
 
-/** Eine Zeile eines Hubs (Karte mit Icon, Titel, Untertitel, Badge, Pfeil). */
-@Composable
-fun HubSectionRow(section: HubSection, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        enabled = section.enabled,
-        modifier = Modifier
-            .fillMaxWidth()
-            .alpha(if (section.enabled) 1f else 0.5f)
-    ) {
-        ListItem(
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            leadingContent = { Icon(painter = painterResource(id = section.icon), contentDescription = null) },
-            headlineContent = { Text(section.title, fontWeight = FontWeight.SemiBold) },
-            supportingContent = section.subtitle?.let { { Text(it, style = MaterialTheme.typography.bodySmall) } },
-            trailingContent = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    section.badge?.let {
-                        Text(it, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                    }
-                    Icon(painter = painterResource(id = R.drawable.chevron_right_24px), contentDescription = null)
-                }
-            }
-        )
-    }
-}
-
 // =============================================================================================
 // Bausteine
 // =============================================================================================
+
+/**
+ * Gruppe von Zeilen auf einer gemeinsamen Fläche (surfaceContainer, shapes.large) mit optionaler [SectionHeader]-Überschrift.
+ * Zeilen mit [ListRow] einfügen, dazwischen [GroupDivider].
+ */
+@Composable
+fun ListGroup(title: String? = null, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier) {
+        title?.let { SectionHeader(it, Modifier.padding(start = 4.dp, bottom = 6.dp)) }
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(content = content)
+        }
+    }
+}
+
+/** Trennlinie zwischen Zeilen einer [ListGroup]; [inset] = linker Einzug (56.dp bei Zeilen mit Icon). */
+@Composable
+fun GroupDivider(inset: Dp = 16.dp) {
+    HorizontalDivider(modifier = Modifier.padding(start = inset), color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+/**
+ * Zeile einer [ListGroup] (M3 ListItem, transparent).
+ * @param icon Drawable links (onSurfaceVariant); [leading] hat Vorrang.
+ * @param trailing eigener Inhalt rechts (z. B. [StatusChip]); danach folgen [badge] und Pfeil.
+ * @param badge kurzer Wert rechts in Primärfarbe.
+ * @param enabled false = ausgegraut (alpha 0.38) und nicht antippbar.
+ * @param titleColor Farbe des Titels; Unspecified = Standard. [iconTint] analog für das Icon (Standard onSurfaceVariant),
+ *   z. B. beide colorScheme.error für "Logout".
+ * @param monospaceTitle / [monospaceSubtitle] Festbreitenschrift (IPs, Record-Inhalte, Token-Hinweise).
+ * @param showChevron Pfeil rechts; null (Standard) = nur wenn [onClick] gesetzt ist. (Kotlin erlaubt keinen Default, der den später deklarierten onClick referenziert.)
+ * @param onClick null = nicht klickbar.
+ */
+@Composable
+fun ListRow(
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    @DrawableRes icon: Int? = null,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    badge: String? = null,
+    enabled: Boolean = true,
+    showChevron: Boolean? = null,
+    subtitleMaxLines: Int = 2,
+    titleColor: Color = Color.Unspecified,
+    iconTint: Color = Color.Unspecified,
+    monospaceTitle: Boolean = false,
+    monospaceSubtitle: Boolean = false,
+    // ListItem setzt das Icon bei umbrechendem Untertitel nach oben; true hält es immer mittig
+    centerIcon: Boolean = false,
+    onClick: (() -> Unit)? = null
+) {
+    val chevron = showChevron ?: (onClick != null)
+    val hasTrailing = trailing != null || badge != null || chevron
+    val lead: (@Composable () -> Unit)? = leading ?: icon?.let {
+        {
+            Icon(
+                painter = painterResource(id = it),
+                contentDescription = null,
+                tint = iconTint.takeIf { c -> c.isSpecified } ?: MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+    val headline: @Composable () -> Unit = {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = titleColor,
+            fontFamily = if (monospaceTitle) FontFamily.Monospace else null
+        )
+    }
+    val supporting: (@Composable () -> Unit)? = subtitle?.let {
+        {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontFamily = if (monospaceSubtitle) FontFamily.Monospace else null,
+                maxLines = subtitleMaxLines
+            )
+        }
+    }
+    val inline = centerIcon && lead != null
+    ListItem(
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        leadingContent = if (inline) null else lead,
+        headlineContent = if (!inline) headline else {
+            {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    lead!!()
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        headline()
+                        supporting?.invoke()
+                    }
+                }
+            }
+        },
+        supportingContent = if (inline) null else supporting,
+        trailingContent = if (!hasTrailing) null else {
+            {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    trailing?.let {
+                        it()
+                        if (badge != null || chevron) Spacer(Modifier.width(8.dp))
+                    }
+                    badge?.let { Text(it, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
+                    if (chevron) {
+                        Icon(painter = painterResource(id = R.drawable.chevron_right_24px), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        },
+        modifier = modifier
+            .heightIn(min = 56.dp)
+            .alpha(if (enabled) 1f else 0.38f)
+            .then(if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier)
+    )
+}
+
+/**
+ * Abgerundetes Suchfeld mit Lupe.
+ * @param onSearch gesetzt: Absende-Button rechts (aktiv bei nicht leerem [value]) und IME-Aktion "Suchen";
+ *   null: stattdessen Löschen-Button (x), solange [value] nicht leer ist.
+ */
+@Composable
+fun SearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    onSearch: (() -> Unit)? = null,
+    isError: Boolean = false,
+    supportingText: String? = null,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    submitContentDescription: String = "Search"
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        placeholder = { Text(placeholder) },
+        leadingIcon = { Icon(painterResource(R.drawable.search_24px), contentDescription = null) },
+        trailingIcon = when {
+            onSearch != null -> ({
+                IconButton(onClick = onSearch, enabled = value.isNotBlank()) {
+                    Icon(painterResource(R.drawable.chevron_right_24px), contentDescription = submitContentDescription)
+                }
+            })
+            value.isNotBlank() -> ({
+                IconButton(onClick = { onValueChange("") }) {
+                    Icon(painterResource(R.drawable.close_24px), contentDescription = "Clear")
+                }
+            })
+            else -> null
+        },
+        singleLine = true,
+        isError = isError,
+        supportingText = supportingText?.let { { Text(it) } },
+        shape = MaterialTheme.shapes.extraLarge,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { onSearch?.invoke() }),
+        modifier = modifier.fillMaxWidth()
+    )
+}
+
+/**
+ * Horizontal scrollbare Reihe von [FilterChip]s (Einfachauswahl über [selected]).
+ * @param trailingContent zweiter Filtersatz in DERSELBEN Reihe: wird nach einem kleinen vertikalen Divider angehängt
+ *   (Chips darin ebenfalls mit [FilterChip] bauen).
+ */
+@Composable
+fun <T> FilterChipRow(
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    trailingContent: (@Composable RowScope.() -> Unit)? = null
+) {
+    Row(
+        modifier = modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        options.forEach { option ->
+            FilterChip(selected = option == selected, onClick = { onSelect(option) }, label = { Text(label(option)) })
+        }
+        if (trailingContent != null) {
+            VerticalDivider(modifier = Modifier.height(24.dp), color = MaterialTheme.colorScheme.outlineVariant)
+            trailingContent()
+        }
+    }
+}
 
 /** Abschnittsüberschrift (titleSmall, Primärfarbe). */
 @Composable
@@ -430,6 +639,7 @@ fun SectionHeader(text: String, modifier: Modifier = Modifier) {
  * @param copyable Kopier-Button anzeigen.
  * @param sensitive Wert verdeckt (mit Anzeigen-Umschalter) und als sensibel kopieren; für Tokens/Keys/Update-URLs.
  * @param monospace Wert in Festbreitenschrift (Tokens, IPs, Hashes).
+ * @param valueColor Farbe des Werts; Unspecified (Standard) = onSurface.
  */
 @Composable
 fun InfoRow(
@@ -438,7 +648,8 @@ fun InfoRow(
     modifier: Modifier = Modifier,
     copyable: Boolean = false,
     sensitive: Boolean = false,
-    monospace: Boolean = false
+    monospace: Boolean = false,
+    valueColor: Color = Color.Unspecified
 ) {
     val ctx = LocalContext.current
     var revealed by rememberSaveable(label) { mutableStateOf(false) }
@@ -452,7 +663,8 @@ fun InfoRow(
                     sensitive && !revealed -> "••••••••"
                     else -> text
                 },
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
+                color = valueColor.takeIf { it.isSpecified } ?: MaterialTheme.colorScheme.onSurface,
                 fontFamily = if (monospace) FontFamily.Monospace else null
             )
         }
@@ -472,6 +684,75 @@ fun InfoRow(
     }
 }
 
+/** Innenabstand für [InfoRow]s (und eigene Inhalte) direkt in einer [ListGroup]. */
+val GroupRowPadding: Modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+
+/**
+ * Eine Tatsache für [InfoGroup]/[InfoRows]; Parameter wie bei [InfoRow].
+ * @param onClick gesetzt = ganze Zeile antippbar.
+ */
+data class InfoItem(
+    val label: String,
+    val value: String?,
+    val copyable: Boolean = false,
+    val sensitive: Boolean = false,
+    val monospace: Boolean = false,
+    val valueColor: Color = Color.Unspecified,
+    val onClick: (() -> Unit)? = null
+)
+
+/** [InfoRow]s mit Gruppen-Einzug und [GroupDivider] dazwischen; innerhalb einer [ListGroup] aufrufen (z. B. mit weiterem Inhalt). */
+@Composable
+fun InfoRows(rows: List<InfoItem>) {
+    rows.forEachIndexed { i, r ->
+        if (i > 0) GroupDivider()
+        InfoRow(
+            r.label, r.value,
+            modifier = (if (r.onClick != null) Modifier.clickable(onClick = r.onClick) else Modifier).then(GroupRowPadding),
+            copyable = r.copyable, sensitive = r.sensitive, monospace = r.monospace, valueColor = r.valueColor
+        )
+    }
+}
+
+/**
+ * Fakten als [ListGroup] aus [InfoRow]s.
+ * @param hideEmpty true = Zeilen ohne Wert weglassen (und bei nur leeren Zeilen gar nichts zeigen); sonst steht "–".
+ */
+@Composable
+fun InfoGroup(title: String?, rows: List<InfoItem>, modifier: Modifier = Modifier, hideEmpty: Boolean = false) {
+    val shown = if (hideEmpty) rows.filter { !it.value.isNullOrBlank() } else rows
+    if (shown.isEmpty()) return
+    ListGroup(title = title, modifier = modifier) { InfoRows(shown) }
+}
+
+/** Hinweis- oder Leer-Text innerhalb einer [ListGroup] ([error] = Fehlerfarbe). */
+@Composable
+fun GroupText(text: String, modifier: Modifier = Modifier, error: Boolean = false) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.then(GroupRowPadding)
+    )
+}
+
+/**
+ * Formularabschnitt: optionale Überschrift + eine Fläche ([ListGroup]) mit 16 dp Innenabstand und 8 dp zwischen den Feldern
+ * (auch für frei gestaltete Inhalte wie Diagramme).
+ */
+@Composable
+fun FormSection(title: String?, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    ListGroup(title, modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            content = content
+        )
+    }
+}
+
 /** Kleiner farbiger Status-Chip; [color] z. B. colorResource(R.color.ipv64_green). */
 @Composable
 fun StatusChip(text: String, color: Color, modifier: Modifier = Modifier) {
@@ -488,6 +769,62 @@ fun StatusChip(text: String, color: Color, modifier: Modifier = Modifier) {
             maxLines = 1,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
         )
+    }
+}
+
+/** Kleine Kennzahl-Kachel (Wert über Beschriftung); [valueColor] nur zusätzlich, die Beschriftung nennt die Bedeutung. */
+@Composable
+fun StatTile(value: String, label: String, modifier: Modifier = Modifier, valueColor: Color = Color.Unspecified) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = modifier
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                value,
+                style = MaterialTheme.typography.titleMedium,
+                color = valueColor.takeIf { it.isSpecified } ?: MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                textAlign = TextAlign.Center
+            )
+            Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        }
+    }
+}
+
+/** Aktions-Kachel (Icon im Kreis über kurzem Text); mehrere mit Modifier.weight(1f) in einer Row. */
+@Composable
+fun ActionTile(icon: Int, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = modifier.heightIn(min = 88.dp)
+    ) {
+        val alpha = if (enabled) 1f else 0.38f
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = alpha), androidx.compose.foundation.shape.CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(painterResource(icon), null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = alpha))
+            }
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                maxLines = 2,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -553,6 +890,50 @@ fun NotAvailableView(feature: String, reason: String? = null, modifier: Modifier
             )
         }
         Button(onClick = { openUrl(ctx, IPV64_PLANS_URL) }) { Text("View plans") }
+    }
+}
+
+/**
+ * Einheitliches Bottom Sheet für Formulare und Auswahlen (statt AlertDialog). Bestätigungen/Löschen bleiben [ConfirmDialog].
+ * Schließt sich nicht selbst: [onConfirm] bzw. [onDismiss] setzen den Anzeige-Zustand zurück.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ActionSheet(
+    title: String,
+    onDismiss: () -> Unit,
+    subtitle: String? = null,
+    confirmLabel: String? = null,
+    confirmEnabled: Boolean = true,
+    destructive: Boolean = false,
+    onConfirm: (() -> Unit)? = null,
+    // false: Wischen, Zurück und Tippen daneben schließen nicht (z. B. während eine Anfrage läuft)
+    dismissible: Boolean = true,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val canDismiss by rememberUpdatedState(dismissible)
+    ModalBottomSheet(
+        onDismissRequest = { if (canDismiss) onDismiss() },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden || canDismiss }),
+        sheetGesturesEnabled = dismissible,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = dismissible, shouldDismissOnClickOutside = dismissible)
+    ) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleLarge)
+            subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            content()
+            if (onConfirm != null && confirmLabel != null) {
+                Button(
+                    onClick = onConfirm, enabled = confirmEnabled, modifier = Modifier.fillMaxWidth(),
+                    colors = if (destructive) ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError
+                    ) else ButtonDefaults.buttonColors()
+                ) { Text(confirmLabel) }
+            }
+        }
     }
 }
 
@@ -689,21 +1070,67 @@ private object SecureWindowCounter {
     }
 }
 
+/** Abstand nach einer [groupedRows]-Gruppe; die LazyColumn muss dafür verticalArrangement = spacedBy(0.dp) nutzen. */
+val GroupGap = 16.dp
+
+/** Item mit [GroupGap] Abstand darunter: für Screens mit [groupedRows], deren LazyColumn spacedBy(0.dp) nutzt. */
+fun LazyListScope.spacedItem(key: Any? = null, content: @Composable () -> Unit) {
+    item(key = key) { Column(Modifier.padding(bottom = GroupGap)) { content() } }
+}
+
 /**
- * Liste von Einträgen mit [EmptyState], wenn leer; Hilfsfunktion für LazyListScope.
- * [emptyKey] muss bei mehreren Aufrufen in derselben Liste eindeutig sein.
+ * Wie [ListGroup], aber je Zeile ein eigenes Lazy-Item (nur sichtbare Zeilen werden komponiert/laden Details).
+ * Erste Zeile oben, letzte unten gerundet, dazwischen [GroupDivider]. Die LazyColumn darf KEINEN Item-Abstand haben
+ * (spacedBy(0.dp)), sonst reißt die Gruppe auseinander; der Abstand nach der Gruppe ist [GroupGap].
+ * [key] null = Positions-Key; sonst muss er in der Liste eindeutig sein.
  */
-fun <T> LazyListScope.itemsOrEmpty(
+fun <T> LazyListScope.groupedRows(
+    items: List<T>,
+    key: ((T) -> Any)? = null,
+    title: String? = null,
+    // Eindeutiger Header-Key, wenn Titel doppelt vorkommen können (z. B. gleichnamige Nodes)
+    headerKey: String? = null,
+    row: @Composable (T) -> Unit
+) {
+    if (items.isEmpty()) return
+    title?.let { item(key = "group_header_${headerKey ?: it}") { SectionHeader(it, Modifier.padding(start = 4.dp, bottom = 6.dp)) } }
+    itemsIndexed(items, key = key?.let { k -> { _: Int, t: T -> k(t) } }) { i, t ->
+        val large = MaterialTheme.shapes.large
+        val none = CornerSize(0.dp)
+        val last = i == items.lastIndex
+        val shape = large.copy(
+            topStart = if (i == 0) large.topStart else none,
+            topEnd = if (i == 0) large.topEnd else none,
+            bottomStart = if (last) large.bottomStart else none,
+            bottomEnd = if (last) large.bottomEnd else none
+        )
+        Column(Modifier.padding(bottom = if (last) GroupGap else 0.dp)) {
+            Surface(shape = shape, color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    if (i > 0) GroupDivider()
+                    row(t)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Listen-Screens: alle Einträge als [ListRow]s in EINER Gruppe ([groupedRows], je Zeile ein Lazy-Item);
+ * leer und geladen → [EmptyState]. [key] ist nur Namensgeber für den Leer-Key; [itemKey] optional (sonst Positions-Key).
+ * Die LazyColumn braucht spacedBy(0.dp) (siehe [groupedRows]).
+ */
+fun <T> LazyListScope.groupedItemsOrEmpty(
     items: List<T>,
     loaded: Boolean,
     emptyText: String,
-    key: ((T) -> Any)? = null,
-    emptyKey: Any = "empty_state",
-    itemContent: @Composable (T) -> Unit
+    key: Any,
+    itemKey: ((T) -> Any)? = null,
+    row: @Composable (T) -> Unit
 ) {
     if (loaded && items.isEmpty()) {
-        item(key = emptyKey) { EmptyState(emptyText) }
+        item(key = "empty_$key") { EmptyState(emptyText) }
     } else {
-        items(items = items, key = key) { itemContent(it) }
+        groupedRows(items, itemKey, row = row)
     }
 }

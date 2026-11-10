@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+   Klartext (http) ist nur für den direkten Node-Zugang nötig; LocalNodeSupport erlaubt http für IP-Literale (auch
+   öffentliche, mit Warnung im Formular) und lokale Namen (DNS-Filter). Die festen Cloud-Hosts bleiben strikt HTTPS.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">ipv64.net</domain>
+        <domain includeSubdomains="true">secntfy.app</domain>
+    </domain-config>
+</network-security-config>

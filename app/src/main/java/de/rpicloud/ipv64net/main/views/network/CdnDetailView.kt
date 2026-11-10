@@ -1,5 +1,6 @@
 package de.rpicloud.ipv64net.main.views.network
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.DropdownMenu
@@ -17,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.AccountCache
@@ -59,6 +61,7 @@ private sealed interface CdnConfirm {
     data object Delete : CdnConfirm
     data class DisableRecord(val record: Record) : CdnConfirm
     data class DeleteMapping(val mapping: CdnMapping) : CdnConfirm
+    data class RemoveAddress(val entry: AccessListEntry) : CdnConfirm
 }
 
 // Ergebnis einer Abfrage beim Polling; detail == null bedeutet: Domain existiert nicht mehr (404)
@@ -252,7 +255,11 @@ fun CdnDetailView(navController: NavHostController, mainPadding: PaddingValues) 
             token == null -> EmptyState("CDN domain not found.")
             unavailable != null -> NotAvailableView(PlanFeature.CDN.label, unavailable)
             shown == null -> Box(modifier = Modifier)
-            else -> RefreshableList(refreshing = refreshing, onRefresh = { load(true, true) }) {
+            else -> RefreshableList(
+                refreshing = refreshing,
+                onRefresh = { load(true, true) },
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 item(key = "header") { CdnHeaderCard(shown) }
 
                 if (detail != null) {
@@ -340,14 +347,7 @@ fun CdnDetailView(navController: NavHostController, mainPadding: PaddingValues) 
                         },
                         onRefresh = { loadAccessList() },
                         onAdd = { showAddAddress = true },
-                        onRemove = { entry ->
-                            val id = entry.id ?: return@cdnAccessListSection
-                            val t = token
-                            req.launch(scope, spinner = "Removing...") {
-                                ipv64Retrying { IPv64Client.get(ctx).cdn.removeAccessListEntry(t, id.toString()) }
-                                accessList = accessList?.filterNot { it.id == id }
-                            }
-                        }
+                        onRemove = { entry -> confirm = CdnConfirm.RemoveAddress(entry) }
                     )
                 }
             }
@@ -430,6 +430,26 @@ fun CdnDetailView(navController: NavHostController, mainPadding: PaddingValues) 
                     req.launch(scope, spinner = "Deleting...") {
                         ipv64Retrying { IPv64Client.get(ctx).cdn.deleteMapping(t, id) }
                         CdnDetailStore.get(t)?.let { store(it.copy(mappings = it.mappings.filterNot { m -> m.id == id })) }
+                    }
+                }
+            },
+            onDismiss = { confirm = null }
+        )
+
+        is CdnConfirm.RemoveAddress -> ConfirmDialog(
+            title = "Remove address?",
+            text = "\"${c.entry.label()}\" is removed from the access list. Depending on the list mode, this " +
+                    "address may lose access to the site, or it may be blocked, which can lock you out.",
+            confirmLabel = "Remove",
+            destructive = true,
+            onConfirm = {
+                confirm = null
+                val id = c.entry.id
+                val t = token
+                if (id != null && t != null) {
+                    req.launch(scope, spinner = "Removing...") {
+                        ipv64Retrying { IPv64Client.get(ctx).cdn.removeAccessListEntry(t, id.toString()) }
+                        accessList = accessList?.filterNot { it.id == id }
                     }
                 }
             },

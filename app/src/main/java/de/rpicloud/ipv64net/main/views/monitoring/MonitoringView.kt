@@ -1,6 +1,7 @@
 package de.rpicloud.ipv64net.main.views.monitoring
 
-import androidx.compose.foundation.clickable
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
@@ -37,7 +37,7 @@ import de.rpicloud.ipv64net.helper.loadHc2Account
 import de.rpicloud.ipv64net.helper.loadHc2Checks
 import de.rpicloud.ipv64net.helper.navigateWithArgs
 import de.rpicloud.ipv64net.helper.planRestrictionText
-import de.rpicloud.ipv64net.main.views.HealthcheckItemView
+import de.rpicloud.ipv64net.main.views.HealthcheckRow
 import de.rpicloud.ipv64net.main.views.HealthcheckSummaryView
 import de.rpicloud.ipv64net.main.views.common.HubScreen
 import de.rpicloud.ipv64net.main.views.common.HubSection
@@ -54,6 +54,7 @@ import de.sr.ipv64.model.Hc2Incident
 import de.sr.ipv64.model.Hc2UsageLimit
 
 private const val MAX_FAILING = 5
+private const val OPEN_INCIDENT_LIMIT = 20
 
 // Zustände, die im Hub als "Problem" aufgelistet werden (Down zuerst)
 private fun Hc2Check.failingRank(): Int? = when (Hc2StateUi.from(state?.state, paused)) {
@@ -100,7 +101,7 @@ fun MonitoringView(navController: NavHostController, mainPadding: PaddingValues)
             onFinally = { refreshing = false }
         ) {
             checks = loadHc2Checks(ctx, force)
-            incidents = OpenIncidentsCache.get(ctx, force) { it.hc2.incidents(limit = 20, open = true) }
+            incidents = OpenIncidentsCache.get(ctx, force) { it.hc2.incidents(limit = OPEN_INCIDENT_LIMIT, open = true) }
             account = loadHc2Account(ctx, force)
         }
     }
@@ -115,6 +116,8 @@ fun MonitoringView(navController: NavHostController, mainPadding: PaddingValues)
             .map { it.second }
     }
     val openIncidents = incidents.orEmpty().size
+    // Erreicht die Liste das Limit, ist die tatsächliche Zahl unbekannt
+    val openIncidentsText = if (openIncidents >= OPEN_INCIDENT_LIMIT) "$OPEN_INCIDENT_LIMIT+" else openIncidents.toString()
 
     HubScreen(
         title = Tabs.getLabel(Tab.monitoring),
@@ -123,18 +126,37 @@ fun MonitoringView(navController: NavHostController, mainPadding: PaddingValues)
         refreshing = refreshing,
         onRefresh = { load(force = true, pull = true) },
         sections = listOf(
-            HubSection(Tab.healthcheck, subtitle = "Checks, states and details", badge = list?.size?.toString(), group = "Monitoring"),
+            HubSection(Tab.healthcheck, subtitle = "Checks, states and details", badge = list?.size?.toString(), group = "Checks"),
             HubSection(
                 Tab.hc2_activity, subtitle = "Incidents and events",
-                badge = openIncidents.takeIf { it > 0 }?.let { "$it open" }, group = "Monitoring"
+                badge = openIncidents.takeIf { it > 0 }?.let { "$openIncidentsText open" }, group = "Checks"
             ),
-            HubSection(Tab.maintenance, subtitle = "Pause alerts during planned work", group = "Monitoring"),
-            HubSection(Tab.channels, subtitle = "Where notifications are sent", group = "Notifications"),
-            HubSection(Tab.hc2_settings, subtitle = "Quiet hours and batching", group = "Notifications"),
-            HubSection(Tab.status_pages, subtitle = "Public pages for your checks", group = "Publishing"),
-            HubSection(Tab.failover, subtitle = "Switch DNS records when a check fails", group = "Resilience"),
-            HubSection(Tab.offline_pages, subtitle = "Fallback pages for your domains", group = "Resilience")
+            HubSection(Tab.maintenance, subtitle = "Pause alerts during planned work", group = "Checks"),
+            HubSection(Tab.channels, subtitle = "Where notifications are sent", group = "Alerts"),
+            HubSection(Tab.hc2_settings, subtitle = "Quiet hours and batching", group = "Alerts"),
+            HubSection(Tab.status_pages, subtitle = "Public pages for your checks", group = "Publishing & failover"),
+            HubSection(Tab.failover, subtitle = "Switch DNS records on failure", group = "Publishing & failover"),
+            HubSection(Tab.offline_pages, subtitle = "Fallback pages for your domains", group = "Publishing & failover")
         ),
+        footer = {
+            account?.let { acc ->
+                item(key = "plan_info") {
+                    // Dezente Plan-/Nutzungsinfo am Ende, keine Karte
+                    Text(
+                        listOfNotNull(
+                            "Plan: " + acc.plan.orEmpty().ifBlank { "–" },
+                            acc.checks?.let { "$it check(s)" },
+                            "Online points ${acc.onlineMeasuringPoints.text()}",
+                            acc.nodes?.let { "Nodes ${it.online ?: 0} / ${it.total ?: 0} online" },
+                            acc.checksPerDay?.let { "Daily measurements ${it.text()}" }
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        },
         header = {
             planNote?.let { note ->
                 item(key = "plan_note") {
@@ -163,13 +185,13 @@ fun MonitoringView(navController: NavHostController, mainPadding: PaddingValues)
                             Icon(painterResource(R.drawable.warning_24px), contentDescription = null)
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    if (openIncidents == 1) "1 open incident" else "$openIncidents open incidents",
-                                    fontWeight = FontWeight.Bold
+                                    if (openIncidents == 1) "1 open incident" else "$openIncidentsText open incidents",
+                                    style = MaterialTheme.typography.titleSmall
                                 )
                                 incidents?.firstOrNull()?.let { first ->
                                     first.name?.takeIf { it.isNotBlank() }?.let {
                                         Text(
-                                            if (openIncidents > 1) "$it and ${openIncidents - 1} more" else it,
+                                            if (openIncidents > 1) "$it and ${openIncidents - 1}${if (openIncidents >= OPEN_INCIDENT_LIMIT) "+" else ""} more" else it,
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }
@@ -193,10 +215,16 @@ fun MonitoringView(navController: NavHostController, mainPadding: PaddingValues)
             }
             if (failing.isNotEmpty()) {
                 item(key = "failing_header") { SectionHeader("Needs attention") }
-                items(failing.take(MAX_FAILING), key = { "failing_" + it.token.orEmpty() + it.name.orEmpty() }) { check ->
-                    HealthcheckItemView(check) { selected ->
-                        selected.token?.let { token ->
-                            navController.navigateWithArgs(Tab.healthcheck_details, Hc2NavKeys.SELECTED_HC2_TOKEN to token)
+                // Auf MAX_FAILING begrenzt, daher eine Gruppe in einem Item (der Hub-Screen hat Item-Abstand)
+                item(key = "failing") {
+                    ListGroup {
+                        failing.take(MAX_FAILING).forEachIndexed { i, check ->
+                            if (i > 0) GroupDivider()
+                            HealthcheckRow(check) { selected ->
+                                selected.token?.let { token ->
+                                    navController.navigateWithArgs(Tab.healthcheck_details, Hc2NavKeys.SELECTED_HC2_TOKEN to token)
+                                }
+                            }
                         }
                     }
                 }
@@ -206,35 +234,6 @@ fun MonitoringView(navController: NavHostController, mainPadding: PaddingValues)
                             onClick = { navController.navigate(Tabs.getRoute(Tab.healthcheck)) },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Show all ${failing.size} problems") }
-                    }
-                }
-            }
-            account?.let { acc ->
-                item(key = "plan_card") {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                "Plan: " + acc.plan.orEmpty().ifBlank { "–" },
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                listOfNotNull(
-                                    acc.checks?.let { "$it check(s)" },
-                                    "Online points ${acc.onlineMeasuringPoints.text()}",
-                                    acc.nodes?.let { "Nodes ${it.online ?: 0} / ${it.total ?: 0} online" }
-                                ).joinToString(" · "),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            acc.checksPerDay?.let {
-                                Text(
-                                    "Daily measurements ${it.text()}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
                     }
                 }
             }

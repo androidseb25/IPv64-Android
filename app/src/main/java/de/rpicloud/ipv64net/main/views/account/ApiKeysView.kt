@@ -3,15 +3,9 @@ package de.rpicloud.ipv64net.main.views.account
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,7 +14,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -31,13 +24,16 @@ import de.rpicloud.ipv64net.helper.ipv64Request
 import de.rpicloud.ipv64net.helper.loadMe
 import de.rpicloud.ipv64net.main.views.FormDropdown
 import de.rpicloud.ipv64net.main.views.FormTextField
+import de.rpicloud.ipv64net.main.views.common.ActionSheet
 import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
+import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.GroupDivider
+import de.rpicloud.ipv64net.main.views.common.ListGroup
+import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.main.views.common.RefreshableList
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
 import de.rpicloud.ipv64net.main.views.common.SecretOnceDialog
-import de.rpicloud.ipv64net.main.views.common.SectionHeader
-import de.rpicloud.ipv64net.main.views.common.itemsOrEmpty
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
 import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
@@ -140,44 +136,46 @@ fun ApiKeysView(navController: NavHostController, mainPadding: PaddingValues) {
             }
         }
     ) {
-        RefreshableList(refreshing = refreshing, onRefresh = { load(force = true, pull = true) }) {
+        RefreshableList(
+            refreshing = refreshing,
+            onRefresh = { load(force = true, pull = true) },
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             if (loaded) {
                 item(key = "info") {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            val auth = me?.auth
-                            Text(
-                                when {
-                                    auth?.type == AuthType.API_KEY ->
-                                        "This app uses the API key \"${auth.keyName ?: "#${auth.keyId ?: "?"}"}\"."
+                    val auth = me?.auth
+                    ListGroup {
+                        ListRow(
+                            title = when {
+                                auth?.type == AuthType.API_KEY ->
+                                    "This app uses the API key \"${auth.keyName ?: "#${auth.keyId ?: "?"}"}\"."
 
-                                    auth?.type == AuthType.ACCOUNT_KEY -> "This app uses your account key."
-                                    else -> "This app's key type is unknown."
-                                },
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                "A new key is shown only once after creating it. Keys give full access to your " +
-                                        "account; delete keys you no longer use.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                auth?.type == AuthType.ACCOUNT_KEY -> "This app uses your account key."
+                                else -> "This app's key type is unknown."
+                            },
+                            subtitle = "A new key is shown only once after creating it. Keys give full access to your " +
+                                    "account; delete keys you no longer use.",
+                            subtitleMaxLines = 4,
+                            icon = R.drawable.key_24px
+                        )
+                    }
+                }
+            }
+            if (loaded && keys.isEmpty()) {
+                item(key = "empty_state") { EmptyState("No API keys yet.") }
+            } else if (keys.isNotEmpty()) {
+                item(key = "keys") {
+                    ListGroup(title = "API keys (${keys.size})") {
+                        keys.forEachIndexed { i, k ->
+                            if (i > 0) GroupDivider(56.dp)
+                            ApiKeyItemView(
+                                key = k,
+                                isCurrent = k.id != null && k.id == currentKeyId,
+                                onDelete = { keyToDelete = k }
                             )
                         }
                     }
                 }
-                item(key = "header") { SectionHeader("API keys (${keys.size})") }
-            }
-            itemsOrEmpty(
-                items = keys,
-                loaded = loaded,
-                emptyText = "No API keys yet.",
-                key = { k -> "key_${k.id ?: k.hashCode()}" }
-            ) { k ->
-                ApiKeyItemView(
-                    key = k,
-                    isCurrent = k.id != null && k.id == currentKeyId,
-                    onDelete = { keyToDelete = k }
-                )
             }
         }
     }
@@ -217,36 +215,28 @@ fun ApiKeysView(navController: NavHostController, mainPadding: PaddingValues) {
 @Composable
 private fun CreateApiKeyDialog(busy: Boolean, onCreate: (String, Int) -> Unit, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
-    var validityIdx by remember { mutableIntStateOf(0) }
+    var validityIdx by remember { mutableIntStateOf(API_KEY_VALIDITIES.indexOfFirst { it.first == "30 days" }.coerceAtLeast(0)) }
     val nameOk = name.isNotBlank() && name.length <= MAX_KEY_NAME
-    AlertDialog(
-        onDismissRequest = { if (!busy) onDismiss() },
-        icon = { Icon(painter = painterResource(id = R.drawable.key_24px), contentDescription = null) },
-        title = { Text("New API key") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                FormTextField(
-                    label = "Name",
-                    value = name,
-                    onValue = { name = it.take(MAX_KEY_NAME) },
-                    placeholder = "e.g. Home Assistant",
-                    supporting = "${name.length} / $MAX_KEY_NAME"
-                )
-                FormDropdown(
-                    label = "Valid for",
-                    value = validityIdx,
-                    options = API_KEY_VALIDITIES.indices.toList(),
-                    labelOf = { API_KEY_VALIDITIES[it].first },
-                    onSelect = { validityIdx = it }
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onCreate(name.trim(), API_KEY_VALIDITIES[validityIdx].second) },
-                enabled = nameOk && !busy
-            ) { Text("Create") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") } }
-    )
+    ActionSheet(
+        title = "New API key",
+        onDismiss = { if (!busy) onDismiss() },
+        confirmLabel = "Create",
+        confirmEnabled = nameOk && !busy,
+        onConfirm = { onCreate(name.trim(), API_KEY_VALIDITIES[validityIdx].second) }
+    ) {
+        FormTextField(
+            label = "Name",
+            value = name,
+            onValue = { name = it.take(MAX_KEY_NAME) },
+            placeholder = "e.g. Home Assistant",
+            supporting = "${name.length} / $MAX_KEY_NAME"
+        )
+        FormDropdown(
+            label = "Valid for",
+            value = validityIdx,
+            options = API_KEY_VALIDITIES.indices.toList(),
+            labelOf = { API_KEY_VALIDITIES[it].first },
+            onSelect = { validityIdx = it }
+        )
+    }
 }

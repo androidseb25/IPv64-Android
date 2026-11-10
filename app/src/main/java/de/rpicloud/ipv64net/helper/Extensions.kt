@@ -32,6 +32,9 @@ fun Date.formatGermanTime(): String {
 
 fun Instant.formatGermanTime(): String = Date(toEpochMilliseconds()).formatGermanTime()
 
+/** Go schickt ungesetzte Zeiten als 0001-01-01 statt null: solche Werte ausblenden. */
+fun Instant.realOrNull(): Instant? = takeIf { it.toEpochMilliseconds() > 0 }
+
 @SuppressLint("DefaultLocale")
 fun Long.formatBytes(): String {
     val unit = 1024

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +30,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.main.views.common.ActionSheet
 import de.rpicloud.ipv64net.helper.Hc2ChannelCache
 import de.rpicloud.ipv64net.helper.IPv64Client
 import de.rpicloud.ipv64net.helper.IPv64Context
@@ -123,73 +123,67 @@ fun ChannelVerificationDialog(channel: Hc2Channel, onVerified: () -> Unit, onDis
         }
     }
 
-    AlertDialog(
-        icon = { Icon(painter = painterResource(id = R.drawable.verified_24px), contentDescription = null) },
-        title = { Text("Verify channel") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (channelId == null) {
-                    Text("This channel cannot be verified in the app.")
-                } else if (!codeSent) {
-                    Text("A 6-digit code will be sent to “${channel.displayName}”.")
-                    Text(
-                        "You can request up to 5 codes per hour. Each code is valid for 15 minutes.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    Text("Enter the 6-digit code sent to “${channel.displayName}”.")
-                    OutlinedTextField(
-                        value = code,
-                        onValueChange = { input ->
-                            code = input.filter { it.isDigit() }.take(VERIFICATION_CODE_LENGTH)
-                            errorText = null
-                        },
-                        label = { Text("Code") },
-                        singleLine = true,
-                        enabled = !busy,
-                        isError = errorText != null,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { sendCode() }, enabled = !busy && resendSeconds == 0) {
-                            Text(if (resendSeconds > 0) "Resend code (${resendSeconds} s)" else "Resend code")
-                        }
-                    }
-                    Text(
-                        "Up to 5 codes per hour, valid for 15 minutes.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                infoText?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                errorText?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = colorResource(R.color.ipv64_red))
-                }
-                if (busy) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
-                    }
+    ActionSheet(
+        title = "Verify channel",
+        onDismiss = onDismiss,
+        // wie zuvor: nur über die Buttons schließen ("Later"), sonst ginge ein gesendeter Code verloren
+        dismissible = false,
+        confirmLabel = when {
+            channelId == null -> "Close"
+            !codeSent -> "Send code"
+            else -> "Verify"
+        },
+        confirmEnabled = channelId == null || (!busy && (!codeSent || code.length == VERIFICATION_CODE_LENGTH)),
+        onConfirm = when {
+            channelId == null -> onDismiss
+            !codeSent -> ({ sendCode() })
+            else -> ({ verify() })
+        }
+    ) {
+        if (channelId == null) {
+            Text("This channel cannot be verified in the app.")
+        } else if (!codeSent) {
+            Text("A 6-digit code will be sent to “${channel.displayName}”.")
+            Text(
+                "You can request up to 5 codes per hour. Each code is valid for 15 minutes.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            Text("Enter the 6-digit code sent to “${channel.displayName}”.")
+            OutlinedTextField(
+                value = code,
+                onValueChange = { input ->
+                    code = input.filter { it.isDigit() }.take(VERIFICATION_CODE_LENGTH)
+                    errorText = null
+                },
+                label = { Text("Code") },
+                singleLine = true,
+                enabled = !busy,
+                isError = errorText != null,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { sendCode() }, enabled = !busy && resendSeconds == 0) {
+                    Text(if (resendSeconds > 0) "Resend code (${resendSeconds} s)" else "Resend code")
                 }
             }
-        },
-        onDismissRequest = { if (!busy) onDismiss() },
-        confirmButton = {
-            if (channelId != null) {
-                if (!codeSent) {
-                    TextButton(onClick = { sendCode() }, enabled = !busy) { Text("Send code") }
-                } else {
-                    TextButton(
-                        onClick = { verify() },
-                        enabled = !busy && code.length == VERIFICATION_CODE_LENGTH
-                    ) { Text("Verify") }
-                }
+            Text(
+                "Up to 5 codes per hour, valid for 15 minutes.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        infoText?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        errorText?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = colorResource(R.color.ipv64_red))
+        }
+        if (busy) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(if (channelId == null) "Close" else "Later") }
-        },
-        properties = DialogProperties(dismissOnBackPress = !busy, dismissOnClickOutside = false)
-    )
+        }
+        if (channelId != null) TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Later") }
+    }
 }

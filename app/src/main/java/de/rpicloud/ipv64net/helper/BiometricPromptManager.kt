@@ -12,7 +12,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 class BiometricPromptManager(
     private val activity: AppCompatActivity
 ) {
-    private val resultChannel = Channel<BiometricResult>()
+    // Gepuffert, damit synchron gesendete Ergebnisse (canAuthenticate) nicht verloren gehen, falls der Collector noch nicht läuft
+    private val resultChannel = Channel<BiometricResult>(Channel.BUFFERED)
     val promptResults = resultChannel.receiveAsFlow()
 
     fun showBiometricPrompt(
