@@ -68,7 +68,6 @@ private fun CheckType.label() = when (this) {
     CheckType.CERT -> "Certificate"
     CheckType.WHOIS -> "WHOIS"
     CheckType.PUSH -> "Push"
-    CheckType.DOCKER -> "Docker"
 }
 
 private val DNS_RECORDS = listOf("A", "AAAA", "CNAME", "MX", "TXT", "NS", "SRV", "CAA", "PTR", "SOA")

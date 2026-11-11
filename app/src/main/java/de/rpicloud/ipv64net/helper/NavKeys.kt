@@ -54,6 +54,9 @@ object NavKeys {
     /** String: Token eines lokalen Checks der Node (Check.token), Healthchecks → node_check_edit (mit SELECTED_NODE_ID). Fehlt = neuer Check. */
     const val NODE_CHECK_TOKEN = "NODE_CHECK_TOKEN"
 
+    /** String: UID eines Monitor64-Hosts der Node, Healthchecks → monitor64_host_details/_edit (mit SELECTED_NODE_ID). Fehlt = neuer Host. */
+    const val MONITOR64_HOST_UID = "MONITOR64_HOST_UID"
+
     /** Long: Proxy64-Host-ID (ProxyHost.id), Proxy64 → proxy_host_edit (mit SELECTED_NODE_ID). Fehlt = neuer Host. */
     const val PROXY_HOST_ID = "PROXY_HOST_ID"
 

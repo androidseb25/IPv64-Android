@@ -4,6 +4,7 @@ import de.rpicloud.ipv64net.main.views.common.groupedRows
 import de.rpicloud.ipv64net.main.views.common.spacedItem
 import androidx.compose.runtime.saveable.rememberSaveable
 import de.rpicloud.ipv64net.main.views.monitoring.MonitoringNavKeys
+import de.rpicloud.ipv64net.main.views.monitoring.monitor64HostState
 import de.rpicloud.ipv64net.main.views.common.FilterChipRow
 import de.rpicloud.ipv64net.main.views.common.GroupDivider
 import de.rpicloud.ipv64net.main.views.common.GroupText
@@ -79,6 +80,9 @@ import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.rpicloud.ipv64net.models.label
 import de.sr.ipv64.IPv64Exception
+import de.sr.ipv64.Node64ApiException
+import de.rpicloud.ipv64net.main.views.monitoring.m64Text
+import de.sr.ipv64.node64.model.Monitor64OverviewHost
 import de.sr.ipv64.model.Hc2Check
 import de.sr.ipv64.model.Hc2Execution
 import kotlinx.coroutines.launch
@@ -108,6 +112,31 @@ private fun HcFilter.matchesNode(c: Check): Boolean {
         HcFilter.DOWN -> st == CheckStateValue.DOWN
         HcFilter.PAUSED -> st == CheckStateValue.PAUSED
     }
+}
+
+// Monitor64-Host: ok = Up, warn = Degraded, crit/unreachable = Down, paused/maintenance = Paused
+private fun HcFilter.matchesHost(h: Monitor64OverviewHost): Boolean {
+    val label = monitor64HostState(h.view, h.paused).first
+    return when (this) {
+        HcFilter.ALL -> true
+        HcFilter.UP -> label == "OK"
+        HcFilter.DEGRADED -> label == "Warning"
+        HcFilter.DOWN -> label == "Critical" || label == "Unreachable"
+        HcFilter.PAUSED -> label == "Paused" || label == "Maintenance"
+    }
+}
+
+@Composable
+private fun Monitor64HostRow(h: Monitor64OverviewHost, onClick: () -> Unit) {
+    val (label, color) = monitor64HostState(h.view, h.paused)
+    ListRow(
+        title = h.name.orEmpty().ifBlank { "(unnamed)" },
+        subtitle = listOfNotNull(h.kind?.takeIf { it.isNotBlank() }, h.address?.takeIf { it.isNotBlank() }).joinToString(" · ")
+            .let { base -> listOfNotNull(base.ifEmpty { null }, h.text?.takeIf { it.isNotBlank() }?.m64Text()).joinToString("\n").ifEmpty { null } },
+        trailing = { StatusChip(label, colorResource(color)) },
+        showChevron = false,
+        onClick = onClick
+    )
 }
 
 @Composable
@@ -176,6 +205,9 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
     val nodeErrors = remember { mutableStateMapOf<String, String>() }
     // Zustand des Healthchecks-Moduls je Node; fehlender Eintrag = unbekannt (noch nicht geladen)
     val nodeModules = remember { mutableStateMapOf<String, NodeHcModule>() }
+    // Monitor64-Hosts je Node; fehlender Eintrag = Modul aus (404) oder nicht geladen. Fehler getrennt von den Node-Checks
+    val m64Hosts = remember { mutableStateMapOf<String, List<Monitor64OverviewHost>>() }
+    val m64Errors = remember { mutableStateMapOf<String, String>() }
     var showNewDialog by remember { mutableStateOf(false) }
     var firstResume by remember { mutableStateOf(true) }
     var filter by rememberSaveable { mutableStateOf(startFilter) }
@@ -185,12 +217,13 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
     suspend fun loadNodes() {
         val ids = ConnectedNodes.ids
         nodeChecks.keys.retainAll(ids.toSet()); nodeErrors.keys.retainAll(ids.toSet()); nodeModules.keys.retainAll(ids.toSet())
+        m64Hosts.keys.retainAll(ids.toSet()); m64Errors.keys.retainAll(ids.toSet())
         coroutineScope {
             ids.map { id ->
                 async {
                     val (url, key) = LocalNodeStore.get(ctx, id) ?: return@async
+                    val node = localNodeClient(url, key)
                     try {
-                        val node = localNodeClient(url, key)
                         // Erst status(): ohne aktives Modul ist die Node erreichbar, hat aber keine Checks
                         val modules = node.node.status().modules
                         val mod = modules.firstOrNull { it.name?.lowercase() in HC_MODULES }
@@ -207,6 +240,15 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
                         // Alte Liste verwerfen: sonst verschwänden ihre Checks auch aus der Account-Liste
                         nodeChecks.remove(id)
                         nodeErrors[id] = localNodeError(e).let { "${it.first}: ${it.second}" }
+                    }
+                    // Monitor64 eigenständig: 404 = Modul aus (still), andere Fehler nur in der Monitor64-Gruppe
+                    if (nodeErrors[id] != null) { m64Hosts.remove(id); m64Errors.remove(id); return@async }
+                    try {
+                        m64Hosts[id] = node.monitor64.hosts.list()
+                        m64Errors.remove(id)
+                    } catch (e: IPv64Exception) {
+                        m64Hosts.remove(id)
+                        if (e is Node64ApiException && e.status == 404) m64Errors.remove(id) else m64Errors[id] = localNodeError(e).second
                     }
                 }
             }.awaitAll()
@@ -283,7 +325,7 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
         },
         floatingActionButton = {
             FloatingActionButton(onClick = {
-                if (ConnectedNodes.ids.none { nodeModules[it].offersChecks() }) navController.navigate(Tabs.getRoute(Tab.healthcheck_new)) else showNewDialog = true
+                if (ConnectedNodes.ids.none { nodeModules[it].offersChecks() || m64Hosts.containsKey(it) }) navController.navigate(Tabs.getRoute(Tab.healthcheck_new)) else showNewDialog = true
             }) {
                 Icon(painter = painterResource(id = R.drawable.heart_plus_24px), contentDescription = "New healthcheck")
             }
@@ -320,7 +362,11 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
                                 HcFilter.DOWN -> counts.down
                                 HcFilter.PAUSED -> counts.paused
                             }
-                            "${f.label} $n"
+                            // Node-Checks und Monitor64-Hosts mitzählen, passend zu den angezeigten Zeilen
+                            val extra = ConnectedNodes.ids.sumOf { id ->
+                                (nodeChecks[id].takeIf { nodeErrors[id] == null } ?: emptyList()).count { it.isNodeOwned() && f.matchesNode(it) }
+                            } + m64Hosts.values.sumOf { l -> l.count { it.uid != null && f.matchesHost(it) } }
+                            "${f.label} ${n + extra}"
                         },
                         onSelect = { filter = it },
                         trailingContent = if (!showExecFilter) null else {
@@ -370,7 +416,21 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
                         NodeCheckRow(c) { c.token?.let { navController.navigateWithArgs(Tab.node_check_details, NavKeys.SELECTED_NODE_ID to id, NavKeys.NODE_CHECK_TOKEN to it) } }
                     }
                 }
-                if (loaded && visible.isEmpty() && nodeChecks.values.none { l -> l.any { it.isNodeOwned() } }) {
+                // Monitor64-Gruppen je Node: Suche (Name/Adresse) und Statusfilter gelten auch hier
+                ConnectedNodes.ids.forEach { id ->
+                    val name = (LocalNodeStore.name(ctx, id)?.takeIf { it.isNotBlank() } ?: id) + " · Monitor64"
+                    val q = query.trim().lowercase()
+                    m64Errors[id]?.let { err ->
+                        spacedItem(key = "m64_err_$id") { ListGroup(title = name) { ListRow(title = "Monitor64 not available", subtitle = err, subtitleMaxLines = 4) } }
+                    }
+                    val hosts = m64Hosts[id].orEmpty().filter { h -> h.uid != null &&
+                        filter.matchesHost(h) && (q.isEmpty() || h.name.orEmpty().lowercase().contains(q) || h.address.orEmpty().lowercase().contains(q))
+                    }.sortedBy { it.name.orEmpty().lowercase() }
+                    groupedRows(hosts, key = { "m64_${id}_" + it.uid.orEmpty() }, title = name, headerKey = "m64_$id") { h ->
+                        Monitor64HostRow(h) { h.uid?.let { navController.navigateWithArgs(Tab.monitor64_host_details, NavKeys.SELECTED_NODE_ID to id, NavKeys.MONITOR64_HOST_UID to it) } }
+                    }
+                }
+                if (loaded && visible.isEmpty() && nodeChecks.values.none { l -> l.any { it.isNodeOwned() } } && m64Hosts.values.all { it.isEmpty() }) {
                     spacedItem {
                         Text(
                             if (checks.isEmpty()) "No healthchecks yet." else "No healthchecks match.",
@@ -421,6 +481,17 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
                             onClick = {
                                 showNewDialog = false
                                 navController.navigateWithArgs(Tab.node_check_edit, NavKeys.SELECTED_NODE_ID to id, NavKeys.NODE_CHECK_TOKEN to null)
+                            }
+                        )
+                    }
+                    ConnectedNodes.ids.filter { m64Hosts.containsKey(it) }.forEach { id ->
+                        val nodeName = LocalNodeStore.name(ctx, id)?.takeIf { it.isNotBlank() } ?: id
+                        GroupDivider(inset = 56.dp)
+                        ListRow(
+                            title = "Monitor64 host on $nodeName", subtitle = "Monitors a server or device from $nodeName", icon = R.drawable.monitor_heart_24px,
+                            onClick = {
+                                showNewDialog = false
+                                navController.navigateWithArgs(Tab.monitor64_host_edit, NavKeys.SELECTED_NODE_ID to id, NavKeys.MONITOR64_HOST_UID to null)
                             }
                         )
                     }

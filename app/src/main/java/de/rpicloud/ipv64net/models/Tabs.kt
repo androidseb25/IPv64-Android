@@ -39,6 +39,8 @@ enum class Tab {
     healthcheck_details,
     node_check_edit,
     node_check_details,
+    monitor64_host_edit,
+    monitor64_host_details,
     channels,
     channel_new,
     channel_edit,
@@ -166,6 +168,7 @@ sealed class Tabs {
             Tab.domain_record_edit -> Tab.domains
 
             Tab.healthcheck, Tab.healthcheck_new, Tab.healthcheck_edit, Tab.healthcheck_details, Tab.node_check_edit, Tab.node_check_details,
+            Tab.monitor64_host_edit, Tab.monitor64_host_details,
             // Vorerst nicht über die Oberfläche erreichbar (Monitoring-Hub und seine Bereiche)
             Tab.monitoring, Tab.hc2_activity, Tab.maintenance, Tab.maintenance_edit, Tab.status_pages,
             Tab.status_page_edit, Tab.failover, Tab.failover_details, Tab.failover_edit, Tab.offline_pages,
@@ -199,6 +202,8 @@ sealed class Tabs {
             Tab.healthcheck_details -> "Healthcheck"
             Tab.node_check_edit -> "Edit node healthcheck"
             Tab.node_check_details -> "Node healthcheck"
+            Tab.monitor64_host_edit -> "Edit Monitor64 host"
+            Tab.monitor64_host_details -> "Monitor64 host"
             Tab.node_dns_log -> "Query log"
             Tab.node_dns_records -> "Local DNS records"
             Tab.channels -> "Channels"
@@ -262,6 +267,7 @@ sealed class Tabs {
             Tab.network -> R.drawable.lan_24px
             Tab.settings -> R.drawable.more_horiz_24px
             Tab.healthcheck, Tab.node_check_edit, Tab.node_check_details -> R.drawable.ecg_heart_24px
+            Tab.monitor64_host_edit, Tab.monitor64_host_details -> R.drawable.monitor_heart_24px
             Tab.channels, Tab.push_setup -> R.drawable.notifications_unread_24px
             Tab.hc2_activity -> R.drawable.history_24px
             Tab.maintenance, Tab.maintenance_edit -> R.drawable.construction_24px

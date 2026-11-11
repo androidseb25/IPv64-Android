@@ -48,7 +48,6 @@ val Hc2CheckType?.label: String
         Hc2CheckType.PORT -> "Port"
         Hc2CheckType.CERT -> "Certificate"
         Hc2CheckType.PUSH -> "Push"
-        Hc2CheckType.DOCKER -> "Docker"
         Hc2CheckType.WHOIS -> "WHOIS"
         null -> "Unknown"
     }
@@ -63,13 +62,8 @@ val Hc2CheckType.targetHint: String
         Hc2CheckType.PORT -> "host:port"
         Hc2CheckType.CERT -> "example.com or host:port"
         Hc2CheckType.PUSH -> ""
-        Hc2CheckType.DOCKER -> "Container name"
         Hc2CheckType.WHOIS -> "example.com"
     }
-
-// Online (ohne Node) anlegbar; Docker braucht immer einen Node
-val Hc2CheckType.creatableOnline: Boolean
-    get() = this != Hc2CheckType.DOCKER
 
 // Sekunden lesbar, z. B. 45 s, 5 min, 1 min 30 s, 2 h, 1 h 30 min, 1 d 2 h
 fun formatSeconds(seconds: Int): String {
