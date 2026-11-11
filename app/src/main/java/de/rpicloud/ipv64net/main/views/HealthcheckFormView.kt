@@ -54,7 +54,6 @@ import de.rpicloud.ipv64net.helper.views.RequestDialogs
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
 import de.rpicloud.ipv64net.main.views.network.NodeListCache
 import de.rpicloud.ipv64net.models.RequestTyp
-import de.rpicloud.ipv64net.models.creatableOnline
 import de.rpicloud.ipv64net.models.label
 import de.rpicloud.ipv64net.models.repeatMinutesLabel
 import de.rpicloud.ipv64net.models.targetHint
@@ -76,7 +75,6 @@ private val REPEAT_OPTIONS: List<Int?> = listOf(null, 0, 5, 10, 15, 30, 60, 120,
 private val CREATE_TYPE_ORDER = listOf(
     Hc2CheckType.HTTP, Hc2CheckType.KEYWORD, Hc2CheckType.JSON, Hc2CheckType.DNS, Hc2CheckType.ICMP,
     Hc2CheckType.TCP, Hc2CheckType.PORT, Hc2CheckType.CERT, Hc2CheckType.PUSH, Hc2CheckType.WHOIS,
-    Hc2CheckType.DOCKER,
 )
 
 // Ausführungsfelder je Modus: Online → nur Standorte, Node → nur Node, Both → beides
@@ -193,7 +191,6 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
     // Push-Checks laufen nie auf Standorten/Nodes
     val execution = if (type == Hc2CheckType.PUSH) Hc2Execution.ONLINE else execSel
     val online = execution == Hc2Execution.ONLINE
-    // Node-only-Typen (Docker): eine zusätzliche Online-Messung könnte den lokalen Container nicht prüfen
     val nodeOnly = execution == Hc2Execution.LOCAL
     val usesLocations = execution != Hc2Execution.LOCAL && type != Hc2CheckType.PUSH
     // Gesamtregel: mehrere Standorte oder Standorte + Node
@@ -320,7 +317,6 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
             if (locations.size > maxLocations) return "Your plan allows up to $maxLocations locations per check."
         }
         if (!online && nodeId == null) return "Select a node."
-        if (type == Hc2CheckType.DOCKER && !nodeOnly) return "Docker checks need a node. Set \"Where it runs\" to Node."
         if (!useDefaultChannels && selectedChannels.isEmpty())
             return fail("Select at least one channel or use the default channels.", 2)
         return null
@@ -529,8 +525,7 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
                 } else {
                     FormDropdown(
                         label = "Type", value = type, options = CREATE_TYPE_ORDER,
-                        labelOf = { if (it.creatableOnline || nodeOnly) it.label else "${it.label} (requires a node)" },
-                        optionEnabled = { it.creatableOnline || nodeOnly },
+                        labelOf = { it.label },
                         onSelect = {
                             if (it != type) {
                                 type = it
@@ -538,10 +533,6 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
                                 iniPs = ps
                             }
                         }
-                    )
-                    FormHint(
-                        if (nodes.isEmpty()) "Docker checks need a node. Link one under Infrastructure."
-                        else "Docker checks need a node. Set \"Where it runs\" to Node first."
                     )
                 }
                 FormTextField("Name", name, { name = it })

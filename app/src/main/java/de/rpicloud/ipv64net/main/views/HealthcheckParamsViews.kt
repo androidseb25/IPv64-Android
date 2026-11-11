@@ -253,7 +253,7 @@ fun ParamsState.toParams(type: Hc2CheckType, ini: ParamsState): Hc2CheckParams? 
             graceSeconds = durationToSeconds(graceValue, graceUnit)?.takeIf { it >= 0 },
         )
 
-        Hc2CheckType.WHOIS, Hc2CheckType.DOCKER -> null
+        Hc2CheckType.WHOIS -> null
     }
 }
 
@@ -332,7 +332,7 @@ fun ParamsState.validateIssue(type: Hc2CheckType, target: String): Pair<String, 
             if (durationToSeconds(graceValue, graceUnit) == -1) return "Grace period is not a valid number." to false
         }
 
-        Hc2CheckType.WHOIS, Hc2CheckType.DOCKER -> {}
+        Hc2CheckType.WHOIS -> {}
     }
     return null
 }
@@ -343,7 +343,7 @@ fun Hc2CheckType.hasEssentialParams() = this in listOf(
 )
 
 fun Hc2CheckType.hasAdvancedParams() =
-    this != Hc2CheckType.WHOIS && this != Hc2CheckType.DOCKER && this != Hc2CheckType.PUSH
+    this != Hc2CheckType.WHOIS && this != Hc2CheckType.PUSH
 
 // Einklappbarer Bereich (standardmäßig zu); Zustand liegt beim Aufrufer
 @Composable
@@ -618,7 +618,7 @@ fun HealthcheckParamsEditor(
                 )
             }
 
-            Hc2CheckType.WHOIS, Hc2CheckType.DOCKER -> {}
+            Hc2CheckType.WHOIS -> {}
         }
     }
 }

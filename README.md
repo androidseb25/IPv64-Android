@@ -2,14 +2,14 @@
 
 The official Android app for [IPv64.net](https://ipv64.net/): DynDNS, healthchecks, CDN64 and your Node64 nodes in one place.
 
-Current version: **2.1.0** — see [CHANGELOG.md](CHANGELOG.md) for what changed.
+Current version: **2.2.0** — see [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## Features
 
 The app has five tabs:
 
 *   **DynDNS:** Your domains with IP status, DNS records, manual DynDNS updates and update URLs.
-*   **Healthchecks:** Healthchecks 2.0 of your account, plus the local checks of every connected node. Detail view with status, statistics, incidents and events.
+*   **Healthchecks:** Healthchecks 2.0 of your account, plus the local checks of every connected node. Detail view with status, statistics, incidents and events. **Monitor64** shows the monitored hosts of each node (servers, VMs, containers, Proxmox, SNMP and more) with charts, services, problems and accesses.
 *   **CDN64 / Proxy64:** Without a node, the CDN64 cloud servers. With a connected node that runs the cdn64 module, the tab becomes **Proxy64**: proxy hosts (create, edit, enable/disable), CDN64 per host with mode choice, and CDN statistics.
 *   **DNS64:** Shown when a connected node runs the dns64 module. Dashboard with blocking (pause for 5 min to "until resumed"), query timeline, top lists, upstreams and cache, a live query log and local DNS records.
 *   **More:**

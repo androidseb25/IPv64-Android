@@ -88,6 +88,8 @@ import de.rpicloud.ipv64net.main.views.network.ProxyHostEditView
 import de.rpicloud.ipv64net.main.views.network.ProxyView
 import de.rpicloud.ipv64net.main.views.NodeCheckEditView
 import de.rpicloud.ipv64net.main.views.NodeCheckDetailView
+import de.rpicloud.ipv64net.main.views.monitoring.Monitor64HostDetailView
+import de.rpicloud.ipv64net.main.views.monitoring.Monitor64HostEditView
 import de.rpicloud.ipv64net.main.views.network.NodeDnsLogView
 import de.rpicloud.ipv64net.main.views.network.NodeDnsRecordsView
 import de.rpicloud.ipv64net.main.views.network.NodeDnsView
@@ -242,6 +244,12 @@ class MainActivity : AppCompatActivity() {
                             }
                             composable(Tabs.getRoute(Tab.node_check_details)) {
                                 NodeCheckDetailView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.monitor64_host_edit)) {
+                                Monitor64HostEditView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.monitor64_host_details)) {
+                                Monitor64HostDetailView(navController, mainPadding = mainPadding)
                             }
                             composable(Tabs.getRoute(Tab.node_dns_log)) {
                                 NodeDnsLogView(navController, mainPadding = mainPadding)

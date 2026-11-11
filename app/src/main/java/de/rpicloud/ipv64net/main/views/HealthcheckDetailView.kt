@@ -348,7 +348,7 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
                         Icon(painter = painterResource(id = R.drawable.refresh_24px), contentDescription = "Refresh")
                     }
                     IconButton(
-                        enabled = detail != null,
+                        enabled = detail?.type != null, // unbekannter Typ (z. B. alter Docker-Check) würde als HTTP bearbeitet
                         onClick = {
                             navController.currentBackStackEntry?.savedStateHandle?.set(
                                 Hc2NavKeys.EDIT_HC2_TOKEN, token

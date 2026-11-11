@@ -20,7 +20,7 @@ cameraView = "1.6.2"
 accompanistPermissions = "0.37.3"
 biometric = "1.4.0-alpha07"
 secntfy = "2.1.0"
-ipv64Package = "1.1.0"
+ipv64Package = "2.1.0"
 firebaseMessaging = "26.0.1"
 googleServices = "4.5.0"
 

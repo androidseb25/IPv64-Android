@@ -2,6 +2,18 @@
 
 All notable changes to the IPv64net Android app. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.0] - 2026-11-11
+
+### Added
+- **Monitor64** in the Healthchecks tab: the monitored hosts of each connected node (servers, VMs, Docker, Proxmox, SNMP and more) with status, charts (touch for time and value), services, open problems (acknowledge, resolve), new services (adopt, ignore) and accesses. Create, edit, pause and delete hosts and their accesses, including a connection test.
+
+### Changed
+- IPv64-Package 2.1.0.
+- The status filter counts in Healthchecks include node checks and Monitor64 hosts.
+
+### Removed
+- The Docker check type (Docker monitoring now lives in Monitor64).
+
 ## [2.1.0] - 2026-11-10
 
 ### Added
