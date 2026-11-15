@@ -1,12 +1,10 @@
 package de.rpicloud.ipv64net.main.views.network
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.selection.selectable
@@ -38,10 +36,10 @@ import de.rpicloud.ipv64net.main.views.common.ActionTile
 import de.rpicloud.ipv64net.helper.formatGermanTime
 import de.rpicloud.ipv64net.main.views.FormTextField
 import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.ExpandableGroupRow
 import de.rpicloud.ipv64net.main.views.common.GroupDivider
 import de.rpicloud.ipv64net.main.views.common.ListGroup
 import de.rpicloud.ipv64net.main.views.common.ListRow
-import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.rpicloud.ipv64net.main.views.common.StatusChip
 import de.rpicloud.ipv64net.main.views.common.InfoGroup
 import de.rpicloud.ipv64net.main.views.common.InfoItem
@@ -234,25 +232,18 @@ private fun SectionToggleHeader(
     expanded: Boolean,
     onToggle: () -> Unit,
     enabled: Boolean,
-    onRefresh: (() -> Unit)?
+    onRefresh: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .clickable(onClick = onToggle),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        SectionHeader(title, modifier = Modifier.weight(1f).padding(start = 4.dp))
-        if (expanded && onRefresh != null) {
-            IconButton(onClick = onRefresh, enabled = enabled) {
-                Icon(painter = painterResource(R.drawable.refresh_24px), contentDescription = "Refresh")
+    ListGroup {
+        ExpandableGroupRow(
+            title, expanded, onToggle,
+            trailing = {
+                if (expanded) {
+                    IconButton(onClick = onRefresh, enabled = enabled) {
+                        Icon(painter = painterResource(R.drawable.refresh_24px), contentDescription = "Refresh $title")
+                    }
+                }
             }
-        }
-        Icon(
-            painter = painterResource(if (expanded) R.drawable.expand_less_24px else R.drawable.expand_more_24px),
-            contentDescription = if (expanded) "Collapse" else "Expand",
-            modifier = Modifier.padding(end = 8.dp)
         )
     }
 }

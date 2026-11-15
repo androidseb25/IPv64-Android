@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
@@ -37,11 +38,10 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.main.views.common.ActionSheet
-import de.rpicloud.ipv64net.helper.FeatureAvailability
+import de.rpicloud.ipv64net.helper.AccountCache
+import de.rpicloud.ipv64net.helper.IPv64Client
 import de.rpicloud.ipv64net.helper.NavKeys
-import de.rpicloud.ipv64net.helper.PlanFeature
-import de.rpicloud.ipv64net.helper.availability
-import de.rpicloud.ipv64net.helper.canCreate
+import de.rpicloud.ipv64net.helper.ipv64Retrying
 import de.rpicloud.ipv64net.helper.loadMe
 import de.rpicloud.ipv64net.helper.navigateWithArgs
 import de.rpicloud.ipv64net.helper.rememberNavArg
@@ -50,7 +50,6 @@ import de.rpicloud.ipv64net.main.views.FormSwitchRow
 import de.rpicloud.ipv64net.main.views.FormTextField
 import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
 import de.rpicloud.ipv64net.main.views.FormAccordion
-import de.rpicloud.ipv64net.main.views.common.DomainPickerDialog
 import de.rpicloud.ipv64net.main.views.common.FormSection
 import de.rpicloud.ipv64net.main.views.common.GroupDivider
 import de.rpicloud.ipv64net.main.views.common.GroupText
@@ -80,7 +79,6 @@ import de.sr.ipv64.node64.model.ProxyHostInput
 import de.sr.ipv64.node64.model.ProxyHostKind
 import de.sr.ipv64.node64.model.ProxyScheme
 import de.sr.ipv64.node64.model.RedirectScheme
-import de.sr.ipv64.IPv64Exception as ApiException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -118,7 +116,7 @@ fun ProxyView(navController: NavHostController, mainPadding: PaddingValues) {
     var groups by remember { mutableStateOf<List<NodeHosts>?>(null) }
     var usage by remember { mutableStateOf<MeUsage?>(null) }
     var refreshing by remember { mutableStateOf(false) }
-    var showPicker by remember { mutableStateOf(false) }
+    var cloudPicker by remember { mutableStateOf<CloudCdnOverview?>(null) }
     var showNodePicker by remember { mutableStateOf(false) }
     var showEnableFlow by remember { mutableStateOf(false) }
 
@@ -157,24 +155,11 @@ fun ProxyView(navController: NavHostController, mainPadding: PaddingValues) {
     fun newHost(nodeId: String) =
         navController.navigateWithArgs(Tab.proxy_host_edit, NavKeys.SELECTED_NODE_ID to nodeId, NavKeys.PROXY_HOST_ID to null)
 
-    // Plan und Liste prüfen wie in CdnView, dann Domain wählen
     fun startAddCdn() {
-        // Mit verbundener Node läuft CDN64 über deren Proxy-Hosts (Plan-/Limitprüfung übernimmt der Server)
+        if (req.isBusy) return
         if (groups.orEmpty().any { it.error == null }) { showEnableFlow = true; return }
         req.launch(scope, spinner = "Loading...") {
-            val availability = try {
-                loadMe(ctx).availability(PlanFeature.CDN)
-            } catch (e: ApiException) {
-                FeatureAvailability.Unknown
-            }
-            when {
-                availability is FeatureAvailability.NotInPlan -> req.message("Not available", "Your plan does not include the CDN.")
-                !availability.canCreate -> req.cdnLimitMessage(availability)
-                else -> {
-                    CdnCache.get(ctx, false) { it.cdn.list() }
-                    showPicker = true
-                }
-            }
+            cloudPicker = CloudCdnCache.get(ctx) { it.loadCloudCdn() }
         }
     }
 
@@ -195,13 +180,13 @@ fun ProxyView(navController: NavHostController, mainPadding: PaddingValues) {
             }
         }
     ) {
-        RefreshableList(refreshing = refreshing, onRefresh = { load(true) }, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        RefreshableList(refreshing = refreshing, onRefresh = { load(true) }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item(key = "cdn_stats") { CdnStatsCard(usage, groups.orEmpty().firstNotNullOfOrNull { it.online?.quota }) }
             item(key = "cdn") {
-                ListGroup("CDN64") {
+                ListGroup {
                     ListRow(
                         title = "CDN64",
-                        subtitle = CdnCache.peek(ctx)?.let { "${it.size} domains" } ?: "Cloud CDN from ipv64.net",
+                        subtitle = CloudCdnCache.peek(ctx)?.let { "${it.hosts.size} domains" },
                         onClick = { navController.navigate(Tabs.getRoute(Tab.cdn)) }
                     )
                     GroupDivider()
@@ -216,7 +201,7 @@ fun ProxyView(navController: NavHostController, mainPadding: PaddingValues) {
                             GroupText("Check the connection under More → Nodes.")
                         }
                         else if (g.hosts.isEmpty()) ListRow(title = "No hosts.")
-                        g.hosts.forEachIndexed { i, h ->
+                        g.hosts.sortedBy { it.names.minWithOrNull(String.CASE_INSENSITIVE_ORDER).orEmpty().lowercase() }.forEachIndexed { i, h ->
                             if (i > 0) GroupDivider()
                             ProxyHostRow(
                                 h, cdn = h.id?.let { g.cdn[it] }, edges = g.edges,
@@ -236,21 +221,25 @@ fun ProxyView(navController: NavHostController, mainPadding: PaddingValues) {
         }
     }
 
-    if (showPicker) {
-        DomainPickerDialog(
-            exclude = CdnCache.peek(ctx).orEmpty().mapNotNull { it.domain }.toSet(),
-            title = "Add domain to CDN",
-            onPick = { name ->
-                showPicker = false
-                req.addCdnDomain(scope, ctx, navController, name)
+    cloudPicker?.let { cloud ->
+        CloudCdnEnableFlow(
+            exclude = cloud.hosts.map { it.fqdn.lowercase() }.toSet(),
+            onEnable = { input ->
+                cloudPicker = null
+                req.launch(scope, spinner = "Enabling CDN64...") {
+                    ipv64Retrying { IPv64Client.get(ctx).enableCloudCdn(input) }
+                    CloudCdnCache.invalidate()
+                    AccountCache.invalidate()
+                    navController.navigate(Tabs.getRoute(Tab.cdn))
+                }
             },
-            onDismiss = { showPicker = false }
+            onDismiss = { cloudPicker = null }
         )
     }
     if (showEnableFlow) {
         val choices = groups.orEmpty().filter { it.error == null }.flatMap { g ->
             g.hosts.filter { it.id != null && it.id !in g.cdn }
-                .map { CdnHostChoice(g.id, g.name, it.id!!, it.names.joinToString().ifBlank { "#${it.id}" }) }
+                .map { CdnHostChoice(g.id, g.name, it.id!!, it.sortedNames()) }
         }
         CdnEnableFlow(
             choices,
@@ -288,6 +277,9 @@ private fun ProxyHost.subtitle(): String {
     return listOfNotNull(kind?.value, redirectTarget ?: target).filter { it.isNotBlank() }.joinToString(" → ")
 }
 
+internal fun ProxyHost.sortedNames(): String =
+    names.sortedWith(String.CASE_INSENSITIVE_ORDER).joinToString().ifBlank { id?.let { "#$it" } ?: "–" }
+
 // SSL-Chip: Text + Farbe (grün, orange < 14 Tage, rot abgelaufen/fehlt)
 private fun ProxyHost.sslChip(): Pair<String, Int>? {
     val c = certificate ?: return null
@@ -302,25 +294,29 @@ private fun ProxyHost.sslChip(): Pair<String, Int>? {
     }
 }
 
-/** Kompakte Host-Zeile: Domains, Ziel, Chips (SSL, Optionen, CDN64) und Zähler. Tippen öffnet den Editor. */
+/** Host-Zeile mit Erreichbarkeit, SSL, CDN64 und Zählern. Konfiguration erscheint im Editor. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ProxyHostRow(h: ProxyHost, cdn: CDNOnlineName?, edges: List<CDNOnlineEdge>, onClick: (() -> Unit)?) {
     val gray = colorResource(R.color.ipv64_gray)
     val (txt, col) = h.statusChip()
     val reach = txt + (h.reach?.ms?.let { " · $it ms" } ?: "")
-    val options = listOfNotNull(
-        "WS".takeIf { h.websockets == true }, "Exploits".takeIf { h.blockExploits == true },
-        "Cache".takeIf { h.cacheAssets == true }, "HTTPS forced".takeIf { h.forceSsl == true },
-        "H2".takeIf { h.http2 == true }, "H3".takeIf { h.http3 == true }, "HSTS".takeIf { h.hsts == true },
-        "Not public".takeIf { (h.accessListId ?: 0) > 0 }
-    )
     val up = edges.count { it.connected == true }
+    val click = if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)
     Column(
-        Modifier.fillMaxWidth().clickable(enabled = onClick != null) { onClick?.invoke() }.padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().then(click).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text(h.names.joinToString().ifBlank { "–" }, style = MaterialTheme.typography.titleMedium)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(h.sortedNames(), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            if (onClick != null) {
+                Icon(
+                    painterResource(R.drawable.chevron_right_24px),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         h.subtitle().takeIf { it.isNotBlank() }?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -331,7 +327,14 @@ private fun ProxyHostRow(h: ProxyHost, cdn: CDNOnlineName?, edges: List<CDNOnlin
                 "CDN64 · ${cdnModeShort(cdn.mode)}" + if (edges.isNotEmpty()) " · $up/${edges.size} servers" else "",
                 colorResource(if (edges.isNotEmpty() && up == 0) R.color.ipv64_red else R.color.ipv64_green)
             )
-            options.forEach { StatusChip(it, gray) }
+            if ((h.accessListId ?: 0) > 0) StatusChip("Restricted", gray)
+            if (onClick == null) {
+                listOfNotNull(
+                    "WS".takeIf { h.websockets == true }, "Exploits".takeIf { h.blockExploits == true },
+                    "Cache".takeIf { h.cacheAssets == true }, "HTTPS forced".takeIf { h.forceSsl == true },
+                    "H2".takeIf { h.http2 == true }, "H3".takeIf { h.http3 == true }, "HSTS".takeIf { h.hsts == true }
+                ).forEach { StatusChip(it, gray) }
+            }
         }
         h.stats?.takeIf { it.requests != null }?.let {
             Text(

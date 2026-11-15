@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,6 +17,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -42,9 +47,11 @@ import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.rpicloud.ipv64net.models.User
 import de.rpicloud.ipv64net.ui.theme.AppTheme
+import de.rpicloud.ipv64net.ui.theme.chartPalette
 import kotlinx.coroutines.launch
 import de.sr.ipv64.IPv64Exception
 import de.sr.ipv64.model.Me
+import de.sr.ipv64.model.UsageCounter
 
 @SuppressLint("ContextCastToActivity")
 @Composable
@@ -127,9 +134,9 @@ fun AccountView(navController: NavHostController, mainPadding: PaddingValues) {
                 InfoGroup(
                     "DynDNS",
                     listOf(
-                        InfoItem("Own Domain", usage?.ownDomains.usageText()),
-                        InfoItem("DynDNS Domains", usage?.dyndnsDomains.usageText()),
-                        InfoItem("DynDNS Update Limit / 24h", usage?.dyndnsUpdates24h.usageText())
+                        usageItem("Own Domain", usage?.ownDomains),
+                        usageItem("DynDNS Domains", usage?.dyndnsDomains),
+                        usageItem("DynDNS Update Limit / 24h", usage?.dyndnsUpdates24h)
                     )
                 )
             }
@@ -137,9 +144,9 @@ fun AccountView(navController: NavHostController, mainPadding: PaddingValues) {
                 InfoGroup(
                     "Healthcheck",
                     listOf(
-                        InfoItem("Healthchecks", usage?.healthchecks.usageText()),
-                        InfoItem("Healthchecks Updates / 24h", usage?.healthcheckPings24h.usageText()),
-                        InfoItem("SMS Limit / 24h", usage?.sms24h.usageText())
+                        usageItem("Healthchecks", usage?.healthchecks),
+                        usageItem("Healthchecks Updates / 24h", usage?.healthcheckPings24h),
+                        usageItem("SMS Limit / 24h", usage?.sms24h)
                     )
                 )
             }
@@ -147,9 +154,9 @@ fun AccountView(navController: NavHostController, mainPadding: PaddingValues) {
                 InfoGroup(
                     "Failover",
                     listOf(
-                        InfoItem("Failover Policies", usage?.failoverPolicies.usageText()),
-                        InfoItem("Failover Monitors", usage?.failoverMonitors.usageText()),
-                        InfoItem("Failover Rules", usage?.failoverRules.usageText())
+                        usageItem("Failover Policies", usage?.failoverPolicies),
+                        usageItem("Failover Monitors", usage?.failoverMonitors),
+                        usageItem("Failover Rules", usage?.failoverRules)
                     )
                 )
             }
@@ -157,8 +164,8 @@ fun AccountView(navController: NavHostController, mainPadding: PaddingValues) {
                 InfoGroup(
                     "CDN",
                     listOf(
-                        InfoItem("CDN Domains", usage?.cdnDomains.usageText()),
-                        InfoItem("CDN Traffic (GB)", usage?.cdnTrafficGb.usageText())
+                        usageItem("CDN Domains", usage?.cdnDomains),
+                        usageItem("CDN Traffic (GB)", usage?.cdnTrafficGb)
                     )
                 )
             }
@@ -166,8 +173,12 @@ fun AccountView(navController: NavHostController, mainPadding: PaddingValues) {
                 InfoGroup(
                     "VPN / DNS64",
                     listOf(
-                        InfoItem("VPN Traffic (GB)", usage?.vpnTrafficGb.usageText()),
-                        InfoItem("DNS64 Clients", usage?.dns64Clients.usageText())
+                        usageItem(
+                            "VPN Traffic (GB)", usage?.vpnTrafficGb.usageText(),
+                            usage?.vpnTrafficGb?.used, usage?.vpnTrafficGb?.limit?.toDouble(),
+                            usage?.vpnTrafficGb?.limited == true
+                        ),
+                        usageItem("DNS64 Clients", usage?.dns64Clients)
                     )
                 )
             }
@@ -216,6 +227,43 @@ fun AccountView(navController: NavHostController, mainPadding: PaddingValues) {
     LaunchedEffect(Unit) {
         getAccountInfos()
     }
+}
+
+@Composable
+private fun usageItem(label: String, counter: UsageCounter?): InfoItem =
+    usageItem(label, counter.usageText(), counter?.used, counter?.limit?.toDouble())
+
+@Composable
+private fun usageItem(label: String, rawValue: String, used: Double?, limit: Double?, reached: Boolean = false): InfoItem {
+    val severity = usageSeverity(used, limit, reached)
+    val palette = chartPalette()
+    val status = when (severity) {
+        UsageSeverity.NEAR_LIMIT -> " · Near limit"
+        UsageSeverity.LIMIT_REACHED -> if (rawValue.endsWith(" (limit reached)")) "" else " · Limit reached"
+        UsageSeverity.NORMAL, UsageSeverity.UNKNOWN -> ""
+    }
+    val color = when (severity) {
+        UsageSeverity.NORMAL -> palette.categorical(5)
+        UsageSeverity.NEAR_LIMIT -> palette.categorical(1)
+        UsageSeverity.LIMIT_REACHED -> palette.categorical(7)
+        UsageSeverity.UNKNOWN -> Color.Unspecified
+    }
+    val readableColor = when {
+        !color.isSpecified -> color
+        MaterialTheme.colorScheme.surface.luminance() < 0.5f -> lerp(color, Color.White, 0.15f)
+        else -> lerp(color, Color.Black, 0.20f)
+    }
+    return InfoItem(label, rawValue + status, valueColor = readableColor)
+}
+
+internal enum class UsageSeverity { UNKNOWN, NORMAL, NEAR_LIMIT, LIMIT_REACHED }
+
+internal fun usageSeverity(used: Double?, limit: Double?, reached: Boolean = false): UsageSeverity = when {
+    reached || (used != null && limit != null && used >= limit) -> UsageSeverity.LIMIT_REACHED
+    used == null -> UsageSeverity.UNKNOWN
+    limit == null || limit <= 0 -> UsageSeverity.NORMAL
+    used >= limit * 0.8 -> UsageSeverity.NEAR_LIMIT
+    else -> UsageSeverity.NORMAL
 }
 
 @Preview(showBackground = true, device = "id:pixel_5")

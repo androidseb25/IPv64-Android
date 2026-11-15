@@ -333,6 +333,7 @@ def _register_node(prefix, spec):
     r("POST", "/dns64/allowlist", lambda c: {"domain": c.body.get("domain", "example.com"), "addedAt": iso()})
     r("DELETE", "/dns64/allowlist", lambda c: (204, None))
     r("POST", "/dns64/allowlist/import", lambda c: {"imported": len(c.body.get("domains") or []), "invalid": 0})
+    r("POST", "/dns64/denylist", lambda c: {"domain": c.body.get("domain"), "addedAt": iso()})
     r("GET", "/dns64/settings", lambda c: _dns_settings())
     r("PUT", "/dns64/settings", lambda c: {**_dns_settings(), **c.body})
     r("POST", "/dns64/pause", pause)

@@ -24,6 +24,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -44,18 +45,18 @@ import de.rpicloud.ipv64net.helper.formatRelative
 import de.rpicloud.ipv64net.helper.navigateWithArgs
 import de.rpicloud.ipv64net.helper.rememberNavArg
 import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
+import de.rpicloud.ipv64net.main.views.common.ExpandableListGroup
 import de.rpicloud.ipv64net.main.views.common.FilterChipRow
 import de.rpicloud.ipv64net.main.views.common.GroupDivider
 import de.rpicloud.ipv64net.main.views.common.GroupText
-import de.rpicloud.ipv64net.main.views.common.InfoGroup
 import de.rpicloud.ipv64net.main.views.common.InfoItem
 import de.rpicloud.ipv64net.main.views.common.InfoRow
+import de.rpicloud.ipv64net.main.views.common.InfoRows
 import de.rpicloud.ipv64net.main.views.common.ListGroup
 import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
 import de.rpicloud.ipv64net.main.views.common.ScreenScaffold
 import de.rpicloud.ipv64net.main.views.common.StatusChip
-import de.rpicloud.ipv64net.main.views.common.groupedRows
 import de.rpicloud.ipv64net.main.views.common.rememberRequestState
 import de.rpicloud.ipv64net.main.views.common.spacedItem
 import de.rpicloud.ipv64net.main.views.network.LocalNodeStore
@@ -92,7 +93,11 @@ fun NodeCheckDetailView(navController: NavHostController, mainPadding: PaddingVa
     var measurements by remember { mutableStateOf<List<Measurement>>(emptyList()) }
     var incidents by remember { mutableStateOf<List<Incident>>(emptyList()) }
     var incidentsError by remember { mutableStateOf<String?>(null) }
-    var range by remember { mutableStateOf(StatsRange.HOURS_24) }
+    var range by rememberSaveable { mutableStateOf(StatsRange.HOURS_24) }
+    var statusExpanded by rememberSaveable { mutableStateOf(true) }
+    var statsExpanded by rememberSaveable { mutableStateOf(false) }
+    var incidentsExpanded by rememberSaveable { mutableStateOf(false) }
+    var eventsExpanded by rememberSaveable { mutableStateOf(false) }
     val statsCache = remember { mutableStateMapOf<StatsRange, Stats>() }
     // Zählt jedes Neuladen hoch, damit die geleerte Statistik erneut geholt wird
     var statsGen by remember { mutableIntStateOf(0) }
@@ -137,12 +142,19 @@ fun NodeCheckDetailView(navController: NavHostController, mainPadding: PaddingVa
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { load() }
 
     // Statistik je Zeitraum nur einmal laden
-    LaunchedEffect(range, chk?.token, statsGen) {
+    LaunchedEffect(statsExpanded, range, chk?.token, statsGen) {
+        if (!statsExpanded) return@LaunchedEffect
         val tk = chk?.token ?: return@LaunchedEffect
         if (client == null || statsCache.containsKey(range)) { statsError = null; return@LaunchedEffect }
         statsLoading = true
-        section({ statsError = it }) { client.checks.stats(tk, range) }?.let { statsCache[range] = it }
-        statsLoading = false
+        try {
+            val requestedRange = range
+            section({ statsError = it }) { client.checks.stats(tk, requestedRange) }?.let {
+                statsCache[requestedRange] = it
+            }
+        } finally {
+            statsLoading = false
+        }
     }
 
     ScreenScaffold(
@@ -183,9 +195,8 @@ fun NodeCheckDetailView(navController: NavHostController, mainPadding: PaddingVa
                     }
                 }
                 spacedItem {
-                    InfoGroup(
-                        "Status",
-                        listOf(
+                    ExpandableListGroup("Status", statusExpanded, { statusExpanded = !statusExpanded }) {
+                        val rows = listOf(
                             InfoItem("Since", st?.since?.realOrNull()?.formatGermanTime()),
                             InfoItem("Last check", st?.lastCheckAt?.let { "${it.formatGermanTime()} (${it.formatRelative()})" }),
                             InfoItem("Last status", st?.lastStatus),
@@ -195,9 +206,9 @@ fun NodeCheckDetailView(navController: NavHostController, mainPadding: PaddingVa
                             InfoItem("Down since", st?.downSince?.realOrNull()?.formatGermanTime(), valueColor = MaterialTheme.colorScheme.error),
                             InfoItem("Interval", d.intervalSeconds?.let { "$it s" }),
                             InfoItem("Description", d.description)
-                        ),
-                        hideEmpty = true
-                    )
+                        ).filter { !it.value.isNullOrBlank() }
+                        if (rows.isEmpty()) GroupText("No status yet") else InfoRows(rows)
+                    }
                 }
                 spacedItem {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -223,7 +234,7 @@ fun NodeCheckDetailView(navController: NavHostController, mainPadding: PaddingVa
                     }
                 }
                 spacedItem {
-                    ListGroup("Statistics") {
+                    ExpandableListGroup("Statistics", statsExpanded, { statsExpanded = !statsExpanded }) {
                         Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             FilterChipRow(options = StatsRange.entries, selected = range, label = { it.chipLabel() }, onSelect = { range = it })
                             val s = statsCache[range]
@@ -241,7 +252,7 @@ fun NodeCheckDetailView(navController: NavHostController, mainPadding: PaddingVa
                     }
                 }
                 spacedItem {
-                    ListGroup("Incidents") {
+                    ExpandableListGroup("Incidents", incidentsExpanded, { incidentsExpanded = !incidentsExpanded }) {
                         when {
                             incidentsError != null -> GroupText(incidentsError.orEmpty(), error = true)
                             incidents.isEmpty() -> ListRow("No incidents")
@@ -252,10 +263,17 @@ fun NodeCheckDetailView(navController: NavHostController, mainPadding: PaddingVa
                         }
                     }
                 }
-                when {
-                    eventsError != null -> spacedItem { ListGroup("Events") { GroupText(eventsError.orEmpty(), error = true) } }
-                    events.isEmpty() -> spacedItem { ListGroup("Events") { ListRow("No events") } }
-                    else -> groupedRows(events, title = "Events") { NodeEventRow(it) }
+                spacedItem {
+                    ExpandableListGroup("Events", eventsExpanded, { eventsExpanded = !eventsExpanded }) {
+                        when {
+                            eventsError != null -> GroupText(eventsError.orEmpty(), error = true)
+                            events.isEmpty() -> ListRow("No events")
+                            else -> events.forEachIndexed { i, event ->
+                                if (i > 0) GroupDivider()
+                                NodeEventRow(event)
+                            }
+                        }
+                    }
                 }
             }
         }

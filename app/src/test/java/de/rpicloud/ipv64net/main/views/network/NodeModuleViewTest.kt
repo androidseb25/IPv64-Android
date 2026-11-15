@@ -10,10 +10,11 @@ class NodeModuleViewTest {
     @Test
     fun labelsKnownModulesCaseInsensitive() {
         assertEquals("Honeypot", moduleLabel("Honeypot"))
-        assertEquals("CDN64 / Proxy", moduleLabel("cdn64"))
         assertTrue(hasModuleScreen("dns64"))
-        assertEquals("Healthchecks", moduleLabel("checks"))
-        assertEquals("Healthchecks", moduleLabel("healthchecks"))
+        listOf("cdn64", "dyndns", "checks", "healthchecks", "ipam64").forEach {
+            assertNull(moduleLabel(it))
+            assertFalse(hasModuleScreen(it))
+        }
     }
 
     @Test

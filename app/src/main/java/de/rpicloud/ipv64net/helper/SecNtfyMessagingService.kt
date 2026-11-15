@@ -11,8 +11,10 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import com.secntfy.android.DeliveryReceipt
 import com.secntfy.android.SecNtfy
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.helper.SecNtfyLog.Status
 import de.rpicloud.ipv64net.main.activity.MainActivity
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
@@ -28,6 +30,7 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
     @Suppress("OverridingDeprecatedMember", "DEPRECATION")
     override fun onNewToken(token: String) {
         super.onNewToken(token)
+        SecNtfyLog.record(applicationContext, "Push token refreshed", status = Status.SUCCESS)
         PreferencesManager.saveString(applicationContext, "FCM_TOKEN", token)
         SecNtfyHelper.registerDeviceToken(applicationContext)
     }
@@ -40,21 +43,20 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
         val title = extras?.getString("gcm.notification.title")
             ?: extras?.getString("gcm.n.title")
             ?: extras?.getString("title")
+        val body = extras?.getString("gcm.notification.body")
+            ?: extras?.getString("gcm.n.body")
+            ?: extras?.getString("body")
+        val messageId = extras?.getString("messageId")?.takeIf { it.isNotBlank() }
+            ?: extras?.getString("id").orEmpty()
 
-        if (intent.action == "com.google.android.c2dm.intent.RECEIVE" && extras != null && title != null) {
-            val body = extras.getString("gcm.notification.body")
-                ?: extras.getString("gcm.n.body")
-                ?: extras.getString("body")
-                ?: ""
+        if (intent.action == "com.google.android.c2dm.intent.RECEIVE" && extras != null &&
+            (title != null || body != null || messageId.isNotBlank())
+        ) {
             val image = extras.getString("gcm.notification.image")
                 ?: extras.getString("gcm.n.image")
                 ?: extras.getString("image")
                 ?: ""
-            val messageId = extras.getString("messageId")
-                ?: extras.getString("id")
-                ?: ""
-
-            processNotification(title, body, image, messageId)
+            processNotification(title.orEmpty(), body.orEmpty(), image, messageId)
         } else {
             super.handleIntent(intent)
         }
@@ -62,10 +64,10 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         processNotification(
-            title = remoteMessage.data["title"].orEmpty(),
-            body = remoteMessage.data["body"].orEmpty(),
-            image = remoteMessage.data["image"].orEmpty(),
-            messageId = remoteMessage.data["messageId"] ?: remoteMessage.data["id"] ?: remoteMessage.messageId.orEmpty(),
+            title = (remoteMessage.data["title"] ?: remoteMessage.notification?.title).orEmpty(),
+            body = (remoteMessage.data["body"] ?: remoteMessage.notification?.body).orEmpty(),
+            image = (remoteMessage.data["image"] ?: remoteMessage.notification?.imageUrl?.toString()).orEmpty(),
+            messageId = remoteMessage.data["messageId"]?.takeIf { it.isNotBlank() } ?: remoteMessage.data["id"].orEmpty(),
         )
     }
 
@@ -73,55 +75,57 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
     // direkt nach der Rückkehr, ein gestarteter Job ginge mit Empfangsbestätigung/Benachrichtigung verloren
     private fun processNotification(title: String, body: String, image: String, messageId: String) {
         runBlocking {
-            try {
-                val apiUrl = PreferencesManager.loadString(applicationContext, "SECNTFY_API_URL")
-                val appKey = PreferencesManager.loadString(applicationContext, "SECNTFY_APP_KEY")
+            val context = applicationContext
+            val secntfy = SecNtfy.getInstance()
+            val notificationId = System.currentTimeMillis().toInt()
+            SecNtfyLog.record(context, "Notification received")
+            if (messageId.isBlank()) SecNtfyLog.record(context, "Receipt unavailable: missing message ID", status = Status.SKIPPED)
 
-                val secntfy = SecNtfy.getInstance()
-                if (apiUrl.isNotEmpty() && appKey.isNotEmpty()) {
-                    // Gemeinsam mit der Registrierung serialisiert und nur einmal pro Prozess initialisiert.
-                    // Höchstens kurz warten (Firebase-Zeitfenster ~20 s): eine laufende Registrierung hält den Mutex
-                    // evtl. lange, hat den Singleton aber schon zu Beginn konfiguriert, Entschlüsseln klappt dann trotzdem
-                    withTimeoutOrNull(3_000) { SecNtfyHelper.ensureConfigured(applicationContext) }
-                }
-
-                val decryptedTitle = try {
-                    if (title.isNotEmpty()) secntfy.decryptMessage(title) else "IPv64.net Notification"
-                } catch (_: Exception) {
-                    title
-                }
-
-                val decryptedBody = try {
-                    if (body.isNotEmpty()) secntfy.decryptMessage(body) else "New notification received"
-                } catch (_: Exception) {
-                    body
-                }
-
-                val decryptedImage = try {
-                    if (image.isNotEmpty()) secntfy.decryptMessage(image) else ""
-                } catch (_: Exception) {
-                    image
-                }
-
-                // Text sofort anzeigen; ein Bild wird erst nach der Empfangsbestätigung nachgeladen
-                val notificationId = System.currentTimeMillis().toInt()
-                val builder = showNotification(notificationId, decryptedTitle, decryptedBody)
-
-                if (messageId.isNotEmpty()) {
-                    try {
-                        if (apiUrl.isNotEmpty() && appKey.isNotEmpty()) {
-                            secntfy.messageReceived(messageId)
-                        }
-                    } catch (error: Exception) {
-                        error.printStackTrace()
+            val notification = withSecNtfyReceipt(messageId, acknowledge = { id ->
+                try {
+                    when (secntfy.messageReceived(id)) {
+                        DeliveryReceipt.DELIVERED -> SecNtfyLog.record(context, "Delivery receipt accepted", status = Status.SUCCESS)
+                        DeliveryReceipt.ALREADY_DELIVERED -> SecNtfyLog.record(context, "Delivery receipt already accepted", status = Status.SUCCESS)
                     }
+                } catch (error: Exception) {
+                    SecNtfyLog.record(context, "Delivery receipt failed", error)
                 }
-
-                if (builder != null && decryptedImage.startsWith("https://")) {
-                    showImage(notificationId, builder, decryptedBody, decryptedImage)
+            }) {
+                try {
+                    // Registration may briefly hold the configuration lock while the SDK is already usable.
+                    when (withTimeoutOrNull(3_000) { SecNtfyHelper.ensureConfigured(context) }) {
+                        null -> SecNtfyLog.record(context, "Timed out waiting for push configuration", status = Status.FAILED)
+                        false -> SecNtfyLog.record(context, "Push configuration missing", status = Status.SKIPPED)
+                        true -> Unit
+                    }
+                    fun decrypt(value: String, fallback: String, field: String): String {
+                        if (value.isEmpty()) return fallback
+                        return try {
+                            secntfy.decryptMessage(value)
+                        } catch (error: Exception) {
+                            SecNtfyLog.record(context, "Could not decrypt notification $field", error)
+                            value
+                        }
+                    }
+                    val decryptedTitle = decrypt(title, "IPv64.net Notification", "title")
+                    val decryptedBody = decrypt(body, "New notification received", "body")
+                    val decryptedImage = decrypt(image, "", "image")
+                    val builder = showNotification(notificationId, decryptedTitle, decryptedBody)
+                    if (builder == null) {
+                        SecNtfyLog.record(context, "Notification permission missing", status = Status.SKIPPED)
+                        null
+                    } else {
+                        SecNtfyLog.record(context, "Notification posted", status = Status.SUCCESS)
+                        Triple(builder, decryptedBody, decryptedImage)
+                    }
+                } catch (error: Exception) {
+                    SecNtfyLog.record(context, "Could not prepare or post notification", error)
+                    null
                 }
-            } catch (error: Exception) {
-                error.printStackTrace()
+            }
+            // An optional image fetch must never delay the receipt.
+            notification?.let { (builder, text, url) ->
+                if (url.startsWith("https://")) showImage(notificationId, builder, text, url)
             }
         }
     }
@@ -181,7 +185,11 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
             connection.connectTimeout = 4_000
             connection.readTimeout = 4_000
             connection.connect()
-            val bitmap = BitmapFactory.decodeStream(connection.inputStream) ?: return
+            val bitmap = try {
+                connection.inputStream.use(BitmapFactory::decodeStream)
+            } finally {
+                connection.disconnect()
+            } ?: return
             builder.setStyle(
                 NotificationCompat.BigPictureStyle()
                     .bigPicture(bitmap)
@@ -190,8 +198,19 @@ class SecNtfyMessagingService : FirebaseMessagingService() {
             )
             builder.setLargeIcon(bitmap)
             (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(notificationId, builder.build())
+            SecNtfyLog.record(applicationContext, "Notification image posted", status = Status.SUCCESS)
         } catch (e: Exception) {
-            e.printStackTrace()
+            SecNtfyLog.record(applicationContext, "Could not load notification image", e)
         }
     }
+}
+
+internal suspend fun <T> withSecNtfyReceipt(
+    messageId: String,
+    acknowledge: suspend (String) -> Unit,
+    process: suspend () -> T
+): T = try {
+    process()
+} finally {
+    if (messageId.isNotBlank()) acknowledge(messageId)
 }

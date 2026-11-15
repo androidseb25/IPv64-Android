@@ -64,9 +64,6 @@ private const val TOP = 10
 internal fun moduleLabel(name: String): String? = when (name.lowercase()) {
     "honeypot" -> "Honeypot"
     "dns64" -> "DNS64"
-    "cdn64" -> "CDN64 / Proxy"
-    "dyndns" -> "DynDNS"
-    "checks", "healthchecks" -> "Healthchecks"
     else -> null
 }
 
@@ -304,6 +301,7 @@ fun NodeModuleView(navController: NavHostController, mainPadding: PaddingValues)
         if (refreshing) return
         val (url, key) = config ?: return
         val m = module ?: return
+        if (moduleLabel(m) == null) return
         refreshing = true
         scope.launch {
             try {
@@ -318,7 +316,8 @@ fun NodeModuleView(navController: NavHostController, mainPadding: PaddingValues)
     ScreenScaffold(title = module?.let { moduleLabel(it) } ?: "Module", navController = navController, mainPadding = mainPadding) {
         val list = sections
         when {
-            config == null || module == null -> EmptyState("No direct connection to this node.")
+            module == null || moduleLabel(module) == null -> EmptyState("Module details are not available.")
+            config == null -> EmptyState("No direct connection to this node.")
             else -> RefreshableList(refreshing = refreshing, onRefresh = ::load, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 (list ?: emptyList()).forEachIndexed { i, s ->
                     item(key = "$i-${s.title}") { SectionView(s) }

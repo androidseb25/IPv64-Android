@@ -136,13 +136,13 @@ fun NodeRow(node: Hc2Node, onClick: (Hc2Node) -> Unit) {
 
 // Zeile einer direkt verbundenen Node (ohne Cloud): Name aus dem gespeicherten Status, Untertitel = Host der Adresse
 @Composable
-fun DirectNodeRow(nodeId: String, onClick: () -> Unit) {
+fun DirectNodeRow(nodeId: String, version: String?, onClick: () -> Unit) {
     val ctx = LocalContext.current
     val url = LocalNodeStore.get(ctx, nodeId)?.first
     val name = LocalNodeStore.name(ctx, nodeId)
     ListRow(
         title = name?.takeIf { it.isNotBlank() } ?: ("Node …" + nodeId.takeLast(4)),
-        subtitle = url?.let { it.toHttpUrlOrNull()?.host ?: it },
+        subtitle = listOfNotNull(url?.let { it.toHttpUrlOrNull()?.host ?: it }, version?.let { "v$it" }).joinToString(" · ").takeIf { it.isNotBlank() },
         trailing = { StatusChip("Direct", colorResource(R.color.ipv64_blue)) },
         onClick = onClick
     )

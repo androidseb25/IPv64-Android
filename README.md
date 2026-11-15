@@ -2,7 +2,7 @@
 
 The official Android app for [IPv64.net](https://ipv64.net/): DynDNS, healthchecks, CDN64 and your Node64 nodes in one place.
 
-Current version: **2.2.0** — see [CHANGELOG.md](CHANGELOG.md) for what changed.
+Current version: **2.2.1** — see [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## Features
 

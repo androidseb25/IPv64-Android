@@ -70,7 +70,7 @@ fun NodeDnsLogView(navController: NavHostController, mainPadding: PaddingValues)
     var live by rememberSaveable { mutableStateOf(true) }
     var filter by rememberSaveable { mutableStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
-    var allowRow by remember { mutableStateOf<DNS64LogRow?>(null) }
+    var ruleRow by remember { mutableStateOf<DNS64LogRow?>(null) }
     val time = remember { SimpleDateFormat("HH:mm:ss", Locale.GERMANY) }
 
     LaunchedEffect(id) { config = id?.let { LocalNodeStore.get(ctx, it) } }
@@ -120,7 +120,7 @@ fun NodeDnsLogView(navController: NavHostController, mainPadding: PaddingValues)
                         "allowed", "cached" -> R.color.ipv64_green to r.status!!.replaceFirstChar { it.uppercase() }
                         else -> R.color.ipv64_gray to (r.status ?: "–").replaceFirstChar { it.uppercase() }
                     }
-                    val blocked = r.status == "blocked" && r.domain != null
+                    val canSetRule = !r.domain.isNullOrBlank() && r.status in setOf("blocked", "allowed", "cached")
                     Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
                         ListRow(
                             title = r.domain ?: "–",
@@ -129,12 +129,12 @@ fun NodeDnsLogView(navController: NavHostController, mainPadding: PaddingValues)
                                 append(" · ").append(r.clientName?.takeIf { it.isNotBlank() } ?: r.client ?: "–")
                                 r.qtype?.let { append(" · ").append(it) }
                                 if (r.upstream != null || r.ms != null) append("\n").append(r.upstream ?: "").append(r.ms?.let { " ${"%.0f".format(Locale.US, it)} ms" } ?: "")
-                                r.reason?.takeIf { it.isNotBlank() && blocked }?.let { append("\n").append(it) }
+                                r.reason?.takeIf { it.isNotBlank() && r.status == "blocked" }?.let { append("\n").append(it) }
                             },
                             subtitleMaxLines = 4,
                             showChevron = false,
                             trailing = { StatusChip(label, colorResource(color)) },
-                            onClick = if (blocked) ({ allowRow = r }) else null
+                            onClick = if (canSetRule && !req.isBusy) ({ ruleRow = r }) else null
                         )
                     }
                 }
@@ -142,24 +142,30 @@ fun NodeDnsLogView(navController: NavHostController, mainPadding: PaddingValues)
         }
     }
 
-    allowRow?.let { r ->
+    ruleRow?.let { r ->
+        val allow = r.status == "blocked"
+        val action = if (allow) "Allow" else "Block"
+        val reason = r.reason?.takeIf { it.isNotBlank() }?.let { " by $it" }.orEmpty()
         AlertDialog(
-            onDismissRequest = { allowRow = null },
+            onDismissRequest = { ruleRow = null },
             title = { Text(r.domain ?: "") },
-            text = { Text("Blocked${r.reason?.takeIf { it.isNotBlank() }?.let { " by $it" } ?: ""}. Allow this domain and its subdomains for all clients?") },
+            text = { Text((if (allow) "Blocked$reason. " else "") + "$action this domain and its subdomains for all clients?") },
             confirmButton = {
                 TextButton(onClick = {
                     val (url, key) = config ?: return@TextButton
                     val d = r.domain ?: return@TextButton
-                    allowRow = null
+                    ruleRow = null
                     req.launch(
                         scope,
                         spinner = "Updating...",
                         onError = { e -> localNodeError(e).let { req.message(it.first, it.second) }; true }
-                    ) { localNodeClient(url, key).dns64.allow(d) }
-                }) { Text("Allow this domain") }
+                    ) {
+                        val dns = localNodeClient(url, key).dns64
+                        if (allow) dns.allow(d) else dns.deny(d)
+                    }
+                }) { Text("$action this domain") }
             },
-            dismissButton = { TextButton(onClick = { allowRow = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { ruleRow = null }) { Text("Cancel") } }
         )
     }
     RequestStateHost(req)

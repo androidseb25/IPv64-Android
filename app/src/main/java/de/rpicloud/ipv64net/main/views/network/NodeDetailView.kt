@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -24,6 +27,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +58,7 @@ import de.rpicloud.ipv64net.helper.rememberNavArg
 import de.rpicloud.ipv64net.main.views.HealthcheckRow
 import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
 import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.ExpandableListGroup
 import de.rpicloud.ipv64net.main.views.common.GroupDivider
 import de.rpicloud.ipv64net.main.views.common.ListGroup
 import de.rpicloud.ipv64net.main.views.common.ListRow
@@ -114,7 +119,7 @@ fun NodeDetailView(navController: NavHostController, mainPadding: PaddingValues)
     var showUnlink by remember { mutableStateOf(false) }
     var showResolve by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
-    var detailsOpen by remember { mutableStateOf(false) }
+    var detailsOpen by rememberSaveable { mutableStateOf(false) }
 
     var historyOpen by remember { mutableStateOf(false) }
     var commands by remember { mutableStateOf<List<Hc2Command>>(emptyList()) }
@@ -291,7 +296,7 @@ fun NodeDetailView(navController: NavHostController, mainPadding: PaddingValues)
         st.node?.name?.takeIf { it.isNotBlank() && it != LocalNodeStore.name(ctx, id.orEmpty()) }
             ?.let { LocalNodeStore.setName(ctx, id.orEmpty(), it) }
         // Modul-Schalter steuern die Tabs (DNS64, CDN64 ↔ Proxy64)
-        id?.let { LocalNodeStore.saveModules(ctx, it, st.modules) }
+        id?.let { LocalNodeStore.saveStatus(ctx, it, st) }
         status = st
         logLines = logs
         lastOk = System.currentTimeMillis()
@@ -335,7 +340,7 @@ fun NodeDetailView(navController: NavHostController, mainPadding: PaddingValues)
                 val client = localNodeClient(url, key)
                 if (enable) client.node.enableModule(name) else client.node.disableModule(name)
                 val st = client.node.status()
-                id?.let { LocalNodeStore.saveModules(ctx, it, st.modules) }
+                id?.let { LocalNodeStore.saveStatus(ctx, it, st) }
                 status = st
             }
         }
@@ -509,10 +514,9 @@ fun NodeDetailView(navController: NavHostController, mainPadding: PaddingValues)
                     }
                 }
 
-                if (!directOnly) item(key = "checks") {
+                if (!directOnly && n.checks.isNotEmpty()) item(key = "checks") {
                     ListGroup(title = "Checks (${n.checks.size})") {
-                        if (n.checks.isEmpty()) GroupText("This node has no checks yet.")
-                        else if (canCommand && n.online != true) GroupText("The node is offline. Commands are picked up when it reconnects.")
+                        if (canCommand && n.online != true) GroupText("The node is offline. Commands are picked up when it reconnects.")
                         n.checks.forEachIndexed { index, check ->
                             if (index > 0) GroupDivider()
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -547,22 +551,8 @@ fun NodeDetailView(navController: NavHostController, mainPadding: PaddingValues)
                 )
 
                 item(key = "details") {
-                    ListGroup {
-                        ListRow(
-                            title = "Details",
-                            showChevron = false,
-                            trailing = {
-                                Icon(
-                                    painter = painterResource(if (detailsOpen) R.drawable.expand_less_24px else R.drawable.expand_more_24px),
-                                    contentDescription = if (detailsOpen) "Collapse" else "Expand"
-                                )
-                            },
-                            onClick = { detailsOpen = !detailsOpen }
-                        )
-                        if (detailsOpen) {
-                            GroupDivider()
-                            InfoRows(nodeDetailItems(n, st, c?.first, cloud = !directOnly).filter { !it.value.isNullOrBlank() })
-                        }
+                    ExpandableListGroup("Details", detailsOpen, onToggle = { detailsOpen = !detailsOpen }) {
+                        InfoRows(nodeDetailItems(n, st, c?.first, cloud = !directOnly).filter { !it.value.isNullOrBlank() })
                     }
                 }
             }
@@ -715,13 +705,14 @@ private fun NodeHeader(
 private fun NodeStatTiles(node: Hc2NodeDetail, status: NodeStatus?, local: Boolean, cloud: Boolean) {
     val link = status?.link
     val conflicts: Number? = link?.conflicts ?: node.conflicts
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        if (local) StatTile(status?.node?.uptimeSeconds?.formatDuration() ?: "–", "Uptime", Modifier.weight(1f))
-        else StatTile(node.lastSync?.formatRelative() ?: "–", "Last sync", Modifier.weight(1f))
-        if (cloud) StatTile(node.checks.size.toString(), "Checks", Modifier.weight(1f))
-        StatTile((link?.outbox ?: node.outboxSize)?.toString() ?: "–", "Outbox", Modifier.weight(1f))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+        val tile = Modifier.fillMaxHeight()
+        if (local) StatTile(status?.node?.uptimeSeconds?.formatDuration() ?: "–", "Uptime", tile.weight(1.5f))
+        else StatTile(node.lastSync?.formatRelative() ?: "–", "Last sync", tile.weight(1f))
+        if (cloud) StatTile(node.checks.size.toString(), "Checks", tile.weight(1f))
+        StatTile((link?.outbox ?: node.outboxSize)?.toString() ?: "–", "Outbox", tile.weight(1f))
         StatTile(
-            conflicts?.toString() ?: "–", "Conflicts", Modifier.weight(1f),
+            conflicts?.toString() ?: "–", "Conflicts", tile.weight(1f),
             valueColor = if ((conflicts?.toLong() ?: 0L) > 0) MaterialTheme.colorScheme.error else androidx.compose.ui.graphics.Color.Unspecified
         )
     }
@@ -732,6 +723,7 @@ private fun nodeDetailItems(node: Hc2NodeDetail, status: NodeStatus?, localUrl: 
     val st = status?.node
     return listOfNotNull(
         InfoItem("Node ID", node.nodeId, copyable = true, monospace = true),
+        InfoItem("Version", st?.version ?: node.version),
         InfoItem("Location", node.location),
         InfoItem("Time zone", node.timezone),
         node.hub?.takeIf { it.isNotBlank() }?.let { InfoItem("Hub", it) },

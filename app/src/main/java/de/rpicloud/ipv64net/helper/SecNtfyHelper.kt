@@ -4,6 +4,7 @@ import android.content.Context
 import com.google.firebase.messaging.FirebaseMessaging
 import com.secntfy.android.NtfyException
 import com.secntfy.android.SecNtfy
+import de.rpicloud.ipv64net.helper.SecNtfyLog.Status
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,14 +32,20 @@ object SecNtfyHelper {
         val apiUrl = PreferencesManager.loadString(appContext, "SECNTFY_API_URL")
         val appKey = PreferencesManager.loadString(appContext, "SECNTFY_APP_KEY")
 
-        if (apiUrl.isEmpty() || appKey.isEmpty()) return
+        if (apiUrl.isEmpty() || appKey.isEmpty()) {
+            SecNtfyLog.record(appContext, "Device registration skipped: push configuration missing", status = Status.SKIPPED)
+            return
+        }
 
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
             if (!task.isSuccessful) {
-                task.exception?.printStackTrace()
+                SecNtfyLog.record(appContext, "Push token request failed", task.exception, status = Status.FAILED)
                 return@addOnCompleteListener
             }
-            val fcmToken = task.result ?: return@addOnCompleteListener
+            val fcmToken = task.result?.takeIf { it.isNotBlank() } ?: run {
+                SecNtfyLog.record(appContext, "Push token request returned no token", status = Status.FAILED)
+                return@addOnCompleteListener
+            }
             PreferencesManager.saveString(appContext, "FCM_TOKEN", fcmToken)
 
             CoroutineScope(Dispatchers.IO).launch {
@@ -47,7 +54,7 @@ object SecNtfyHelper {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    SecNtfyLog.record(appContext, "Device registration failed", e)
                     null
                 }
                 // Gerätekanal des aktiven Accounts nachziehen, auch bei unverändertem Token (ein früherer Abgleich kann
@@ -58,7 +65,7 @@ object SecNtfyHelper {
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        e.printStackTrace()
+                        SecNtfyLog.record(appContext, "Could not sync notification channel", e)
                     }
                 }
             }
@@ -84,12 +91,15 @@ object SecNtfyHelper {
         return try {
             val fcmToken = PreferencesManager.loadString(appContext, "FCM_TOKEN").ifEmpty { null }
                 ?: fetchFcmToken()?.also { PreferencesManager.saveString(appContext, "FCM_TOKEN", it) }
-                ?: return null
+                ?: run {
+                    SecNtfyLog.record(appContext, "Device registration skipped: no push token", status = Status.SKIPPED)
+                    return null
+                }
             register(appContext, apiUrl, appKey, fcmToken)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            e.printStackTrace()
+            SecNtfyLog.record(appContext, "Device registration failed", e)
             null
         }
     }
@@ -111,6 +121,11 @@ object SecNtfyHelper {
                 if (token != null && token != storedNtfyToken(appContext)) {
                     PreferencesManager.saveString(appContext, DEVICE_TOKEN_KEY, token)
                 }
+                SecNtfyLog.record(
+                    appContext,
+                    if (token != null) "Device registered" else "Registration returned no device token",
+                    status = if (token != null) Status.SUCCESS else Status.FAILED
+                )
                 token
             }
         }

@@ -67,6 +67,7 @@ fun NodesView(navController: NavHostController, mainPadding: PaddingValues) {
     var showDirect by remember { mutableStateOf(false) }
     // Direkt verbundene Nodes (LocalNodeStore) dieses Accounts; bei jeder Rückkehr neu gelesen
     var directIds by remember { mutableStateOf(emptyList<String>()) }
+    val directVersions = ConnectedNodes.versions
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         directIds = LocalNodeStore.list(ctx, User.current?.id?.toString().orEmpty())
     }
@@ -196,13 +197,14 @@ fun NodesView(navController: NavHostController, mainPadding: PaddingValues) {
                         ListGroup {
                             list.forEachIndexed { i, node ->
                                 if (i > 0) GroupDivider()
-                                NodeRow(node) {
+                                val version = directVersions[node.nodeId]
+                                NodeRow(if (version != null) node.copy(version = version) else node) {
                                     navController.navigateWithArgs(Tab.node_details, NavKeys.SELECTED_NODE_ID to it.nodeId)
                                 }
                             }
                             direct.forEachIndexed { i, nid ->
                                 if (i > 0 || list.isNotEmpty()) GroupDivider()
-                                DirectNodeRow(nid) {
+                                DirectNodeRow(nid, directVersions[nid]) {
                                     navController.navigateWithArgs(Tab.node_details, NavKeys.SELECTED_NODE_ID to nid)
                                 }
                             }

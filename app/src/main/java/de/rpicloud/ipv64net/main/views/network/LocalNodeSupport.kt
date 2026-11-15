@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import de.rpicloud.ipv64net.models.User
 import de.sr.ipv64.IPv64Exception
 import de.sr.ipv64.node64.model.ModuleStatus
+import de.sr.ipv64.node64.model.NodeStatus
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -46,6 +47,9 @@ object LocalNodeStore {
     /** Name der Node laut lokalem Status (nur für die Liste direkter Nodes), null = unbekannt. */
     fun name(ctx: Context, nodeId: String): String? = prefs(ctx).getString("$nodeId.name", null)
 
+    /** Zuletzt gemeldete Node-Version, null = noch nicht verbunden. */
+    fun version(ctx: Context, nodeId: String): String? = prefs(ctx).getString("$nodeId.version", null)
+
     /** IDs aller Nodes mit gespeichertem Zugang dieses Accounts. */
     fun list(ctx: Context, owner: String): List<String> = localNodeIds(prefs(ctx).all, owner)
 
@@ -68,16 +72,20 @@ object LocalNodeStore {
     /** Zuletzt bekannter Zustand des DNS64-Moduls (steuert den DNS64-Tab). */
     fun dnsActive(ctx: Context, nodeId: String): Boolean = prefs(ctx).getBoolean("$nodeId.dns", false)
 
-    /** Merkt, ob Proxy64 und DNS64 auf der Node eingeschaltet sind (schreibt nur bei Änderung). */
-    fun saveModules(ctx: Context, nodeId: String, modules: List<ModuleStatus>) {
-        val proxy = modules.any { it.isProxyModule() && it.enabled == true }
-        val dns = modules.any { it.name.equals("dns64", ignoreCase = true) && it.enabled == true }
-        if (proxy == proxyActive(ctx, nodeId) && dns == dnsActive(ctx, nodeId)) return
-        prefs(ctx).edit().putBoolean("$nodeId.proxy", proxy).putBoolean("$nodeId.dns", dns).apply()
+    /** Merkt Modulstatus und installierte Version aus der letzten erreichbaren Node. */
+    fun saveStatus(ctx: Context, nodeId: String, status: NodeStatus) {
+        val proxy = status.modules.any { it.isProxyModule() && it.enabled == true }
+        val dns = status.modules.any { it.name.equals("dns64", ignoreCase = true) && it.enabled == true }
+        val reportedVersion = status.node?.version?.takeIf { it.isNotBlank() }
+        val versionChanged = reportedVersion != null && reportedVersion != version(ctx, nodeId)
+        if (proxy == proxyActive(ctx, nodeId) && dns == dnsActive(ctx, nodeId) && !versionChanged) return
+        val edit = prefs(ctx).edit().putBoolean("$nodeId.proxy", proxy).putBoolean("$nodeId.dns", dns)
+        if (versionChanged) edit.putString("$nodeId.version", reportedVersion)
+        edit.apply()
     }
 
     fun remove(ctx: Context, nodeId: String) {
-        prefs(ctx).edit().remove("$nodeId.url").remove("$nodeId.key").remove("$nodeId.owner").remove("$nodeId.name").remove("$nodeId.proxy").remove("$nodeId.dns").apply()
+        prefs(ctx).edit().remove("$nodeId.url").remove("$nodeId.key").remove("$nodeId.owner").remove("$nodeId.name").remove("$nodeId.version").remove("$nodeId.proxy").remove("$nodeId.dns").apply()
     }
 
     /** Entfernt alle Zugänge eines Accounts (beim Entfernen des Accounts aus der App). */
@@ -86,7 +94,7 @@ object LocalNodeStore {
         val nodeIds = p.all.filter { (k, v) -> k.endsWith(".owner") && v == owner }.keys.map { it.removeSuffix(".owner") }
         if (nodeIds.isEmpty()) return
         val edit = p.edit()
-        nodeIds.forEach { edit.remove("$it.url").remove("$it.key").remove("$it.owner").remove("$it.name").remove("$it.proxy").remove("$it.dns") }
+        nodeIds.forEach { edit.remove("$it.url").remove("$it.key").remove("$it.owner").remove("$it.name").remove("$it.version").remove("$it.proxy").remove("$it.dns") }
         edit.apply()
     }
 }
@@ -98,6 +106,9 @@ object LocalNodeStore {
 object ConnectedNodes {
     /** Node-IDs mit gespeichertem Zugang (sortiert). */
     var ids by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    var versions by mutableStateOf<Map<String, String?>>(emptyMap())
         private set
 
     /** IDs der Nodes, deren Proxy64-Modul aktiv ist (zuletzt bekannter Stand). */
@@ -114,6 +125,7 @@ object ConnectedNodes {
     fun refresh(ctx: Context) {
         val list = LocalNodeStore.list(ctx, User.current?.id?.toString().orEmpty())
         if (list != ids) ids = list
+        versions = list.associateWith { LocalNodeStore.version(ctx, it) }
         val proxies = list.filter { LocalNodeStore.proxyActive(ctx, it) }
         if (proxies != proxyIds) proxyIds = proxies
         val dns = list.filter { LocalNodeStore.dnsActive(ctx, it) }
@@ -127,7 +139,8 @@ object ConnectedNodes {
                 async {
                     val (url, key) = LocalNodeStore.get(ctx, id) ?: return@async
                     try {
-                        LocalNodeStore.saveModules(ctx, id, localNodeClient(url, key).node.status().modules)
+                        val status = localNodeClient(url, key).node.status()
+                        if (LocalNodeStore.get(ctx, id) == (url to key)) LocalNodeStore.saveStatus(ctx, id, status)
                     } catch (_: IPv64Exception) {
                     }
                 }

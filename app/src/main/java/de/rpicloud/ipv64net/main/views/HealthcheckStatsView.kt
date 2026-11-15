@@ -12,7 +12,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.input.pointer.pointerInput
@@ -35,9 +34,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -46,7 +46,6 @@ import de.rpicloud.ipv64net.helper.formatLatency
 import de.rpicloud.ipv64net.helper.formatPercent
 import de.rpicloud.ipv64net.main.views.common.FilterChipRow
 import de.rpicloud.ipv64net.main.views.common.InfoRow
-import de.rpicloud.ipv64net.main.views.common.ListGroup
 import de.sr.ipv64.model.Hc2Stats
 import de.sr.ipv64.model.Hc2StatsRange
 
@@ -64,41 +63,38 @@ fun HealthcheckStatsView(
     onRangeChange: (Hc2StatsRange) -> Unit,
     stats: Hc2Stats?,
     loading: Boolean,
-    error: String?,
-    modifier: Modifier = Modifier
+    error: String?
 ) {
-    ListGroup(modifier = modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            FilterChipRow(
-                options = Hc2StatsRange.entries,
-                selected = range,
-                label = { it.chipLabel() },
-                onSelect = onRangeChange
-            )
-            when {
-                loading -> CircularProgressIndicator(modifier = Modifier.size(24.dp).align(Alignment.CenterHorizontally))
-                error != null -> Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-                stats == null -> Text("No data", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                else -> {
-                    InfoRow("Availability", stats.availabilityPercent.formatPercent())
-                    InfoRow("Measurements", stats.measurements?.toString() ?: "–")
-                    stats.sources.forEach { s ->
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(s.label ?: s.source.orEmpty(), style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                "Availability ${s.availabilityPercent.formatPercent()} · ${s.measurements ?: 0} measurements",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                "Latency min ${s.latencyMs?.min.formatLatency()} · avg ${s.latencyMs?.avg.formatLatency()} · max ${s.latencyMs?.max.formatLatency()}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+    Column(modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        FilterChipRow(
+            options = Hc2StatsRange.entries,
+            selected = range,
+            label = { it.chipLabel() },
+            onSelect = onRangeChange
+        )
+        when {
+            loading -> CircularProgressIndicator(modifier = Modifier.size(24.dp).align(Alignment.CenterHorizontally))
+            error != null -> Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            stats == null -> Text("No data", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            else -> {
+                InfoRow("Availability", stats.availabilityPercent.formatPercent())
+                InfoRow("Measurements", stats.measurements?.toString() ?: "–")
+                stats.sources.forEach { s ->
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(s.label ?: s.source.orEmpty(), style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Availability ${s.availabilityPercent.formatPercent()} · ${s.measurements ?: 0} measurements",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "Latency min ${s.latencyMs?.min.formatLatency()} · avg ${s.latencyMs?.avg.formatLatency()} · max ${s.latencyMs?.max.formatLatency()}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    LatencyChart(stats)
                 }
+                LatencyChart(stats)
             }
         }
     }

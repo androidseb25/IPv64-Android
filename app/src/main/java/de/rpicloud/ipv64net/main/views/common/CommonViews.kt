@@ -101,6 +101,7 @@ import de.rpicloud.ipv64net.helper.findActivity
 import de.rpicloud.ipv64net.helper.isPlanRestricted
 import de.rpicloud.ipv64net.helper.openUrl
 import de.rpicloud.ipv64net.helper.planRestrictionText
+import de.rpicloud.ipv64net.helper.rememberScreenshotProtectionEnabled
 import de.rpicloud.ipv64net.helper.toError
 import de.rpicloud.ipv64net.helper.views.SpinnerDialog
 import de.rpicloud.ipv64net.main.views.ChannelDialogHost
@@ -441,6 +442,50 @@ fun ListGroup(title: String? = null, modifier: Modifier = Modifier, content: @Co
             Column(content = content)
         }
     }
+}
+
+@Composable
+fun ExpandableListGroup(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    trailing: @Composable (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    ListGroup(modifier = modifier) {
+        ExpandableGroupRow(title, expanded, onToggle, subtitle, trailing)
+        if (expanded) {
+            GroupDivider()
+            content()
+        }
+    }
+}
+
+@Composable
+fun ExpandableGroupRow(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    subtitle: String? = null,
+    trailing: @Composable (() -> Unit)? = null
+) {
+    ListRow(
+        title = title,
+        subtitle = subtitle,
+        showChevron = false,
+        trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                trailing?.invoke()
+                Icon(
+                    painter = painterResource(if (expanded) R.drawable.expand_less_24px else R.drawable.expand_more_24px),
+                    contentDescription = if (expanded) "Collapse" else "Expand"
+                )
+            }
+        },
+        onClick = onToggle
+    )
 }
 
 /** Trennlinie zwischen Zeilen einer [ListGroup]; [inset] = linker Einzug (56.dp bei Zeilen mit Icon). */
@@ -993,7 +1038,7 @@ fun ConfirmDialog(
 }
 
 /**
- * Zeigt ein Geheimnis genau einmal an (z. B. neuer API-Key). Bildschirmaufnahmen sind gesperrt (FLAG_SECURE),
+ * Zeigt ein Geheimnis genau einmal an (z. B. neuer API-Key). Der Dialog übernimmt die Screenshot-Einstellung.
  * Kopieren ist als sensibel markiert, "Done" erst nach dem Haken "I have stored it". Nicht per Zurück/außen
  * schließbar. Das Geheimnis nie loggen und nach [onDone] aus dem State entfernen.
  */
@@ -1036,25 +1081,30 @@ fun SecretOnceDialog(title: String, secret: String, warning: String, onDone: () 
         properties = DialogProperties(
             dismissOnBackPress = false,
             dismissOnClickOutside = false,
-            securePolicy = SecureFlagPolicy.SecureOn
+            securePolicy = screenshotDialogPolicy()
         )
     )
 }
 
 /**
  * Sperrt Screenshots/Bildschirmaufnahmen und die Vorschau in "Letzte Apps" (FLAG_SECURE), solange der aufrufende
- * Composable sichtbar ist (z. B. Passwort-Check, Honeypot-Token). Mehrfach gleichzeitig nutzbar (Zähler).
- * Dialoge haben eigene Fenster: dort zusätzlich DialogProperties(securePolicy = SecureFlagPolicy.SecureOn) setzen.
+ * Composable sichtbar und der Screenshot-Schutz in den Einstellungen aktiv ist.
+ * Dialoge haben eigene Fenster und verwenden [screenshotDialogPolicy].
  */
 @Composable
 fun SecureWindowEffect() {
-    val ctx = LocalContext.current
-    DisposableEffect(Unit) {
-        val window = ctx.findActivity()?.window
-        if (window != null) SecureWindowCounter.acquire(window)
-        onDispose { if (window != null) SecureWindowCounter.release(window) }
+    if (rememberScreenshotProtectionEnabled()) {
+        val window = LocalContext.current.findActivity()?.window ?: return
+        DisposableEffect(window) {
+            SecureWindowCounter.acquire(window)
+            onDispose { SecureWindowCounter.release(window) }
+        }
     }
 }
+
+@Composable
+internal fun screenshotDialogPolicy(): SecureFlagPolicy =
+    if (rememberScreenshotProtectionEnabled()) SecureFlagPolicy.SecureOn else SecureFlagPolicy.SecureOff
 
 // Zählt aktive Nutzer, damit FLAG_SECURE erst entfernt wird, wenn kein Screen/Dialog es mehr braucht
 private object SecureWindowCounter {
@@ -1090,24 +1140,31 @@ fun <T> LazyListScope.groupedRows(
     title: String? = null,
     // Eindeutiger Header-Key, wenn Titel doppelt vorkommen können (z. B. gleichnamige Nodes)
     headerKey: String? = null,
+    header: (@Composable () -> Unit)? = null,
     row: @Composable (T) -> Unit
 ) {
     if (items.isEmpty()) return
     title?.let { item(key = "group_header_${headerKey ?: it}") { SectionHeader(it, Modifier.padding(start = 4.dp, bottom = 6.dp)) } }
+    if (header != null) {
+        item(key = "group_first_${headerKey ?: title}") {
+            val shape = MaterialTheme.shapes.large.copy(bottomStart = CornerSize(0.dp), bottomEnd = CornerSize(0.dp))
+            Surface(shape = shape, color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth(), content = header)
+        }
+    }
     itemsIndexed(items, key = key?.let { k -> { _: Int, t: T -> k(t) } }) { i, t ->
         val large = MaterialTheme.shapes.large
         val none = CornerSize(0.dp)
         val last = i == items.lastIndex
         val shape = large.copy(
-            topStart = if (i == 0) large.topStart else none,
-            topEnd = if (i == 0) large.topEnd else none,
+            topStart = if (i == 0 && header == null) large.topStart else none,
+            topEnd = if (i == 0 && header == null) large.topEnd else none,
             bottomStart = if (last) large.bottomStart else none,
             bottomEnd = if (last) large.bottomEnd else none
         )
         Column(Modifier.padding(bottom = if (last) GroupGap else 0.dp)) {
             Surface(shape = shape, color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
                 Column {
-                    if (i > 0) GroupDivider()
+                    if (i > 0 || header != null) GroupDivider()
                     row(t)
                 }
             }

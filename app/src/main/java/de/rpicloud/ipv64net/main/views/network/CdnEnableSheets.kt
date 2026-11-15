@@ -30,8 +30,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Row
+import de.rpicloud.ipv64net.main.views.FormDropdown
+import de.rpicloud.ipv64net.main.views.FormTextField
+import de.rpicloud.ipv64net.main.views.common.ActionSheet
+import de.rpicloud.ipv64net.main.views.common.DomainPickerDialog
 
 /** Ein Proxy-Host, für den CDN64 eingeschaltet werden kann. */
 class CdnHostChoice(val nodeId: String, val nodeName: String, val hostId: Long, val label: String)
@@ -101,7 +106,7 @@ fun CdnEnableFlow(choices: List<CdnHostChoice>, onEnable: (CdnHostChoice, Int, B
             Text("Enable CDN64 for a proxy host", style = MaterialTheme.typography.titleLarge)
             if (choices.isEmpty()) Text("All proxy hosts already use CDN64.", style = MaterialTheme.typography.bodyMedium)
             LazyColumn {
-                items(choices, key = { "${it.nodeId}/${it.hostId}" }) { c ->
+                items(choices.sortedBy { it.label.lowercase() }, key = { "${it.nodeId}/${it.hostId}" }) { c ->
                     Column(Modifier.fillMaxWidth().clickable { picked = c }.padding(vertical = 10.dp)) {
                         Text(c.label, style = MaterialTheme.typography.titleMedium)
                         Text(c.nodeName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -109,5 +114,44 @@ fun CdnEnableFlow(choices: List<CdnHostChoice>, onEnable: (CdnHostChoice, Int, B
                 }
             }
         }
+    }
+}
+
+@Composable
+internal fun CloudCdnEnableFlow(exclude: Set<String>, onEnable: (CloudCdnInput) -> Unit, onDismiss: () -> Unit) {
+    var domain by remember { mutableStateOf<String?>(null) }
+    val zone = domain
+    if (zone == null) {
+        DomainPickerDialog(title = "Add domain to CDN64", onPick = { domain = it }, onDismiss = onDismiss)
+        return
+    }
+
+    var name by remember(zone) { mutableStateOf(zone) }
+    var target by remember { mutableStateOf("") }
+    var scheme by remember { mutableStateOf("https") }
+    var port by remember { mutableStateOf("") }
+    val fqdn = name.trim().trimEnd('.').lowercase()
+    val inZone = fqdn == zone.lowercase() || fqdn.endsWith(".${zone.lowercase()}")
+    val alreadyEnabled = fqdn in exclude
+    val parsedPort = parsePort(port)
+    ActionSheet(
+        title = "Enable CDN64 without Node64",
+        subtitle = "CDN64 changes this name’s DNS to route visitors through its servers.",
+        onDismiss = onDismiss,
+        confirmLabel = "Enable",
+        confirmEnabled = inZone && !alreadyEnabled && (port.isBlank() || parsedPort != null),
+        onConfirm = { onEnable(CloudCdnInput(fqdn, target.trim(), scheme, parsedPort)) }
+    ) {
+        FormTextField(
+            "Domain name", name, { name = it },
+            supporting = when {
+                !inZone -> "Enter $zone or a subdomain."
+                alreadyEnabled -> "This name is already in CDN64 or its domain is in the old CDN."
+                else -> "Enter the domain or a subdomain."
+            }
+        )
+        FormTextField("Origin", target, { target = it }, supporting = "Leave empty to use this name’s existing public A/AAAA records.")
+        FormDropdown("Origin protocol", scheme, listOf("https", "http"), { it.uppercase() }, { scheme = it })
+        FormTextField("Origin port", port, { port = it }, keyboardType = KeyboardType.Number, placeholder = if (scheme == "https") "443" else "80")
     }
 }

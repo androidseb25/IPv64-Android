@@ -2,6 +2,26 @@
 
 All notable changes to the IPv64net Android app. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.1] - 2026-11-15
+
+### Added
+- **CDN64 without a node:** enable CDN64 for a domain or subdomain right in the app, with origin, protocol and port.
+- **Notification logs** under More: what happened to each incoming push message (received, decrypted, posted, delivery receipt).
+- **Screenshot protection** setting: blocks screenshots and screen recordings on sensitive screens.
+- Account usage is coloured green, orange (from 80 % of the limit) or red (limit reached).
+- Monitor64: additional charts for service metrics.
+- App version and build number in the settings; contact, support and legal links in About.
+
+### Changed
+- IPv64-Package 2.2.0.
+- Healthcheck detail: recent checks and latency charts per measuring point; Status, Statistics, Incidents, Events, Measuring points, Push endpoints and Configuration are collapsible groups. The header card is gone, its status chip sits in the Status group.
+- Monitor64 host detail: collapsible sections.
+- Domain, account and host lists are sorted alphabetically; healthchecks without a name show their target.
+- CDN quota tiles show limit and projected monthly traffic.
+
+### Fixed
+- Push notifications that arrive as plain notification messages or without a message ID are shown reliably.
+
 ## [2.2.0] - 2026-11-11
 
 ### Added

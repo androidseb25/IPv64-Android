@@ -6,19 +6,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.colorResource
 import android.content.Context
 import android.os.SystemClock
-import androidx.navigation.NavController
-import de.rpicloud.ipv64net.helper.AccountCache
 import de.rpicloud.ipv64net.helper.FeatureAvailability
-import de.rpicloud.ipv64net.helper.IPv64Client
-import de.rpicloud.ipv64net.helper.NavKeys
-import de.rpicloud.ipv64net.helper.ipv64Retrying
-import de.rpicloud.ipv64net.helper.isLimitReached
-import de.rpicloud.ipv64net.helper.isPlanRestricted
-import de.rpicloud.ipv64net.helper.navigateWithArgs
-import de.rpicloud.ipv64net.helper.planRestrictionText
 import de.rpicloud.ipv64net.main.views.common.RequestState
-import de.rpicloud.ipv64net.models.Tab
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import de.rpicloud.ipv64net.R
@@ -315,38 +304,15 @@ fun RequestState.cdnLimitMessage(availability: FeatureAvailability) {
     )
 }
 
-/** Legt [domain] im Cloud-CDN an, aktualisiert die Caches und öffnet die Details. [onAdded] läuft vor der Navigation. */
-fun RequestState.addCdnDomain(scope: CoroutineScope, ctx: Context, navController: NavController, domain: String, onAdded: () -> Unit = {}) {
-    launch(
-        scope,
-        spinner = "Adding domain...",
-        onError = { e ->
-            if (e.isLimitReached() || e.isPlanRestricted()) {
-                message("Plan limit reached", e.planRestrictionText())
-                true
-            } else false
-        }
-    ) {
-        val created = ipv64Retrying { IPv64Client.get(ctx).cdn.add(domain) }
-        CdnDetailStore.put(created)
-        CdnCache.upsertCdn(created.toCdnDomain())
-        AccountCache.invalidate()
-        onAdded()
-        // Die Details lesen das Token vom Eintrag unter diesem Screen (Liste)
-        navController.navigateWithArgs(Tab.cdn_details, NavKeys.SELECTED_CDN_TOKEN to created.id)
-    }
-}
-
-
 // =============================================================================================
 // CDN64 (Node): Modus, Status je Node
 // =============================================================================================
 
-/** Titel und Beschreibung eines CDN64-Modus (Mode 3 wird nur auf ipv64.net/cdn64 eingerichtet). */
+/** Titel und Beschreibung eines CDN64-Modus. */
 fun cdnModeLabel(mode: Int): Pair<String, String> = when (mode) {
     1 -> "Pass through (default)" to "The servers only pass the encrypted connection through; it is decrypted in your node. The right choice for almost everything."
     2 -> "Terminate on the servers" to "The servers decrypt (own certificate) and filter there: blocklists, limits, HTTP/3. Good for small uploads. Not with TLS passthrough."
-    3 -> "Without Node64" to "The servers go directly to your target without a tunnel — it must be reachable from the internet. Set up on the website: ipv64.net/cdn64"
+    3 -> "Without Node64" to "The servers connect directly to a target that is reachable from the internet."
     else -> "Mode $mode" to ""
 }
 

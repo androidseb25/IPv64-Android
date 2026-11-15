@@ -6,6 +6,29 @@ from core import API, data, page, route, iso, epoch, now, echo
 
 # ---------------------------------------------------------------- CDN
 CDN_SERVER = {"name": "cdn-fra-1", "hostname": "cdn-fra-1.ipv64.net", "ipv4": "203.0.113.50", "ipv6": "2001:db8:cd::50"}
+CDN64_HOSTS = {
+    "cdn.example.test": {"id": 1, "fqdn": "cdn.example.test", "mode": 3, "status": "active", "paused": False}
+}
+
+
+def cdn64_overview(ctx):
+    return data({"quota": {
+        "domains": {"used": len(CDN64_HOSTS) + 4, "old_cdn": 4, "limit": 10},
+        "traffic_mb": {"used": 1834.2, "old_cdn": 0, "limit": 102400},
+        "bandwidth_mbit": 1000,
+    }, "hosts": list(CDN64_HOSTS.values())})
+
+
+def cdn64_enable(ctx):
+    b = ctx.body
+    name = b.get("fqdn")
+    if not name or b.get("mode") != 3:
+        return 422, {"status": 422, "code": "invalid_field", "detail": "Specify a name and standalone mode (3)."}
+    if name in CDN64_HOSTS:
+        return 409, {"status": 409, "code": "cdn64o_exists", "detail": "This name is already in CDN64."}
+    host = {"id": len(CDN64_HOSTS) + 1, "fqdn": name, "mode": 3, "status": "active", "paused": False}
+    CDN64_HOSTS[name] = host
+    return 201, data(host)
 
 
 def _cdn(token, domain, domain_id, proxy="on", pm="off", frontend="https_redirect", cert="letsencrypt",
@@ -116,9 +139,10 @@ ACCESS = [(1, "198.51.100.0/24"), (2, "203.0.113.17"), (3, "2001:db8:1::/48")]
 
 
 def register():
+    route("GET", API + "/cdn64o", cdn64_overview)
+    route("POST", API + "/cdn64o/hosts", cdn64_enable)
     route("GET", API + "/cdn", lambda ctx: data([cdn_list_item(d) for d in cdn_domains()]))
-    route("POST", API + "/cdn", lambda ctx: (201, data(_cdn("cdn_new00005", str(ctx.body.get("domain") or "new.home64.de"), 1006,
-                                                           proxy="off", cert="default", pending=["server_assignment"], mb=(0.0, 0.0), days=0))))
+    route("POST", API + "/cdn", (410, {"status": 410, "code": "old_cdn_closed", "detail": "Use CDN64 to enable new names."}))
     route("GET", API + "/cdn/{token}", lambda ctx: data(cdn_detail(ctx)))
     route("PATCH", API + "/cdn/{token}", cdn_update)
     route("DELETE", API + "/cdn/{token}", lambda ctx: (202, data(_deep_merge(cdn_list_item(cdn_detail(ctx)), {"pending": ["deletion"]}))))
