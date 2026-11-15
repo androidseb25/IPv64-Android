@@ -47,6 +47,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -58,13 +59,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.main.views.common.ExpandableGroupRow
+import de.rpicloud.ipv64net.main.views.common.ExpandableListGroup
 import de.rpicloud.ipv64net.main.views.common.GroupDivider
 import de.rpicloud.ipv64net.main.views.common.InfoRow
 import de.rpicloud.ipv64net.main.views.common.ListGroup
 import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.main.views.common.StatusChip
-import de.rpicloud.ipv64net.main.views.common.InfoGroup
 import de.rpicloud.ipv64net.main.views.common.InfoItem
+import de.rpicloud.ipv64net.main.views.common.InfoRows
 import de.rpicloud.ipv64net.helper.Hc2ChannelCache
 import de.rpicloud.ipv64net.helper.Hc2CheckListCache
 import de.rpicloud.ipv64net.helper.Hc2NavKeys
@@ -140,13 +143,18 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
     var moreEventsLoading by remember { mutableStateOf(false) }
     var moreEventsJob by remember { mutableStateOf<Job?>(null) }
 
-    var statsExpanded by remember { mutableStateOf(false) }
-    var statsRange by remember { mutableStateOf(Hc2StatsRange.HOURS_24) }
+    var statusExpanded by rememberSaveable { mutableStateOf(true) }
+    var statsExpanded by rememberSaveable { mutableStateOf(false) }
+    var eventsExpanded by rememberSaveable { mutableStateOf(false) }
+    var sourcesExpanded by rememberSaveable { mutableStateOf(false) }
+    var pushExpanded by rememberSaveable { mutableStateOf(false) }
+    var configExpanded by rememberSaveable { mutableStateOf(false) }
+    var statsRange by rememberSaveable { mutableStateOf(Hc2StatsRange.HOURS_24) }
     val statsCache = remember { mutableStateMapOf<Hc2StatsRange, Hc2Stats>() }
     var statsLoading by remember { mutableStateOf(false) }
     var statsError by remember { mutableStateOf<String?>(null) }
 
-    var incidentsExpanded by remember { mutableStateOf(false) }
+    var incidentsExpanded by rememberSaveable { mutableStateOf(false) }
     var incidents by remember { mutableStateOf<List<Hc2Incident>?>(null) }
     var incidentsLoading by remember { mutableStateOf(false) }
     var incidentsError by remember { mutableStateOf<String?>(null) }
@@ -306,7 +314,8 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
         statsError = null
         try {
             val ipv64 = IPv64Client.get(ctx)
-            statsCache[statsRange] = ipv64Retrying { ipv64.hc2.checks.stats(token, statsRange) }
+            val requestedRange = statsRange
+            statsCache[requestedRange] = ipv64Retrying { ipv64.hc2.checks.stats(token, requestedRange) }
         } catch (e: IPv64Exception) {
             statsError = e.toError().text.ifBlank { "Statistics could not be loaded" }
         } finally {
@@ -380,8 +389,20 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             if (d != null) {
-                spacedItem { HeaderCard(d) }
-                spacedItem { StatusFacts(d) }
+                if (measurements.isNotEmpty()) {
+                    spacedItem {
+                        ListGroup("Recent checks") {
+                            Box(Modifier.padding(16.dp)) { HealthcheckMeasurementsBar(measurements) }
+                        }
+                    }
+                } else if (events.isNotEmpty()) {
+                    spacedItem {
+                        ListGroup("Recent events") {
+                            Box(Modifier.padding(16.dp)) { HealthcheckEventsBar(events) }
+                        }
+                    }
+                }
+                spacedItem { StatusFacts(d, statusExpanded) { statusExpanded = !statusExpanded } }
                 spacedItem {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ActionTile(
@@ -405,22 +426,57 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
                         }
                     }
                 }
-                if (measurements.isNotEmpty()) {
-                    spacedItem {
-                        ListGroup("Recent checks") {
-                            Box(Modifier.padding(16.dp)) { HealthcheckMeasurementsBar(measurements) }
+                spacedItem {
+                    ExpandableListGroup("Statistics", statsExpanded, { statsExpanded = !statsExpanded }) {
+                        HealthcheckStatsView(
+                            range = statsRange,
+                            onRangeChange = { statsRange = it },
+                            stats = statsCache[statsRange],
+                            loading = statsLoading && !statsCache.containsKey(statsRange),
+                            error = statsError
+                        )
+                    }
+                }
+                spacedItem {
+                    ExpandableListGroup("Incidents", incidentsExpanded, { incidentsExpanded = !incidentsExpanded }) {
+                        when {
+                            incidentsLoading -> ListRow("Loading...")
+                            incidentsError != null -> GroupText(incidentsError.orEmpty(), error = true)
+                            incidents.isNullOrEmpty() -> ListRow("No incidents")
+                            else -> incidents.orEmpty().forEachIndexed { i, inc ->
+                                if (i > 0) GroupDivider()
+                                HealthcheckIncidentItemView(inc)
+                            }
                         }
                     }
-                } else if (events.isNotEmpty()) {
+                }
+                val toggleEvents = { eventsExpanded = !eventsExpanded }
+                if (eventsExpanded && events.isNotEmpty()) {
+                    groupedRows(
+                        events,
+                        key = { ev -> "ev-" + (ev.id ?: ev) },
+                        headerKey = "events",
+                        header = { ExpandableGroupRow("Events", true, toggleEvents) }
+                    ) { HealthcheckEventItemView(it) }
+                } else {
+                    spacedItem(key = "group_first_events") {
+                        ExpandableListGroup("Events", eventsExpanded, toggleEvents) { ListRow("No events") }
+                    }
+                }
+                if (eventsExpanded && nextBefore != null) {
                     spacedItem {
-                        ListGroup("Recent events") {
-                            Box(Modifier.padding(16.dp)) { HealthcheckEventsBar(events) }
+                        FilledTonalButton(
+                            onClick = { loadMoreEvents() },
+                            enabled = !moreEventsLoading,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (moreEventsLoading) "Loading..." else "Load more")
                         }
                     }
                 }
                 if (d.sources.isNotEmpty()) {
                     spacedItem {
-                        ListGroup("Measuring points") {
+                        ExpandableListGroup("Measuring points", sourcesExpanded, { sourcesExpanded = !sourcesExpanded }) {
                             d.sources.forEachIndexed { i, s ->
                                 if (i > 0) GroupDivider()
                                 val st = Hc2StateUi.from(s.state)
@@ -443,62 +499,22 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
                     }
                 }
                 if (d.type == Hc2CheckType.PUSH && d.push != null) {
-                    spacedItem { PushCard(ctx, d, onCopied = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }) }
+                    spacedItem {
+                        PushCard(ctx, d, pushExpanded, { pushExpanded = !pushExpanded }) {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+                    }
                 }
                 spacedItem {
                     // Check mit Node: Ausführung führt zur Node-Detailansicht
-                    ConfigCard(d, d.nodeId?.takeIf { it.isNotBlank() }?.let { nid ->
-                        { navController.navigateWithArgs(Tab.node_details, NavKeys.SELECTED_NODE_ID to nid) }
-                    })
-                }
-
-                spacedItem {
-                    ExpandableTitle("Statistics", statsExpanded) { statsExpanded = !statsExpanded }
-                }
-                if (statsExpanded) {
-                    spacedItem {
-                        HealthcheckStatsView(
-                            range = statsRange,
-                            onRangeChange = { statsRange = it },
-                            stats = statsCache[statsRange],
-                            loading = statsLoading && !statsCache.containsKey(statsRange),
-                            error = statsError
-                        )
-                    }
-                }
-                spacedItem {
-                    ExpandableTitle("Incidents", incidentsExpanded) { incidentsExpanded = !incidentsExpanded }
-                }
-                if (incidentsExpanded) {
-                    spacedItem {
-                        ListGroup {
-                            when {
-                                incidentsLoading -> ListRow("Loading...")
-                                incidentsError != null -> GroupText(incidentsError.orEmpty(), error = true)
-                                incidents.isNullOrEmpty() -> ListRow("No incidents")
-                                else -> incidents.orEmpty().forEachIndexed { i, inc ->
-                                    if (i > 0) GroupDivider()
-                                    HealthcheckIncidentItemView(inc)
-                                }
-                            }
+                    ConfigCard(
+                        d,
+                        configExpanded,
+                        { configExpanded = !configExpanded },
+                        d.nodeId?.takeIf { it.isNotBlank() }?.let { nid ->
+                            { navController.navigateWithArgs(Tab.node_details, NavKeys.SELECTED_NODE_ID to nid) }
                         }
-                    }
-                }
-
-                if (events.isEmpty()) spacedItem { ListGroup("Events") { ListRow("No events") } }
-                else groupedRows(events, key = { ev -> "ev-" + (ev.id ?: ev) }, title = "Events") { ev ->
-                    HealthcheckEventItemView(ev)
-                }
-                if (nextBefore != null) {
-                    spacedItem {
-                        FilledTonalButton(
-                            onClick = { loadMoreEvents() },
-                            enabled = !moreEventsLoading,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(if (moreEventsLoading) "Loading..." else "Load more")
-                        }
-                    }
+                    )
                 }
             }
         }
@@ -540,33 +556,12 @@ fun HealthcheckDetailView(navController: NavHostController, mainPadding: Padding
     }
 }
 
-// Aufklappbarer Abschnitt: eine Zeile mit "Show"/"Hide"
-@Composable
-private fun ExpandableTitle(text: String, expanded: Boolean, onToggle: () -> Unit) {
-    ListGroup {
-        ListRow(title = text, badge = if (expanded) "Hide" else "Show", showChevron = false, onClick = onToggle)
-    }
-}
-
-// Kopf: Zustand und Ziel
-@Composable
-private fun HeaderCard(d: Hc2CheckDetail) {
-    val ui = Hc2StateUi.from(d.state?.state, d.paused)
-    ListGroup {
-        ListRow(
-            title = "${d.type.label}${d.target?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()}",
-            trailing = { StatusChip(ui.label, colorResource(ui.color)) }
-        )
-    }
-}
-
 // Zustand: seit wann, letzte Messung, Verfügbarkeit
 @Composable
-private fun StatusFacts(d: Hc2CheckDetail) {
+private fun StatusFacts(d: Hc2CheckDetail, expanded: Boolean, onToggle: () -> Unit) {
     val st = d.state
-    InfoGroup(
-        "Status",
-        listOf(
+    ExpandableListGroup("Status", expanded, onToggle) {
+        val rows = listOf(
             InfoItem("Since", st?.since?.realOrNull()?.formatGermanTime()),
             InfoItem("Last check", st?.lastCheckAt?.let { "${it.formatGermanTime()} (${it.formatRelative()})" }),
             InfoItem("Last status", st?.lastStatus),
@@ -578,14 +573,20 @@ private fun StatusFacts(d: Hc2CheckDetail) {
             InfoItem("Availability 24 h", d.availabilityPercent?.last24h?.formatPercent()),
             InfoItem("Availability 30 d", d.availabilityPercent?.last30d?.formatPercent()),
             InfoItem("Availability 1 y", d.availabilityPercent?.last1y?.formatPercent())
-        ),
-        hideEmpty = true
-    )
+        ).filter { !it.value.isNullOrBlank() }
+        if (rows.isEmpty()) GroupText("No status yet") else InfoRows(rows)
+    }
 }
 
 // Push-URL kopieren oder teilen (enthält das Check-Token, daher nie loggen)
 @Composable
-private fun PushCard(ctx: Context, d: Hc2CheckDetail, onCopied: () -> Unit) {
+private fun PushCard(
+    ctx: Context,
+    d: Hc2CheckDetail,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onCopied: () -> Unit
+) {
     val push = d.push ?: return
     val entries = listOfNotNull(
         push.url?.takeIf { it.isNotBlank() }?.let { "Push URL" to it },
@@ -593,7 +594,7 @@ private fun PushCard(ctx: Context, d: Hc2CheckDetail, onCopied: () -> Unit) {
         push.nodePath?.takeIf { it.isNotBlank() }?.let { "Node path" to it }
     )
     if (entries.isEmpty()) return
-    ListGroup("Push endpoints") {
+    ExpandableListGroup("Push endpoints", expanded, onToggle) {
         entries.forEachIndexed { i, (label, value) ->
             if (i > 0) GroupDivider()
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -631,7 +632,12 @@ private fun PushCard(ctx: Context, d: Hc2CheckDetail, onCopied: () -> Unit) {
 
 // Einstellungen des Checks; Kanalnamen nur aus dem Cache (keine zusätzliche Anfrage)
 @Composable
-private fun ConfigCard(d: Hc2CheckDetail, onNode: (() -> Unit)?) {
+private fun ConfigCard(
+    d: Hc2CheckDetail,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onNode: (() -> Unit)?
+) {
     val channelText = if (d.channels.isEmpty()) {
         "Default channels"
     } else {
@@ -645,9 +651,8 @@ private fun ConfigCard(d: Hc2CheckDetail, onNode: (() -> Unit)?) {
         Hc2Execution.ONLINE, null -> "Online" + d.locations.takeIf { it.isNotEmpty() }?.joinToString(", ", " (", ")").orEmpty()
     }
     fun yn(v: Boolean?) = when (v) { true -> "Yes"; false -> "No"; null -> null }
-    InfoGroup(
-        "Configuration",
-        listOf(
+    ExpandableListGroup("Configuration", expanded, onToggle) {
+        val rows = listOf(
             InfoItem("Type", d.type.label),
             InfoItem("Target", d.target),
             InfoItem("Interval", d.intervalSeconds?.let { formatSeconds(it) }),
@@ -671,7 +676,7 @@ private fun ConfigCard(d: Hc2CheckDetail, onNode: (() -> Unit)?) {
             InfoItem("Description", d.description),
             InfoItem("Created", d.createdAt?.formatGermanTime()),
             InfoItem("Updated", d.updatedAt?.formatGermanTime())
-        ),
-        hideEmpty = true
-    )
+        ).filter { !it.value.isNullOrBlank() }
+        InfoRows(rows)
+    }
 }

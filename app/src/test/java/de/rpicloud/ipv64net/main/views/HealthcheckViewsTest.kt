@@ -1,11 +1,43 @@
 package de.rpicloud.ipv64net.main.views
 
+import de.sr.ipv64.model.Hc2Check
+import de.rpicloud.ipv64net.models.label
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class HealthcheckViewsTest {
     private val base = 1_800_000_000_000L
     private val step = 300_000L // 5 Minuten
+
+    @Test
+    fun legacyChecksDecodeAndKeepTheirTypeSpecificParametersUntouched() {
+        listOf("docker" to "Docker", "proxmox" to "Proxmox").forEach { (apiType, label) ->
+            val type = requireNotNull(Json.decodeFromString<Hc2Check>("""{"type":"$apiType"}""").type)
+            val params = ParamsState.initial(type)
+
+            assertEquals(label, type.label)
+            assertFalse(type.hasEssentialParams())
+            assertFalse(type.hasAdvancedParams())
+            assertNull(params.toParams(type, params))
+        }
+    }
+
+    @Test
+    fun healthcheckNamesSortCaseInsensitivelyWithTargetFallback() {
+        val checks = listOf(
+            Hc2Check(name = "zeta", target = "example.org"),
+            Hc2Check(name = "  ", target = "Bravo.example"),
+            Hc2Check(name = "Alpha", target = "z.example"),
+            Hc2Check(name = "alpha", target = "a.example")
+        )
+        assertEquals(
+            listOf("a.example", "z.example", "Bravo.example", "example.org"),
+            checks.sortedWith(healthcheckNameOrder).map { it.target }
+        )
+    }
 
     @Test
     fun nearestIndex_epochValuesPickCorrectIndexNearMidpoints() {

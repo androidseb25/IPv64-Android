@@ -49,10 +49,12 @@ val Hc2CheckType?.label: String
         Hc2CheckType.CERT -> "Certificate"
         Hc2CheckType.PUSH -> "Push"
         Hc2CheckType.WHOIS -> "WHOIS"
+        Hc2CheckType.DOCKER -> "Docker"
+        Hc2CheckType.PROXMOX -> "Proxmox"
         null -> "Unknown"
     }
 
-// Platzhalter für das Ziel-Feld im Formular (leer bei Push, dort gibt es kein Ziel)
+// Platzhalter für das Ziel-Feld bei anlegbaren Checks mit Ziel
 val Hc2CheckType.targetHint: String
     get() = when (this) {
         Hc2CheckType.HTTP, Hc2CheckType.KEYWORD, Hc2CheckType.JSON -> "https://example.com/health"
@@ -61,7 +63,7 @@ val Hc2CheckType.targetHint: String
         Hc2CheckType.TCP -> "host:port"
         Hc2CheckType.PORT -> "host:port"
         Hc2CheckType.CERT -> "example.com or host:port"
-        Hc2CheckType.PUSH -> ""
+        Hc2CheckType.PUSH, Hc2CheckType.DOCKER, Hc2CheckType.PROXMOX -> ""
         Hc2CheckType.WHOIS -> "example.com"
     }
 

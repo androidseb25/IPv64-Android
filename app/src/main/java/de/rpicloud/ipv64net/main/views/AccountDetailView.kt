@@ -143,7 +143,7 @@ fun AccountDetailView(navController: NavHostController, mainPadding: PaddingValu
             ) {
                 item(key = "accounts") {
                     ListGroup {
-                        users.forEachIndexed { i, user ->
+                        users.sortedBy { it.Username.trim().lowercase() }.forEachIndexed { i, user ->
                             if (i > 0) GroupDivider(56.dp)
                             AccountItemView(
                                 user,

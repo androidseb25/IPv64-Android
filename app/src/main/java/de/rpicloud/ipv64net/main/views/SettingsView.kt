@@ -15,10 +15,13 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.navigation.NavHostController
+import de.rpicloud.ipv64net.BuildConfig
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.CacheRegistry
 import de.rpicloud.ipv64net.helper.PreferencesManager
+import de.rpicloud.ipv64net.helper.SCREENSHOT_PROTECTION_ENABLED
 import de.rpicloud.ipv64net.helper.findActivity
+import de.rpicloud.ipv64net.helper.rememberScreenshotProtectionEnabled
 import de.rpicloud.ipv64net.main.startup.activity.LoginActivity
 import de.rpicloud.ipv64net.main.views.common.HubScreen
 import de.rpicloud.ipv64net.main.views.common.HubSection
@@ -39,6 +42,7 @@ import me.zhanghai.compose.preference.rememberPreferenceState
 @Composable
 fun SettingsView(navController: NavHostController, mainPadding: PaddingValues) {
     val ctx = LocalContext.current
+    val screenshotProtectionEnabled = rememberScreenshotProtectionEnabled()
 
     ProvidePreferenceLocals {
         val lockScreenEnabled = rememberPreferenceState("LOCKSCREEN_ENABLED", false)
@@ -53,7 +57,8 @@ fun SettingsView(navController: NavHostController, mainPadding: PaddingValues) {
             HubSection(Tab.threat_lookup, title = "IP lookup & My IP", subtitle = "Your public IP and why an IP is on the blocklist", group = "Security"),
             HubSection(Tab.password_check, subtitle = "Was a password used in attacks? Stays on your device", group = "Security"),
             HubSection(Tab.honeypot, subtitle = "Attacks, ports and rankings of the Honeypot64 network", group = "Security"),
-            HubSection(Tab.logs, group = "Tools")
+            HubSection(Tab.logs, group = "Tools"),
+            HubSection(Tab.notification_logs, subtitle = "App notification deliveries", group = "Tools")
         )
 
         HubScreen(
@@ -65,6 +70,10 @@ fun SettingsView(navController: NavHostController, mainPadding: PaddingValues) {
                 appGroup(
                     lockScreenEnabled = lockScreenEnabled.value,
                     onLockScreenChange = { lockScreenEnabled.value = it },
+                    screenshotProtectionEnabled = screenshotProtectionEnabled,
+                    onScreenshotProtectionChange = {
+                        PreferencesManager.saveBool(ctx, SCREENSHOT_PROTECTION_ENABLED, it)
+                    },
                     onAbout = { navController.navigate(Tabs.getRoute(Tab.about)) { launchSingleTop = true } },
                     onOpen = { url -> ctx.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
                 )
@@ -92,6 +101,8 @@ fun SettingsView(navController: NavHostController, mainPadding: PaddingValues) {
 private fun LazyListScope.appGroup(
     lockScreenEnabled: Boolean,
     onLockScreenChange: (Boolean) -> Unit,
+    screenshotProtectionEnabled: Boolean,
+    onScreenshotProtectionChange: (Boolean) -> Unit,
     onAbout: () -> Unit,
     onOpen: (String) -> Unit
 ) {
@@ -106,11 +117,26 @@ private fun LazyListScope.appGroup(
                 modifier = Modifier.toggleable(value = lockScreenEnabled, role = Role.Switch, onValueChange = onLockScreenChange)
             )
             GroupDivider(56.dp)
+            ListRow(
+                title = "Screenshot protection",
+                subtitle = "Block screenshots and screen recordings on sensitive screens",
+                icon = R.drawable.lock_24px,
+                centerIcon = true,
+                trailing = { Switch(checked = screenshotProtectionEnabled, onCheckedChange = null) },
+                modifier = Modifier.toggleable(
+                    value = screenshotProtectionEnabled,
+                    role = Role.Switch,
+                    onValueChange = onScreenshotProtectionChange
+                )
+            )
+            GroupDivider(56.dp)
             ListRow(title = "About", icon = R.drawable.info_24px, centerIcon = true, onClick = onAbout)
             GroupDivider(56.dp)
             ListRow(title = "YouTube", icon = R.drawable.youtube_activity_24px, centerIcon = true, onClick = { onOpen("https://www.youtube.com/c/RaspberryPiCloud") })
             GroupDivider(56.dp)
             ListRow(title = "Discord", icon = R.drawable.discord_24px, centerIcon = true, onClick = { onOpen("https://discord.gg/rpicloud") })
+            GroupDivider()
+            ListRow(title = "App version", subtitle = "${BuildConfig.VERSION_NAME} · Build ${BuildConfig.VERSION_CODE}")
         }
     }
 }

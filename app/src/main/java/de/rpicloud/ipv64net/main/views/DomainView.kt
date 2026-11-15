@@ -36,7 +36,6 @@ import de.rpicloud.ipv64net.helper.IPv64Client
 import de.rpicloud.ipv64net.helper.loadDomains
 import de.rpicloud.ipv64net.helper.ipv64Request
 import de.rpicloud.ipv64net.helper.myIp
-import de.rpicloud.ipv64net.helper.v64domains
 import de.rpicloud.ipv64net.main.views.common.EmptyState
 import de.rpicloud.ipv64net.main.views.common.FilterChipRow
 import de.rpicloud.ipv64net.main.views.common.RefreshableList
@@ -192,7 +191,7 @@ fun DomainView(navController: NavHostController, mainPadding: PaddingValues) {
             }
             // Eine Gruppe, je Zeile ein Lazy-Item: Details (Indikator) werden nur für sichtbare Einträge nachgeladen
             groupedRows(
-                visible.sortedBy { String().v64domains().indexOf(it.baseDomain) }, // nach Zone sortiert
+                visible.sortedBy { it.name.orEmpty().lowercase() },
                 key = { it.name.orEmpty() }
             ) { d ->
                 val name = d.name.orEmpty()

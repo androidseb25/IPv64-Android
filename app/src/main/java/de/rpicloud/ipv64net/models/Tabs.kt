@@ -88,6 +88,7 @@ enum class Tab {
     api_keys,
     account_links,
     logs,
+    notification_logs,
     my_ip,
     about
 }
@@ -182,7 +183,7 @@ sealed class Tabs {
             // More: Account, Tools, Benachrichtigungen, Security und Nodes; network (Infrastructure-Hub) vorerst
             // nicht erreichbar
             Tab.settings, Tab.account, Tab.account_details, Tab.account_edit, Tab.api_keys, Tab.account_links,
-            Tab.logs, Tab.my_ip, Tab.about, Tab.channels, Tab.channel_new, Tab.channel_edit, Tab.push_setup,
+            Tab.logs, Tab.notification_logs, Tab.my_ip, Tab.about, Tab.channels, Tab.channel_new, Tab.channel_edit, Tab.push_setup,
             Tab.hc2_settings, Tab.network, Tab.nodes, Tab.node_details, Tab.node_module,
             Tab.threat_lookup, Tab.threat_stats, Tab.threat_watch, Tab.password_check, Tab.honeypot -> Tab.settings
         }
@@ -245,6 +246,7 @@ sealed class Tabs {
             Tab.api_keys -> "API keys"
             Tab.account_links -> "Account links"
             Tab.logs -> "Logs"
+            Tab.notification_logs -> "Notification logs"
             Tab.my_ip -> "My IP"
             Tab.about -> "About"
         }
@@ -288,7 +290,7 @@ sealed class Tabs {
             Tab.account, Tab.account_details, Tab.account_edit -> R.drawable.account_circle_24px
             Tab.api_keys -> R.drawable.key_24px
             Tab.account_links -> R.drawable.link_24px
-            Tab.logs -> R.drawable.data_info_alert_24px
+            Tab.logs, Tab.notification_logs -> R.drawable.data_info_alert_24px
             Tab.my_ip -> R.drawable.bring_your_own_ip_24px
             Tab.about -> R.drawable.info_24px
             Tab.domain_settings -> R.drawable.tune_24px

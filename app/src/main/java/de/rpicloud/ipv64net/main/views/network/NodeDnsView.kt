@@ -40,6 +40,7 @@ import de.rpicloud.ipv64net.helper.navigateWithArgs
 import de.rpicloud.ipv64net.helper.rememberNavArg
 import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
 import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.ExpandableListGroup
 import de.rpicloud.ipv64net.main.views.common.FilterChipRow
 import androidx.compose.runtime.LaunchedEffect
 import de.rpicloud.ipv64net.models.Tabs
@@ -379,12 +380,17 @@ private fun Timeline(timeline: Sec<DNS64Timeline>, range: DNS64Range) {
 private fun Upstreams(up: Sec<DNS64Upstreams>) {
     val u = up.value
     if (u == null) return SecError("Upstream servers", up.error ?: "No data")
-    ListGroup(title = "Upstream servers") {
-        u.mode?.let { GroupText("Mode: $it") }
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    ExpandableListGroup(
+        title = "Upstream servers",
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+        subtitle = u.mode
+    ) {
         if (u.servers.isEmpty()) GroupText("No upstream servers.")
         val sumWins = u.servers.sumOf { it.wins ?: 0L }
         u.servers.forEachIndexed { i, sv ->
-            if (i > 0 || u.mode != null) GroupDivider()
+            if (i > 0) GroupDivider()
             val req = sv.requests ?: 0L
             ListRow(
                 title = sv.name ?: sv.url ?: "–",
@@ -416,9 +422,14 @@ private fun CacheCard(cache: Sec<DNS64Cache>, busy: Boolean, onFlush: () -> Unit
     if (c == null) return SecError("DNS cache", cache.error ?: "No data")
     val hits = c.hits ?: 0L
     val misses = c.misses ?: 0L
-    ListGroup(title = "DNS cache") {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    ExpandableListGroup(
+        title = "DNS cache",
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+        subtitle = "Hit rate ${pct(hits, hits + misses)} %"
+    ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Hit rate ${pct(hits, hits + misses)} %", style = MaterialTheme.typography.bodyMedium)
             LinearProgressIndicator(progress = { if (hits + misses > 0) hits.toFloat() / (hits + misses) else 0f }, modifier = Modifier.fillMaxWidth())
         }
         GroupDivider()

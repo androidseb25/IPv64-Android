@@ -3,6 +3,8 @@ package de.rpicloud.ipv64net.main.views.monitoring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,10 +21,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -31,6 +33,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -44,11 +48,13 @@ import de.rpicloud.ipv64net.helper.realOrNull
 import de.rpicloud.ipv64net.helper.rememberNavArg
 import de.rpicloud.ipv64net.main.views.common.ActionTile
 import de.rpicloud.ipv64net.main.views.common.ConfirmDialog
+import de.rpicloud.ipv64net.main.views.common.ExpandableGroupRow
+import de.rpicloud.ipv64net.main.views.common.ExpandableListGroup
 import de.rpicloud.ipv64net.main.views.common.FilterChipRow
 import de.rpicloud.ipv64net.main.views.common.GroupDivider
 import de.rpicloud.ipv64net.main.views.common.GroupText
-import de.rpicloud.ipv64net.main.views.common.InfoGroup
 import de.rpicloud.ipv64net.main.views.common.InfoItem
+import de.rpicloud.ipv64net.main.views.common.InfoRows
 import de.rpicloud.ipv64net.main.views.common.ListGroup
 import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.main.views.common.RequestStateHost
@@ -66,6 +72,7 @@ import de.sr.ipv64.IPv64Exception
 import de.sr.ipv64.Node64ApiException
 import de.sr.ipv64.node64.model.Monitor64AccessState
 import de.sr.ipv64.node64.model.Monitor64HostChart
+import de.sr.ipv64.node64.model.Monitor64HostChartSeries
 import de.sr.ipv64.node64.model.Monitor64HostDetail
 import de.sr.ipv64.node64.model.Monitor64HostInput
 import de.sr.ipv64.node64.model.Monitor64HostService
@@ -77,6 +84,7 @@ import de.sr.ipv64.node64.model.Monitor64ProblemActionAction
 import de.sr.ipv64.node64.model.Monitor64ProblemStatus
 import de.sr.ipv64.node64.model.Monitor64Range
 import de.sr.ipv64.node64.model.Monitor64ServiceState
+import de.sr.ipv64.node64.model.Monitor64SeriesEntry
 import de.rpicloud.ipv64net.main.views.nearestIndex
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -117,6 +125,43 @@ private fun Monitor64Range.chipLabel() = when (this) {
     Monitor64Range.YEAR_1 -> "1 y"
 }
 
+private const val SERIES_PER_REQUEST = 16
+private const val EXTRA_CHART_POINTS = 120
+
+private fun Monitor64HostChartSeries.seriesKey(): String? =
+    if (svc.isNullOrBlank() || metric.isNullOrBlank()) null else "$svc|$metric"
+
+internal fun monitor64Charts(detail: Monitor64HostDetail): List<Monitor64HostChart> {
+    val keys = detail.charts.flatMap { chart -> chart.series.mapNotNull { it.seriesKey() } }.toMutableSet()
+    val serviceCharts = detail.services.flatMap { service ->
+        val key = service.key
+        if (key.isNullOrBlank() || service.vanished == true || service.adopted == -1) return@flatMap emptyList()
+        val name = service.displayName()
+        service.metrics.mapNotNull { metric ->
+            val measure = metric.name?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            if (metric.value?.isFinite() != true || !keys.add("$key|$measure")) return@mapNotNull null
+            Monitor64HostChart(
+                id = "$name · ${measure.m64Text()}",
+                unit = metric.unit,
+                max = metric.max,
+                series = listOf(Monitor64HostChartSeries(svc = key, metric = measure))
+            )
+        }
+    }
+    return detail.charts.map { it.copy(id = it.id?.uppercase()) } + serviceCharts
+}
+
+internal fun Monitor64SeriesEntry.chartPoints(): List<Pair<Long, Double>> = points.mapNotNull { point ->
+    val timestamp = point.t?.takeIf { it in 1..Long.MAX_VALUE / 1000 } ?: return@mapNotNull null
+    val value = point.avg?.takeIf { it.isFinite() } ?: return@mapNotNull null
+    timestamp * 1000 to value
+}.distinctBy { it.first }.sortedBy { it.first }.takeIf { it.size >= 2 }.orEmpty()
+
+private data class Monitor64ChartData(
+    val chart: Monitor64HostChart,
+    val lines: List<Pair<String, List<Pair<Long, Double>>>>
+)
+
 // Detailansicht eines Monitor64-Hosts einer direkt verbundenen Node (lokale Node-API)
 @Composable
 fun Monitor64HostDetailView(navController: NavHostController, mainPadding: PaddingValues) {
@@ -131,9 +176,15 @@ fun Monitor64HostDetailView(navController: NavHostController, mainPadding: Paddi
     var nodeError by remember { mutableStateOf<String?>(null) }
     var problems by remember { mutableStateOf<List<Monitor64Problem>>(emptyList()) }
     var problemsError by remember { mutableStateOf<String?>(null) }
-    var range by remember { mutableStateOf(Monitor64Range.HOURS_24) }
-    // Chart-ID -> Linien (Beschriftung, avg-Werte); fehlender Eintrag = Chart ausgeblendet
-    val chartLines = remember { mutableStateMapOf<String, List<Pair<String, List<Pair<Long, Double>>>>>() }
+    var range by rememberSaveable { mutableStateOf(Monitor64Range.HOURS_24) }
+    var hostExpanded by rememberSaveable { mutableStateOf(true) }
+    var chartsExpanded by rememberSaveable { mutableStateOf(true) }
+    var problemsExpanded by rememberSaveable { mutableStateOf(false) }
+    var accessesExpanded by rememberSaveable { mutableStateOf(false) }
+    var newServicesExpanded by rememberSaveable { mutableStateOf(false) }
+    var expandedCategories by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    val charts = remember(detail) { detail?.let(::monitor64Charts).orEmpty() }
+    var chartData by remember(range, charts) { mutableStateOf<List<Monitor64ChartData>?>(null) }
     // Zählt jedes Neuladen hoch, damit die Charts erneut geholt werden
     var chartGen by remember { mutableIntStateOf(0) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -173,22 +224,29 @@ fun Monitor64HostDetailView(navController: NavHostController, mainPadding: Paddi
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { load() }
 
-    // Ein Aufruf für alle Charts pro Zeitraum/Neuladen (Server erlaubt max. 16 Serien); Fehler blendet nur die Charts aus
-    LaunchedEffect(range, chartGen) {
+    LaunchedEffect(range, chartGen, charts) {
         val d = detail ?: return@LaunchedEffect
-        val id = d.host?.uid ?: return@LaunchedEffect
-        if (client == null) return@LaunchedEffect
-        val keys = d.charts.flatMap { c -> c.series.map { "${it.svc}|${it.metric}" } }.distinct().take(16)
-        val res = if (keys.isEmpty()) null else try { client.monitor64.series(host = id, s = keys, range = range) } catch (e: IPv64Exception) { null }
-        chartLines.clear()
-        d.charts.forEach { chart ->
-            val lines = res?.series?.mapNotNull { e ->
-                val s = chart.series.firstOrNull { "${it.svc}|${it.metric}" == e.s } ?: return@mapNotNull null
-                // (Zeit in ms, avg)
-                val v = e.points.mapNotNull { p -> p.avg?.let { a -> p.t?.let { it * 1000 to a } } }.sortedBy { it.first }
-                if (v.size >= 2) (s.label ?: e.s.orEmpty()) to v else null
-            }.orEmpty()
-            if (lines.isNotEmpty()) chartLines[chart.id.orEmpty()] = lines
+        val id = d.host?.uid ?: uid ?: return@LaunchedEffect
+        if (client == null || charts.isEmpty()) return@LaunchedEffect
+        val requestedRange = range
+        val primaryKeys = d.charts.flatMap { chart -> chart.series.mapNotNull { it.seriesKey() } }.toSet()
+        val extraKeys = charts.flatMap { chart -> chart.series.mapNotNull { it.seriesKey() } }.toSet() - primaryKeys
+        val requests = primaryKeys.chunked(SERIES_PER_REQUEST).map { it to null } +
+            extraKeys.chunked(SERIES_PER_REQUEST).map { it to EXTRA_CHART_POINTS }
+        val series = requests.flatMap { (batch, points) ->
+            try {
+                client.monitor64.series(host = id, s = batch, range = requestedRange, points = points).series
+            } catch (_: IPv64Exception) {
+                emptyList()
+            }
+        }.associateBy { it.s }
+        chartData = charts.mapNotNull { chart ->
+            val lines = chart.series.mapNotNull { config ->
+                val key = config.seriesKey() ?: return@mapNotNull null
+                val points = series[key]?.chartPoints().orEmpty()
+                if (points.isEmpty()) null else (config.label?.m64Text() ?: key) to points
+            }
+            chart.takeIf { lines.isNotEmpty() }?.let { Monitor64ChartData(it, lines) }
         }
     }
 
@@ -241,9 +299,8 @@ fun Monitor64HostDetailView(navController: NavHostController, mainPadding: Paddi
                     }
                 }
                 spacedItem {
-                    InfoGroup(
-                        "Host",
-                        listOf(
+                    ExpandableListGroup("Host", hostExpanded, { hostExpanded = !hostExpanded }) {
+                        val rows = listOf(
                             InfoItem("Kind", h?.kind?.value?.takeIf { it.isNotBlank() }),
                             InfoItem("Group", h?.group),
                             InfoItem("Tags", h?.tags?.joinToString(", ")),
@@ -252,9 +309,9 @@ fun Monitor64HostDetailView(navController: NavHostController, mainPadding: Paddi
                             InfoItem("Maintenance", d.maint?.let { m -> listOfNotNull(m.reason?.takeIf { it.isNotBlank() }, m.end?.realOrNull()?.let { "until ${it.formatGermanTime()}" }).joinToString(" · ").ifEmpty { "Running" } }),
                             InfoItem("Interval", h?.intervalSec?.takeIf { it > 0 }?.let { "$it s" }),
                             InfoItem("Notes", h?.notes)
-                        ),
-                        hideEmpty = true
-                    )
+                        ).filter { !it.value.isNullOrBlank() }
+                        if (rows.isEmpty()) GroupText("No host details yet") else InfoRows(rows)
+                    }
                 }
                 spacedItem {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -278,19 +335,39 @@ fun Monitor64HostDetailView(navController: NavHostController, mainPadding: Paddi
                         )
                     }
                 }
-                if (d.charts.isNotEmpty()) {
-                    spacedItem {
-                        ListGroup("Charts") {
-                            Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                FilterChipRow(options = RANGES, selected = range, label = { it.chipLabel() }, onSelect = { range = it })
-                                d.charts.forEach { chart -> chartLines[chart.id.orEmpty()]?.let { Monitor64Chart(chart, it) } }
-                                if (chartLines.isEmpty()) Text("No data in this range.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (charts.isNotEmpty()) {
+                    val toggleCharts = { chartsExpanded = !chartsExpanded }
+                    val rangePicker: @Composable () -> Unit = {
+                        Column(Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChipRow(options = RANGES, selected = range, label = { it.chipLabel() }, onSelect = { range = it })
+                            val message = when {
+                                chartData == null -> "Loading..."
+                                chartData.orEmpty().isEmpty() -> "No data in this range."
+                                else -> null
                             }
+                            message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        }
+                    }
+                    if (chartsExpanded && !chartData.isNullOrEmpty()) {
+                        groupedRows(
+                            chartData.orEmpty(),
+                            headerKey = "monitor64_charts",
+                            header = {
+                                Column {
+                                    ExpandableGroupRow("Charts", true, toggleCharts)
+                                    GroupDivider()
+                                    rangePicker()
+                                }
+                            }
+                        ) { data -> Monitor64Chart(data.chart, data.lines) }
+                    } else {
+                        spacedItem(key = "group_first_monitor64_charts") {
+                            ExpandableListGroup("Charts", chartsExpanded, toggleCharts) { rangePicker() }
                         }
                     }
                 }
                 spacedItem {
-                    ListGroup("Problems") {
+                    ExpandableListGroup("Problems", problemsExpanded, { problemsExpanded = !problemsExpanded }) {
                         when {
                             problemsError != null -> GroupText(problemsError.orEmpty(), error = true)
                             problems.isEmpty() -> ListRow("No open problems")
@@ -314,7 +391,7 @@ fun Monitor64HostDetailView(navController: NavHostController, mainPadding: Paddi
                 val keys = d.new.mapNotNull { it.key }
                 if (keys.isNotEmpty()) {
                     spacedItem {
-                        ListGroup("New services") {
+                        ExpandableListGroup("New services", newServicesExpanded, { newServicesExpanded = !newServicesExpanded }) {
                             ListRow(
                                 title = "${keys.size} newly discovered",
                                 subtitle = d.new.mapNotNull { it.name?.takeIf { n -> n.isNotBlank() }?.m64Text() ?: it.key }.take(5).joinToString(", ") + if (keys.size > 5) " …" else "",
@@ -328,11 +405,30 @@ fun Monitor64HostDetailView(navController: NavHostController, mainPadding: Paddi
                     }
                 }
                 // Dienste nach Kategorie (docker, guests, system, fs, ...)
-                d.services.filter { it.key != null }.distinctBy { it.key }.groupBy { it.category?.value ?: "other" }.forEach { (cat, list) ->
-                    groupedRows(list, key = { "svc_${cat}_${it.key}" }, title = cat.replaceFirstChar { it.uppercase() }, headerKey = "cat_$cat") { ServiceRow(it) }
+                val servicesByCategory = d.services.filter { it.key != null }.distinctBy { it.key }
+                    .groupBy { it.category?.value ?: "other" }
+                servicesByCategory.forEach { (category, services) ->
+                    val title = category.replaceFirstChar { it.uppercase() }
+                    val expanded = category in expandedCategories
+                    val toggle = {
+                        expandedCategories = if (category in expandedCategories) expandedCategories - category
+                        else expandedCategories + category
+                    }
+                    if (expanded) {
+                        groupedRows(
+                            services,
+                            key = { "svc_${category}_${it.key}" },
+                            headerKey = "category_$category",
+                            header = { ExpandableGroupRow(title, true, toggle) }
+                        ) { ServiceRow(it) }
+                    } else {
+                        spacedItem(key = "group_first_category_$category") {
+                            ExpandableListGroup(title, false, toggle) {}
+                        }
+                    }
                 }
                 spacedItem {
-                    ListGroup("Accesses") {
+                    ExpandableListGroup("Accesses", accessesExpanded, { accessesExpanded = !accessesExpanded }) {
                         if (d.accesses.isEmpty()) ListRow("No accesses")
                         d.accesses.forEachIndexed { i, a ->
                             if (i > 0) GroupDivider()
@@ -365,6 +461,9 @@ fun Monitor64HostDetailView(navController: NavHostController, mainPadding: Paddi
     RequestStateHost(req)
 }
 
+private fun Monitor64HostService.displayName(): String =
+    (customName?.takeIf { it.isNotBlank() } ?: name?.takeIf { it.isNotBlank() } ?: key.orEmpty()).m64Text()
+
 @Composable
 private fun ServiceRow(s: Monitor64HostService) {
     val (text, color) = monitor64ServiceState(s.state)
@@ -372,7 +471,7 @@ private fun ServiceRow(s: Monitor64HostService) {
         m.value?.let { "${m.name.orEmpty()} ${it.fmt()}${m.unit?.takeIf { u -> u.isNotBlank() }?.let { u -> " $u" }.orEmpty()}".trim() }
     }.joinToString(" · ")
     ListRow(
-        title = (s.customName?.takeIf { it.isNotBlank() } ?: s.name?.takeIf { it.isNotBlank() } ?: s.key.orEmpty()).m64Text(),
+        title = s.displayName(),
         subtitle = listOf(s.text.orEmpty().m64Text(), metrics).filter { it.isNotBlank() }.joinToString("\n").ifEmpty { null },
         subtitleMaxLines = 4,
         trailing = { StatusChip(text, colorResource(color)) }, showChevron = false
@@ -395,23 +494,27 @@ private fun AccessRow(a: Monitor64AccessState) {
     )
 }
 
-// Liniendiagramm (avg-Werte, eine Linie je Serie); y von 0 bis max des Charts bzw. größtem Wert.
+// Liniendiagramm (avg-Werte, eine Linie je Serie).
 // Tippen oder Wischen zeigt Uhrzeit und Werte an dieser Stelle.
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Monitor64Chart(chart: Monitor64HostChart, lines: List<Pair<String, List<Pair<Long, Double>>>>) {
     val palette = chartPalette()
     val surface = MaterialTheme.colorScheme.surfaceContainer
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val unit = chart.unit?.takeIf { it.isNotBlank() }?.let { " $it" }.orEmpty()
-    val top = (chart.max ?: lines.maxOf { l -> l.second.maxOf { it.second } }).takeIf { it > 0 } ?: 1.0
+    val bottom = minOf(0.0, lines.minOf { (_, points) -> points.minOf { it.second } })
+    val top = maxOf(0.0, chart.max?.takeIf { it.isFinite() } ?: 0.0, lines.maxOf { (_, points) -> points.maxOf { it.second } })
+    val span = (top - bottom).takeIf { it > 0 } ?: 1.0
+    val title = chart.id?.takeIf { it.isNotBlank() } ?: "Metrics"
     val times = remember(lines) { lines.flatMap { l -> l.second.map { it.first } }.distinct().sorted() }
     val tMin = times.first()
     val tMax = times.last()
     var selected by remember(lines) { mutableStateOf<Int?>(null) }
     val sel = selected?.takeIf { it in times.indices }
     val fmt = remember { SimpleDateFormat("dd.MM. HH:mm", Locale.getDefault()) }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("${chart.id.orEmpty().uppercase()} (max ${top.fmt()}$unit)", style = MaterialTheme.typography.titleSmall)
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("$title (max ${top.fmt()}$unit)", style = MaterialTheme.typography.titleSmall)
         // Auslesezeile mit fester Höhe, damit das Diagramm beim Berühren nicht springt
         val readout = if (sel == null) "Touch the chart for values" else {
             val t = times[sel]
@@ -423,6 +526,7 @@ private fun Monitor64Chart(chart: Monitor64HostChart, lines: List<Pair<String, L
         Text(readout, style = MaterialTheme.typography.labelSmall, color = if (sel == null) muted else MaterialTheme.colorScheme.onSurface, minLines = 1, maxLines = 2)
         Canvas(
             Modifier.fillMaxWidth().height(110.dp)
+                .semantics { contentDescription = "$title over time" }
                 .pointerInput(times) {
                     detectTapGestures { pos -> nearestIndex(times, tMin, tMax, pos.x / size.width).let { selected = if (selected == it) null else it } }
                 }
@@ -430,10 +534,10 @@ private fun Monitor64Chart(chart: Monitor64HostChart, lines: List<Pair<String, L
                     detectHorizontalDragGestures { change, _ -> selected = nearestIndex(times, tMin, tMax, change.position.x / size.width) }
                 }
         ) {
-            val span = (tMax - tMin).coerceAtLeast(1L).toFloat()
-            fun xOf(t: Long) = size.width * (t - tMin) / span
-            fun yOf(v: Double) = size.height * (1f - (v / top).toFloat().coerceIn(0f, 1f))
-            drawLine(palette.baseline, Offset(0f, size.height), Offset(size.width, size.height))
+            val timeSpan = (tMax - tMin).coerceAtLeast(1L).toFloat()
+            fun xOf(t: Long) = size.width * (t - tMin) / timeSpan
+            fun yOf(v: Double) = size.height * (1f - ((v - bottom) / span).toFloat().coerceIn(0f, 1f))
+            drawLine(palette.baseline, Offset(0f, yOf(0.0)), Offset(size.width, yOf(0.0)))
             sel?.let { val x = xOf(times[it]); drawLine(palette.baseline, Offset(x, 0f), Offset(x, size.height), 1.dp.toPx()) }
             lines.forEachIndexed { i, (_, pts) ->
                 val path = Path()
@@ -451,7 +555,7 @@ private fun Monitor64Chart(chart: Monitor64HostChart, lines: List<Pair<String, L
             Text(fmt.format(Date(tMin)), style = MaterialTheme.typography.labelSmall, color = muted)
             Text(fmt.format(Date(tMax)), style = MaterialTheme.typography.labelSmall, color = muted)
         }
-        if (lines.size > 1) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (lines.size > 1) FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             lines.forEachIndexed { i, (label, _) -> Text(label, style = MaterialTheme.typography.labelSmall, color = palette.categorical(i)) }
         }
     }

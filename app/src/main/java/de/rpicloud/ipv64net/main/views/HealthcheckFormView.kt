@@ -297,7 +297,7 @@ fun HealthcheckForm(navController: NavHostController, mainPadding: PaddingValues
             return msg
         }
         if (name.isBlank()) return "Please enter a name."
-        if (type != Hc2CheckType.PUSH && target.isBlank()) return "Please enter a target."
+        if (type != Hc2CheckType.PUSH && type in CREATE_TYPE_ORDER && target.isBlank()) return "Please enter a target."
         ps.validateIssue(type, target)?.let { (msg, adv) -> return fail(msg, if (adv) 1 else 0) }
         durationToSeconds(intervalValue, intervalUnit).let {
             if (it == -1 || (it != null && it < 20)) return fail("Interval must be at least 20 seconds.", 1)

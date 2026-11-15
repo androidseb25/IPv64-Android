@@ -130,7 +130,7 @@ private fun HcFilter.matchesHost(h: Monitor64OverviewHost): Boolean {
 private fun Monitor64HostRow(h: Monitor64OverviewHost, onClick: () -> Unit) {
     val (label, color) = monitor64HostState(h.view, h.paused)
     ListRow(
-        title = h.name.orEmpty().ifBlank { "(unnamed)" },
+        title = healthcheckDisplayName(h.name, h.address) ?: "(unnamed)",
         subtitle = listOfNotNull(h.kind?.takeIf { it.isNotBlank() }, h.address?.takeIf { it.isNotBlank() }).joinToString(" · ")
             .let { base -> listOfNotNull(base.ifEmpty { null }, h.text?.takeIf { it.isNotBlank() }?.m64Text()).joinToString("\n").ifEmpty { null } },
         trailing = { StatusChip(label, colorResource(color)) },
@@ -150,7 +150,7 @@ private fun NodeCheckRow(c: Check, onClick: () -> Unit) {
     }
     val type = c.type?.value.orEmpty().uppercase()
     ListRow(
-        title = c.name.orEmpty().ifBlank { "(unnamed)" },
+        title = healthcheckDisplayName(c.name, c.target) ?: "(unnamed)",
         subtitle = if (c.target.isNullOrBlank()) type else "$type · ${c.target}",
         trailing = { StatusChip(st?.value?.replaceFirstChar { it.uppercase() } ?: "–", colorResource(color)) },
         showChevron = false,
@@ -261,7 +261,7 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
         IPv64Client.get(ctx)
         if (!force) {
             Hc2CheckListCache.get()?.let {
-                allChecks = it.sortedBy { c -> c.name.orEmpty().lowercase() }
+                allChecks = it.sortedWith(healthcheckNameOrder)
                 loaded = true
                 return
             }
@@ -272,7 +272,7 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
             try {
                 // Gemeinsamer Loader: Mutex, Cache und Schutz vor Account-Wechsel während des Abrufs
                 val result = loadHc2Checks(ctx, force)
-                allChecks = result.sortedBy { c -> c.name.orEmpty().lowercase() }
+                allChecks = result.sortedWith(healthcheckNameOrder)
                 loaded = true
             } catch (e: IPv64Exception) {
                 val error = e.toError()
@@ -398,7 +398,8 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
                     // Bei Fehler keine veralteten Zeilen neben der Fehlermeldung
                     val rows = (nodeChecks[id].takeIf { nodeErrors[id] == null } ?: emptyList()).filter { c ->
                         c.isNodeOwned() && filter.matchesNode(c) && (q.isEmpty() || c.name.orEmpty().lowercase().contains(q) || c.target.orEmpty().lowercase().contains(q))
-                    }.sortedBy { it.name.orEmpty().lowercase() }
+                    }.sortedWith(compareBy<Check> { healthcheckDisplayName(it.name, it.target).orEmpty().lowercase() }
+                        .thenBy { it.target.orEmpty().lowercase() })
                     if (nodeErrors[id] == null && nodeModules[id] == NodeHcModule.OFF) {
                         spacedItem(key = "node_off_$id") {
                             ListGroup(title = name) { GroupText("Healthchecks module is off on this node") }
@@ -425,7 +426,8 @@ fun HealthcheckView(navController: NavHostController, mainPadding: PaddingValues
                     }
                     val hosts = m64Hosts[id].orEmpty().filter { h -> h.uid != null &&
                         filter.matchesHost(h) && (q.isEmpty() || h.name.orEmpty().lowercase().contains(q) || h.address.orEmpty().lowercase().contains(q))
-                    }.sortedBy { it.name.orEmpty().lowercase() }
+                    }.sortedWith(compareBy<Monitor64OverviewHost> { healthcheckDisplayName(it.name, it.address).orEmpty().lowercase() }
+                        .thenBy { it.address.orEmpty().lowercase() })
                     groupedRows(hosts, key = { "m64_${id}_" + it.uid.orEmpty() }, title = name, headerKey = "m64_$id") { h ->
                         Monitor64HostRow(h) { h.uid?.let { navController.navigateWithArgs(Tab.monitor64_host_details, NavKeys.SELECTED_NODE_ID to id, NavKeys.MONITOR64_HOST_UID to it) } }
                     }

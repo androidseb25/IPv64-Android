@@ -57,6 +57,13 @@ fun Hc2Check.executionLabel(): String? = when (execution) {
     else -> null
 }
 
+internal fun healthcheckDisplayName(name: String?, target: String?): String? =
+    name?.takeIf { it.isNotBlank() } ?: target?.takeIf { it.isNotBlank() }
+
+internal val healthcheckNameOrder = compareBy<Hc2Check> {
+    healthcheckDisplayName(it.name, it.target).orEmpty().lowercase()
+}.thenBy { it.target.orEmpty().lowercase() }
+
 // Zeile der Check-Liste (für eine ListGroup): nur Daten aus der Liste, keine Einzelabfragen
 @Composable
 fun HealthcheckRow(check: Hc2Check, onClick: (Hc2Check) -> Unit) {
@@ -72,7 +79,7 @@ fun HealthcheckRow(check: Hc2Check, onClick: (Hc2Check) -> Unit) {
         if (details.isNotEmpty()) add(details.joinToString(" · "))
     }.joinToString("\n")
     ListRow(
-        title = check.name.orEmpty().ifBlank { "(unnamed)" },
+        title = healthcheckDisplayName(check.name, check.target) ?: "(unnamed)",
         subtitle = subtitle,
         trailing = { StatusChip(state.label, colorResource(state.color)) },
         showChevron = false,

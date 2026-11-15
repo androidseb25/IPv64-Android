@@ -4,7 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
@@ -25,7 +24,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
@@ -39,8 +37,8 @@ import de.rpicloud.ipv64net.helper.formatRelative
 import de.rpicloud.ipv64net.main.views.FormDropdown
 import de.rpicloud.ipv64net.main.views.FormNumberField
 import de.rpicloud.ipv64net.main.views.common.EmptyState
+import de.rpicloud.ipv64net.main.views.common.ExpandableListGroup
 import de.rpicloud.ipv64net.main.views.common.GroupDivider
-import de.rpicloud.ipv64net.main.views.common.ListGroup
 import de.rpicloud.ipv64net.main.views.common.ListRow
 import de.rpicloud.ipv64net.main.views.common.SectionHeader
 import de.rpicloud.ipv64net.main.views.common.StatusChip
@@ -185,36 +183,25 @@ fun LazyListScope.nodeCommandHistory(
     onToggle: () -> Unit,
     onRefresh: () -> Unit
 ) {
-    // Gleiches Muster wie "Details": eine Gruppe, Kopfzeile darin, Inhalt beim Aufklappen
     item(key = "history") {
-        ListGroup {
-            ListRow(
-                title = "Command history",
-                showChevron = false,
-                trailing = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (loading) {
-                            CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp).size(24.dp), strokeWidth = 2.dp)
-                        } else if (open) {
-                            IconButton(onClick = onRefresh) {
-                                Icon(painter = painterResource(R.drawable.refresh_24px), contentDescription = "Reload commands")
-                            }
-                        }
-                        Icon(
-                            painter = painterResource(if (open) R.drawable.expand_less_24px else R.drawable.expand_more_24px),
-                            contentDescription = if (open) "Collapse" else "Expand"
-                        )
+        ExpandableListGroup(
+            title = "Command history",
+            expanded = open,
+            onToggle = onToggle,
+            trailing = {
+                if (loading) {
+                    CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp).size(24.dp), strokeWidth = 2.dp)
+                } else if (open) {
+                    IconButton(onClick = onRefresh) {
+                        Icon(painter = painterResource(R.drawable.refresh_24px), contentDescription = "Reload commands")
                     }
-                },
-                onClick = onToggle
-            )
-            if (open) {
-                GroupDivider()
-                if (loaded && commands.isEmpty()) GroupText("No commands sent yet.")
-                commands.forEachIndexed { index, command ->
-                    if (index > 0) GroupDivider()
-                    NodeCommandRow(command, checks)
                 }
+            }
+        ) {
+            if (loaded && commands.isEmpty()) GroupText("No commands sent yet.")
+            commands.forEachIndexed { index, command ->
+                if (index > 0) GroupDivider()
+                NodeCommandRow(command, checks)
             }
         }
     }

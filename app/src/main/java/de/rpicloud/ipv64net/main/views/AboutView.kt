@@ -12,11 +12,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.helper.openUrl
 import de.rpicloud.ipv64net.main.views.common.GroupDivider
 import de.rpicloud.ipv64net.main.views.common.ListGroup
 import de.rpicloud.ipv64net.main.views.common.ListRow
@@ -26,6 +28,7 @@ import de.rpicloud.ipv64net.models.Tabs
 
 @Composable
 fun AboutView(navController: NavHostController, mainPadding: PaddingValues) {
+    val context = LocalContext.current
     ScreenScaffold(title = Tabs.getLabel(Tab.about), navController = navController, mainPadding = mainPadding) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -69,22 +72,26 @@ fun AboutView(navController: NavHostController, mainPadding: PaddingValues) {
             item {
                 ListGroup(title = "Contact") {
                     TextBlock(
-                        "IPv64.net - A product of Prox IT UG (limited liability)\n\n" +
-                                "Information according to Section § 5 DDG\n" +
-                                "Prox IT UG (limited liability)\n" +
-                                "Am Eisenstein 10\n" +
-                                "45470 Mülheim an der Ruhr\n\n" +
-                                "Represented by\n" +
-                                "Dennis Schröder (CEO)\n\n" +
-                                "Registry court: Amtsgericht Duisburg\n" +
-                                "Register number: HRB 35106\n" +
-                                "Ust-IdNr.: DE350434683"
+                        "x64 GmbH\nAm Eisenstein 10\n45470 Mülheim an der Ruhr, Germany\n\n" +
+                                "Managing director: Dennis Schröder\n" +
+                                "Registry court: Amtsgericht Duisburg · HRB 35106\n" +
+                                "VAT ID: DE350434683"
                     )
+                    GroupDivider()
+                    ListRow("Email", subtitle = "info@ipv64.net", onClick = { openUrl(context, "mailto:info@ipv64.net") })
+                    GroupDivider()
+                    ListRow("Product support", subtitle = "v64.tech", onClick = { openUrl(context, "https://v64.tech") })
+                    GroupDivider()
+                    ListRow("Legal notice", onClick = { openUrl(context, "https://node64.de/imprint/") })
                 }
             }
             item {
                 ListGroup(title = "About the App") {
                     TextBlock("This app was created with the help of the Raspberry Pi Cloud community. All rights reserved by Dennis Schröder.")
+                    GroupDivider()
+                    ListRow("Visit the project on GitHub", onClick = { openUrl(context, "https://github.com/androidseb25/IPv64-Android") })
+                    GroupDivider()
+                    ListRow("Visit androidseb25 on GitHub", onClick = { openUrl(context, "https://github.com/androidseb25") })
                 }
             }
         }

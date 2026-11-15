@@ -92,14 +92,14 @@ fun NodeLocalSheet(id: String?, onDismiss: () -> Unit, onSaved: (String) -> Unit
                     return@launch
                 }
                 LocalNodeStore.save(ctx, newId, url, key, owner, st.node?.name?.takeIf { it.isNotBlank() })
-                LocalNodeStore.saveModules(ctx, newId, st.modules)
+                LocalNodeStore.saveStatus(ctx, newId, st)
                 keyInput = ""
                 onSaved(newId)
                 return@launch
             }
             val nid: String = id
             LocalNodeStore.save(ctx, nid, url, key, owner)
-            LocalNodeStore.saveModules(ctx, nid, st.modules)
+            LocalNodeStore.saveStatus(ctx, nid, st)
             keyInput = ""
             // Andere Node unter dieser Adresse: nur warnen
             val remoteId = st.node?.id

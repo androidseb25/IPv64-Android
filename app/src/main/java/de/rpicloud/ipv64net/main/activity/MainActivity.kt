@@ -62,6 +62,7 @@ import de.rpicloud.ipv64net.main.views.HealthcheckView
 import de.rpicloud.ipv64net.main.views.ChannelsView
 import de.rpicloud.ipv64net.main.views.PushSetupView
 import de.rpicloud.ipv64net.main.views.LogView
+import de.rpicloud.ipv64net.main.views.SecNtfyLogView
 import de.rpicloud.ipv64net.main.views.MyIpView
 import de.rpicloud.ipv64net.main.views.SettingsView
 import de.rpicloud.ipv64net.main.views.DomainRecordEditView
@@ -286,6 +287,9 @@ class MainActivity : AppCompatActivity() {
                             }
                             composable(Tabs.Companion.getRoute(Tab.logs)) {
                                 LogView(navController, mainPadding = mainPadding)
+                            }
+                            composable(Tabs.getRoute(Tab.notification_logs)) {
+                                SecNtfyLogView(navController, mainPadding = mainPadding)
                             }
                             composable(Tabs.Companion.getRoute(Tab.my_ip)) {
                                 MyIpView(navController, mainPadding = mainPadding)

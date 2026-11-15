@@ -49,6 +49,8 @@ import de.rpicloud.ipv64net.helper.loadDomains
 import de.rpicloud.ipv64net.helper.loadHc2Checks
 import de.rpicloud.ipv64net.helper.toError
 import de.rpicloud.ipv64net.main.views.Hc2StateBadge
+import de.rpicloud.ipv64net.main.views.healthcheckDisplayName
+import de.rpicloud.ipv64net.main.views.healthcheckNameOrder
 import de.rpicloud.ipv64net.main.views.inlineText
 import de.rpicloud.ipv64net.models.Hc2StateUi
 import de.rpicloud.ipv64net.models.effectiveKind
@@ -121,7 +123,7 @@ fun Hc2CheckPickerDialog(
         error = null
         scope.launch {
             try {
-                checks = loadHc2Checks(ctx, force).sortedBy { it.name.orEmpty().lowercase() }
+                checks = loadHc2Checks(ctx, force).sortedWith(healthcheckNameOrder)
             } catch (e: IPv64Exception) {
                 error = e.toError().inlineText()
             } finally {
@@ -187,7 +189,7 @@ fun Hc2CheckPickerDialog(
                         PickerRow(
                             selected = token in selected,
                             multi = multi,
-                            title = c.name?.takeIf { it.isNotBlank() } ?: unknownCheckLabel(token),
+                            title = healthcheckDisplayName(c.name, c.target) ?: unknownCheckLabel(token),
                             subtitle = listOfNotNull(c.type.label, c.target?.takeIf { it.isNotBlank() })
                                 .joinToString(" · "),
                             trailing = { Hc2StateBadge(Hc2StateUi.from(c.state?.state, c.paused)) },
@@ -405,7 +407,9 @@ fun RecordPickerDialog(
         return
     }
 
-    val visible = records.orEmpty().filter { r -> r.type in types && r.id != null && filter(r) }
+    val visible = records.orEmpty()
+        .filter { r -> r.type in types && r.id != null && filter(r) }
+        .sortedBy { it.displayName(current).lowercase() }
     ActionSheet(title = current, onDismiss = onDismiss) {
         Box(modifier = Modifier.heightIn(min = 80.dp, max = 400.dp)) {
             when {

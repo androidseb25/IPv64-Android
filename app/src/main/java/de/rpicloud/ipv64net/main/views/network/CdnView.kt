@@ -18,14 +18,16 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import de.rpicloud.ipv64net.R
+import de.rpicloud.ipv64net.helper.AccountCache
 import de.rpicloud.ipv64net.helper.FeatureAvailability
+import de.rpicloud.ipv64net.helper.IPv64Client
 import de.rpicloud.ipv64net.helper.NavKeys
 import de.rpicloud.ipv64net.helper.PlanFeature
-import de.rpicloud.ipv64net.helper.availability
 import de.rpicloud.ipv64net.helper.canCreate
+import de.rpicloud.ipv64net.helper.ipv64Retrying
 import de.rpicloud.ipv64net.helper.loadMe
 import de.rpicloud.ipv64net.helper.navigateWithArgs
-import de.rpicloud.ipv64net.main.views.common.DomainPickerDialog
+import de.rpicloud.ipv64net.helper.openUrl
 import de.rpicloud.ipv64net.main.views.common.EmptyState
 import de.rpicloud.ipv64net.main.views.common.GroupDivider
 import de.rpicloud.ipv64net.main.views.common.ListGroup
@@ -40,11 +42,8 @@ import de.rpicloud.ipv64net.models.Tab
 import de.rpicloud.ipv64net.models.Tabs
 import de.sr.ipv64.IPv64Exception
 import de.sr.ipv64.model.CdnDomain
+import kotlinx.coroutines.async
 
-/**
- * Liste der CDN-Domains. Anfragen: je Öffnen/Aktualisieren höchstens `account.me` (Plan, gecacht) und `cdn.list`
- * (30 s Cache), danach eine pro "Domain hinzufügen". Keine Einzelabfragen pro Zeile.
- */
 @Composable
 fun CdnView(navController: NavHostController, mainPadding: PaddingValues) {
     val ctx = LocalContext.current
@@ -52,11 +51,11 @@ fun CdnView(navController: NavHostController, mainPadding: PaddingValues) {
     val req = rememberRequestState()
 
     var domains by remember { mutableStateOf(CdnCache.peek(ctx)) }
+    var cloud by remember { mutableStateOf(CloudCdnCache.peek(ctx)) }
     var availability by remember { mutableStateOf<FeatureAvailability>(FeatureAvailability.Unknown) }
     var usage by remember { mutableStateOf<de.sr.ipv64.model.MeUsage?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     var showPicker by remember { mutableStateOf(false) }
-    // Neues CDN64 je verbundener Proxy-Node (null = noch nicht geladen / keine Nodes)
     var nodes by remember { mutableStateOf<List<NodeOnline>>(emptyList()) }
     var choices by remember { mutableStateOf<List<CdnHostChoice>?>(null) }
 
@@ -65,36 +64,44 @@ fun CdnView(navController: NavHostController, mainPadding: PaddingValues) {
         req.notAvailable = null
         req.launch(
             scope,
-            spinner = if (pull || domains != null) null else "Loading...",
+            spinner = if (pull || cloud != null) null else "Loading...",
             retry = { load(true) },
             planGate = true,
             onFinally = { refreshing = false }
         ) {
-            nodes = loadNodeOnline(ctx)
-            if (nodes.isNotEmpty()) {
-                // Neues CDN64 läuft über die Node; das alte Cloud-CDN ist optional (Plan kann es ausschließen)
+            val nodeTask = async { loadNodeOnline(ctx) }
+            val oldCdnTask = async {
                 try {
-                    val me = loadMe(ctx, force)
-                    usage = me.usage
-                    availability = me.availability(PlanFeature.CDN)
-                    if (availability !is FeatureAvailability.NotInPlan) domains = CdnCache.get(ctx, force) { it.cdn.list() }
+                    CdnCache.get(ctx, force) { it.cdn.list() }
                 } catch (e: IPv64Exception) {
+                    // The old CDN is separate and can be unavailable during its shutdown.
+                    null
                 }
-                return@launch
             }
-            // Plan-Prüfung ist nicht kritisch: bei Fehlern entscheidet der Server beim Laden der Liste
-            try {
-                val me = loadMe(ctx, force)
-                usage = me.usage
-                availability = me.availability(PlanFeature.CDN)
+            val cloudError = try {
+                cloud = CloudCdnCache.get(ctx, force) { it.loadCloudCdn() }
+                null
             } catch (e: IPv64Exception) {
-                availability = FeatureAvailability.Unknown
+                e
             }
-            if (availability is FeatureAvailability.NotInPlan) {
-                req.notAvailable = "Your plan does not include the CDN."
-                return@launch
+            nodes = nodeTask.await()
+            domains = oldCdnTask.await()
+            val quota = cloud?.quota?.domains
+            val limit = quota?.limit
+            val used = quota?.used ?: 0
+            availability = when {
+                limit == null -> FeatureAvailability.Unknown
+                limit == 0 -> FeatureAvailability.NotInPlan
+                used >= limit && limit > 0 -> FeatureAvailability.LimitReached(used, limit)
+                else -> FeatureAvailability.Available
             }
-            domains = CdnCache.get(ctx, force) { it.cdn.list() }
+            if (cloudError != null && nodes.isEmpty()) throw cloudError
+            if (cloud?.quota == null) {
+                try { usage = loadMe(ctx, force).usage } catch (_: IPv64Exception) { }
+            }
+            if (availability is FeatureAvailability.NotInPlan && nodes.isEmpty() && domains.isNullOrEmpty() && cloud?.hosts.isNullOrEmpty()) {
+                req.notAvailable = "Your plan does not include CDN64."
+            }
         }
     }
 
@@ -109,6 +116,7 @@ fun CdnView(navController: NavHostController, mainPadding: PaddingValues) {
             if (req.notAvailable == null) {
                 FloatingActionButton(
                     onClick = {
+                        if (req.isBusy) return@FloatingActionButton
                         if (nodes.isNotEmpty()) {
                             // Hosts der Nodes, die noch nicht im CDN64 sind
                             req.launch(scope, spinner = "Loading...", onError = { req.nodeError(it) }) {
@@ -121,7 +129,7 @@ fun CdnView(navController: NavHostController, mainPadding: PaddingValues) {
                                         return@flatMap emptyList()
                                     }
                                     hosts.filter { it.id != null && it.id !in used }
-                                        .map { CdnHostChoice(n.id, n.name, it.id!!, it.names.joinToString().ifBlank { "#${it.id}" }) }
+                                        .map { CdnHostChoice(n.id, n.name, it.id!!, it.sortedNames()) }
                                 }
                             }
                             return@FloatingActionButton
@@ -130,15 +138,14 @@ fun CdnView(navController: NavHostController, mainPadding: PaddingValues) {
                             req.cdnLimitMessage(availability)
                             return@FloatingActionButton
                         }
-                        // Ohne geladene Liste lässt sich nicht ausschließen, welche Domains schon im CDN sind
-                        if (domains == null) load(true) else showPicker = true
+                        showPicker = true
                     },
                     containerColor = if (canCreate) MaterialTheme.colorScheme.primaryContainer
                     else MaterialTheme.colorScheme.surfaceVariant,
                     contentColor = if (canCreate) MaterialTheme.colorScheme.onPrimaryContainer
                     else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 ) {
-                    Icon(painter = painterResource(R.drawable.add_24px), contentDescription = "Add domain to CDN")
+                    Icon(painter = painterResource(R.drawable.add_24px), contentDescription = "Add domain to CDN64")
                 }
             }
         }
@@ -152,7 +159,7 @@ fun CdnView(navController: NavHostController, mainPadding: PaddingValues) {
                 onRefresh = { load(true, true) },
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                item(key = "stats") { CdnStatsCard(usage, nodes.firstNotNullOfOrNull { it.status?.quota }) }
+                item(key = "stats") { CdnStatsCard(usage, cloud?.quota ?: nodes.firstNotNullOfOrNull { it.status?.quota }) }
                 nodes.forEach { n ->
                     item(key = "node_${n.id}") {
                         ListGroup(n.name) {
@@ -164,7 +171,7 @@ fun CdnView(navController: NavHostController, mainPadding: PaddingValues) {
                                     title = if (st.edges.isEmpty()) "No CDN64 servers" else "Servers: $up of ${st.edges.size} connected",
                                     subtitle = st.syncError
                                 )
-                                st.names.forEach { name ->
+                                st.names.sortedBy { it.name.orEmpty().lowercase() }.forEach { name ->
                                     GroupDivider()
                                     ListRow(
                                         title = name.name.orEmpty().ifBlank { "–" },
@@ -200,21 +207,30 @@ fun CdnView(navController: NavHostController, mainPadding: PaddingValues) {
                         }
                     }
                 }
-                val list = domains.orEmpty()
-                if (nodes.isNotEmpty()) {
-                    if (list.isNotEmpty()) item(key = "old_cdn") {
-                        ListGroup("Old CDN") {
-                            list.forEachIndexed { i, cdn ->
-                                if (i > 0) GroupDivider()
-                                CdnRow(cdn) { navController.navigateWithArgs(Tab.cdn_details, NavKeys.SELECTED_CDN_TOKEN to it.id) }
+                val nodeNames = nodes.flatMap { it.status?.names.orEmpty() }.mapNotNull { it.name?.lowercase() }.toSet()
+                val hosts = cloud?.hosts.orEmpty().filterNot { it.fqdn.lowercase() in nodeNames }.sortedBy { it.fqdn.lowercase() }
+                if (hosts.isNotEmpty()) {
+                    item(key = "cloud_cdn") {
+                        ListGroup("Cloud domains") {
+                            hosts.forEachIndexed { index, host ->
+                                if (index > 0) GroupDivider()
+                                val status = if (host.paused) "Paused" else host.status?.replaceFirstChar { it.uppercase() }
+                                ListRow(
+                                    title = host.fqdn,
+                                    subtitle = status,
+                                    trailing = { StatusChip(cdnModeShort(host.mode), colorResource(R.color.ipv64_blue)) },
+                                    onClick = { openUrl(ctx, "https://ipv64.net/cdn64") }
+                                )
                             }
                         }
                     }
-                } else if (domains != null && list.isEmpty()) {
-                    item(key = "empty_state") { EmptyState("No domains in the CDN yet. Tap + to add one.") }
-                } else if (list.isNotEmpty()) {
-                    item(key = "domains") {
-                        ListGroup {
+                } else if (cloud != null && nodes.isEmpty()) {
+                    item(key = "empty_state") { EmptyState("No domains in CDN64 yet. Tap + to add one.") }
+                }
+                val list = domains.orEmpty().sortedBy { it.displayName().lowercase() }
+                if (list.isNotEmpty()) {
+                    item(key = "old_cdn") {
+                        ListGroup("Old CDN") {
                             list.forEachIndexed { i, cdn ->
                                 if (i > 0) GroupDivider()
                                 CdnRow(cdn) {
@@ -242,12 +258,17 @@ fun CdnView(navController: NavHostController, mainPadding: PaddingValues) {
         )
     }
     if (showPicker) {
-        DomainPickerDialog(
-            exclude = domains.orEmpty().mapNotNull { it.domain }.toSet(),
-            title = "Add domain to CDN",
-            onPick = { name ->
+        CloudCdnEnableFlow(
+            exclude = (cloud?.hosts.orEmpty().map { it.fqdn } + domains.orEmpty().mapNotNull { it.domain }).map { it.lowercase() }.toSet(),
+            onEnable = { input ->
                 showPicker = false
-                req.addCdnDomain(scope, ctx, navController, name) { domains = CdnCache.peek() }
+                req.launch(scope, spinner = "Enabling CDN64...") {
+                    val created = ipv64Retrying { IPv64Client.get(ctx).enableCloudCdn(input) }
+                    cloud = CloudCdnOverview(cloud?.quota, cloud?.hosts.orEmpty().filterNot { it.fqdn.equals(created.fqdn, true) } + created)
+                    CloudCdnCache.invalidate()
+                    AccountCache.invalidate()
+                    load(true)
+                }
             },
             onDismiss = { showPicker = false }
         )

@@ -25,10 +25,10 @@ import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.SecureFlagPolicy
 import de.rpicloud.ipv64net.R
 import de.rpicloud.ipv64net.helper.copyText
 import de.rpicloud.ipv64net.main.views.common.InfoRow
+import de.rpicloud.ipv64net.main.views.common.screenshotDialogPolicy
 
 /** Aktionen im Überlaufmenü der Domain-Detailansicht. */
 enum class DomainAction { SETTINGS, DYNDNS, ROTATE_TOKEN, RESET, DELETE }
@@ -101,6 +101,6 @@ fun RotatedTokenDialog(updateUrl: String, onDismiss: () -> Unit) {
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
-        properties = DialogProperties(securePolicy = SecureFlagPolicy.SecureOn)
+        properties = DialogProperties(securePolicy = screenshotDialogPolicy())
     )
 }
